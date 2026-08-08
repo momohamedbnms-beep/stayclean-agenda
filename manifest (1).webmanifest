@@ -1,0 +1,15 @@
+{
+  "name": "StayClean Agenda",
+  "short_name": "StayClean",
+  "description": "Planificateur d'interventions StayClean — Bruxelles",
+  "display": "standalone",
+  "start_url": "./",
+  "scope": "./",
+  "background_color": "#F4F9FD",
+  "theme_color": "#4AA3E3",
+  "lang": "fr",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

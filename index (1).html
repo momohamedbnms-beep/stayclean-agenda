@@ -1,0 +1,1578 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>StayClean Agenda</title>
+<meta name="theme-color" content="#4AA3E3">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="StayClean Agenda">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bleu:#4AA3E3; --bleu-dark:#3D96D6; --nuit:#0F2233; --ciel:#7EC4EF;
+  --pale:#EAF5FC; --fond:#F4F9FD; --bordure:#DFEDF7; --gris:#5A6B7C;
+  --ambre:#B45309; --ambre-bg:#FEF3C7; --rouge:#E14D4D; --rouge-bg:#FCE8E8;
+  --vert:#0E9F6E; --vert-bg:#DEF7EC;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+html{-webkit-text-size-adjust:100%}
+html,body{background:var(--fond);color:var(--nuit);font-family:'Poppins',system-ui,-apple-system,sans-serif;min-height:100%}
+body{padding-bottom:env(safe-area-inset-bottom);overflow-x:hidden}
+button{font-family:inherit;border:0;background:none;cursor:pointer;color:inherit}
+input,textarea,select{font-family:inherit;font-size:16px;border:1px solid var(--bordure);background:var(--fond);border-radius:12px;padding:9px;color:var(--nuit);outline:none;width:100%}
+input:focus,textarea:focus,select:focus{box-shadow:0 0 0 2px var(--bleu)}
+.tnum{font-variant-numeric:tabular-nums}
+.card{background:#fff;border:1px solid var(--bordure);box-shadow:0 4px 14px rgba(74,163,227,.07)}
+.grad{background:linear-gradient(92deg,var(--nuit) 10%,var(--bleu) 90%);-webkit-background-clip:text;background-clip:text;color:transparent}
+header{background:#fff;border-bottom:1px solid var(--bordure);padding:calc(env(safe-area-inset-top) + 20px) 20px 16px}
+.logo-row{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.logo-row .lft{display:flex;align-items:center;gap:8px}
+.logo-row h1{font-size:20px;font-weight:800;letter-spacing:-.02em}
+.logo-row h1 .b{color:var(--bleu)}
+.cloud{font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px}
+.cloud.on{background:var(--vert-bg);color:var(--vert)}
+.cloud.off{background:#EDF2F7;color:var(--gris)}
+.cloud.err{background:var(--ambre-bg);color:var(--ambre)}
+.badge{display:inline-flex;align-items:center;gap:6px;margin-top:12px;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;background:var(--pale);color:var(--bleu-dark)}
+.btn-main{display:block;width:100%;margin-top:16px;padding:14px;border-radius:999px;background:var(--bleu);color:#fff;font-weight:700;font-size:16px;box-shadow:0 8px 20px rgba(74,163,227,.35);text-align:center}
+.btn-main:active{opacity:.8}
+.btn-main:disabled{background:#BBDCF3;box-shadow:none}
+nav{display:flex;gap:6px;padding:16px 16px 0}
+nav button{flex:1;padding:10px 4px;border-radius:999px;font-size:13px;font-weight:700;background:#fff;border:1px solid var(--bordure)}
+nav button.on{background:var(--bleu);color:#fff;border-color:var(--bleu)}
+main{padding:16px 20px 100px}
+.sub{font-size:12px;color:var(--gris);font-weight:500;margin-bottom:12px}
+.sub b{color:var(--nuit)}
+.wknav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.wknav .arrow{width:36px;height:36px;border-radius:999px;font-weight:700}
+.wknav .lbl{font-size:14px;font-weight:700}
+.wknav .lbl span{color:var(--bleu);font-size:12px;font-weight:600;text-decoration:underline;margin-left:8px}
+.day{border-radius:16px;padding:12px 16px;margin-bottom:10px}
+.day.today{border-left:3px solid var(--bleu)}
+.day.pastempty{opacity:.55}
+.day-head{display:flex;align-items:center;justify-content:space-between}
+.day-head .t{font-weight:700;font-size:14px}
+.day-head .t small{color:var(--bleu);font-weight:700;font-size:12px;margin-left:6px}
+.dots{display:flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:999px;border:2px solid #C9DFF0}
+.dot.on{background:var(--bleu);border-color:var(--bleu)}
+.full{background:var(--nuit);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;margin-left:4px}
+.rdv{display:block;width:100%;text-align:left;margin-top:8px;background:var(--fond);border:1px solid var(--bordure);border-radius:12px;padding:10px 12px;overflow:hidden}
+.rdv:active{opacity:.7}
+.rdv .l1{display:flex;justify-content:space-between;font-weight:700;font-size:14px}
+.rdv .cl{display:block;font-size:14px;font-weight:500;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rdv .pr{display:block;font-size:12px;color:var(--gris);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
+.tag.done{background:var(--pale);color:var(--bleu-dark)}
+.tag.todo{background:var(--ambre-bg);color:var(--ambre)}
+.tag.fac{background:#EDF2F7;color:var(--gris);font-weight:500}
+.libre{font-size:12px;color:#9FB6C8;margin-top:6px}
+.annnote{font-size:12px;color:var(--gris);margin-top:8px}
+.hero{border-radius:22px;padding:20px}
+.hero .k{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gris)}
+.hero .v{font-size:42px;font-weight:800;line-height:1.1;margin-top:4px}
+.hero .s{font-size:12px;color:var(--gris);font-weight:500;margin-top:8px}
+.row2{display:flex;gap:10px;margin-top:10px}
+.mini{flex:1;border-radius:16px;padding:14px 16px}
+.mini .k{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gris)}
+.mini .v{font-size:20px;font-weight:800;margin-top:4px}
+.mini .s{font-size:12px;color:var(--gris)}
+.sec{border-radius:16px;padding:16px;margin-top:10px}
+.sec .k{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gris);margin-bottom:12px}
+.bars{display:flex;align-items:flex-end;gap:6px;height:96px}
+.bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}
+.bar i{display:block;width:100%;border-radius:4px 4px 0 0;background:#CFE5F5}
+.bar.cur i{background:var(--bleu)}
+.bar span{font-size:9px;color:var(--gris)}
+.rep{margin-bottom:10px}
+.rep .l{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;gap:8px}
+.rep .l span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rep .l b{font-weight:700;flex-shrink:0}
+.rep .g{height:6px;border-radius:999px;background:var(--pale)}
+.rep .g i{display:block;height:6px;border-radius:999px;background:var(--bleu)}
+.annrow{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--bordure)}
+.annrow .inf{flex:1;min-width:0}
+.annrow .inf p{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.annrow .inf small{font-size:12px;color:var(--gris)}
+.annrow .m{font-size:14px;font-weight:700;color:var(--rouge);flex-shrink:0}
+.annrow .rest{font-size:12px;font-weight:700;background:var(--pale);color:var(--bleu-dark);padding:6px 10px;border-radius:999px;flex-shrink:0}
+.annrow .del{color:var(--rouge);font-size:18px;padding:0 4px;flex-shrink:0}
+.set-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;gap:12px}
+.set-row span{font-size:14px}
+.set-row input,.set-row select{width:auto}
+.set-row input[type=number]{width:72px;text-align:center;font-weight:700}
+.dur-row{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.dur-row input.lab{flex:1;min-width:0}
+.dur-row input.kw{width:76px;font-size:13px;color:var(--gris)}
+.dur-row input.mn{width:60px;text-align:center}
+.dur-row .del{color:var(--rouge);font-size:18px;padding:0 4px}
+.price-row{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.price-row .lab{flex:1;min-width:0;font-size:13px}
+.price-row input{width:64px;text-align:center}
+.addline{color:var(--bleu);font-size:14px;font-weight:700;margin-top:4px}
+.note{font-size:12px;color:var(--gris);margin:4px 0 12px}
+.setbtns{display:flex;gap:8px;margin-top:8px}
+.setbtns button{flex:1;padding:10px;border-radius:999px;font-size:13px;font-weight:700;background:var(--pale);color:var(--bleu-dark)}
+.overlay{position:fixed;inset:0;background:rgba(15,34,51,.5);z-index:40;display:flex;align-items:flex-end;justify-content:center}
+@media(min-width:640px){.overlay{align-items:center}}
+.sheet{background:#fff;width:100%;max-width:520px;border-radius:24px 24px 0 0;padding:20px 20px calc(24px + env(safe-area-inset-bottom));max-height:92vh;overflow:auto}
+@media(min-width:640px){.sheet{border-radius:24px}}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.sheet-head h2{font-size:18px;font-weight:700;display:flex;align-items:center;gap:8px}
+.sheet-head .x{font-size:24px;color:var(--gris);padding:0 8px;line-height:1}
+.hint{font-size:12px;color:var(--gris);margin-bottom:12px}
+textarea{resize:none;border-radius:16px;padding:12px}
+.thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.thumb{position:relative}
+.thumb img{width:64px;height:64px;object-fit:cover;border-radius:12px;border:1px solid var(--bordure);display:block}
+.thumb .rm{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:999px;background:var(--rouge);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.thumb .n{position:absolute;bottom:2px;left:2px;background:rgba(15,34,51,.65);color:#fff;font-size:9px;font-weight:700;padding:0 4px;border-radius:4px}
+.addimg{width:64px;height:64px;border-radius:12px;background:var(--pale);color:var(--bleu-dark);border:1.5px dashed var(--bleu);font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:22px}
+.addimg small{font-size:8px;font-weight:600;line-height:1;margin-top:2px}
+.imgcount{font-size:12px;color:var(--gris);margin-top:8px}
+.busy{font-size:12px;color:var(--gris);text-align:center;margin-top:8px}
+.linkline{display:block;text-align:center;font-size:13px;font-weight:700;color:var(--bleu);margin-top:12px}
+.fld{margin-bottom:12px}
+.fld label{display:block;font-size:11px;font-weight:700;color:var(--gris);margin-bottom:4px}
+.fld input.warn{border:1.5px solid var(--ambre)}
+.two{display:flex;gap:8px}
+.two>div{flex:1}
+.two>div.small{flex:0 0 118px}
+.rem{font-size:12px;background:var(--ambre-bg);color:var(--ambre);padding:8px 12px;border-radius:12px;margin-bottom:12px}
+.acts{display:flex;gap:8px;margin-bottom:12px}
+.acts a{flex:1;text-align:center;padding:10px;border-radius:999px;font-size:14px;font-weight:700;background:var(--pale);color:var(--bleu-dark);text-decoration:none}
+.acts2{display:flex;gap:8px}
+.acts2 button{flex:1;padding:12px;border-radius:999px;font-size:14px;font-weight:700}
+.b-done{background:var(--bleu);color:#fff}
+.b-open{background:var(--fond);border:1px solid var(--bordure)}
+.b-cancel{background:var(--rouge-bg);color:var(--rouge)}
+.toast{position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:60;border-radius:16px;padding:14px 16px;box-shadow:0 10px 30px rgba(15,34,51,.3)}
+.toast.ok{background:var(--nuit)}
+.toast.err{background:var(--rouge)}
+.toast p{color:#fff;font-size:14px;font-weight:700}
+.toast p+p{color:#BFD9EE;font-size:12px;font-weight:500;margin-top:4px}
+.toast.err p+p{color:#FBD9D9}
+.warnbox{margin:12px 20px 0;background:var(--ambre-bg);color:var(--ambre);font-size:12px;font-weight:500;padding:10px 14px;border-radius:12px}
+.hidden{display:none}
+.art-row{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.art-row select{flex:1;min-width:0;font-size:14px;padding:8px}
+.art-row .qty{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.art-row .qty button{width:30px;height:30px;border-radius:999px;background:var(--pale);color:var(--bleu-dark);font-weight:800;font-size:16px}
+.art-row .qty b{min-width:20px;text-align:center;font-size:14px}
+.art-row input.m2{width:64px;text-align:center;flex-shrink:0}
+.art-row .del{color:var(--rouge);font-size:18px;padding:0 2px;flex-shrink:0}
+.totline{display:flex;justify-content:space-between;font-size:14px;padding:6px 0}
+.totline b{font-weight:800}
+.totline .old{text-decoration:line-through;color:var(--gris);font-weight:500;margin-right:6px}
+.quote-pre{width:100%;min-height:280px;font-size:14px;line-height:1.45;border-radius:16px;padding:12px;background:var(--fond);border:1px solid var(--bordure)}
+.qbtns{display:flex;gap:8px;margin-top:10px}
+.qbtns button,.qbtns a{flex:1;text-align:center;padding:12px 4px;border-radius:999px;font-size:13px;font-weight:700;text-decoration:none}
+.q-copy{background:var(--pale);color:var(--bleu-dark)}
+.q-wa{background:#25D366;color:#fff}
+.q-rdv{background:var(--nuit);color:#fff}
+.pick2{display:flex;gap:8px;margin-top:10px}
+.pick2 button{flex:1;padding:12px;border-radius:16px;font-size:13px;font-weight:700;border:1.5px solid var(--bordure);background:#fff}
+.pick2 button.selq{border-color:var(--bleu);background:var(--pale);color:var(--bleu-dark)}
+.login-card{max-width:420px;margin:40px auto;border-radius:22px;padding:24px}
+.mini-analyse{border:1.5px dashed var(--bleu);border-radius:16px;padding:12px;margin-bottom:12px;background:var(--pale)}
+.mini-analyse p.t{font-size:12px;font-weight:700;color:var(--bleu-dark);margin-bottom:8px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo-row">
+    <div class="lft">
+      <svg width="32" height="32" viewBox="0 0 40 40" aria-hidden="true">
+        <path d="M20 6 C15.5 12 12.5 15.5 12.5 20.5 a7.5 7.5 0 0 0 15 0 C27.5 15.5 24.5 12 20 6Z" fill="#4AA3E3" transform="rotate(-38 20 20) translate(-4 1)" opacity=".55"/>
+        <path d="M20 6 C15.5 12 12.5 15.5 12.5 20.5 a7.5 7.5 0 0 0 15 0 C27.5 15.5 24.5 12 20 6Z" fill="#7EC4EF" transform="rotate(38 20 20) translate(4 1)" opacity=".75"/>
+        <path d="M20 4 C15 10.5 11.5 14.5 11.5 20 a8.5 8.5 0 0 0 17 0 C28.5 14.5 25 10.5 20 4Z" fill="#4AA3E3"/>
+      </svg>
+      <h1>StayClean<span class="b"> Agenda</span></h1>
+    </div>
+    <span id="cloudbadge" class="cloud off">Local</span>
+  </div>
+  <div class="badge">📍 Planificateur & devis — Bruxelles</div>
+  <button class="btn-main" data-act="open-devis">+ Nouvelle réservation</button>
+</header>
+
+<nav>
+  <button id="tab-planning" class="on" data-act="tab" data-tab="planning">Planning</button>
+  <button id="tab-devis" data-act="tab" data-tab="devis">Devis</button>
+  <button id="tab-revenus" data-act="tab" data-tab="revenus">Revenus</button>
+  <button id="tab-reglages" data-act="tab" data-tab="reglages">Réglages</button>
+</nav>
+
+<div id="warn" class="warnbox hidden"></div>
+<main id="main"></main>
+<div id="modals"></div>
+<div id="toastbox"></div>
+<input type="file" id="filepick" accept="image/png,image/jpeg,image/webp,image/gif" multiple class="hidden">
+
+<script>
+"use strict";
+/* =============== StayClean Agenda v2 =============== */
+
+var KEY = "stayclean-agenda-v1";
+var MAX_IMGS = 6;
+var GEMINI_MODEL = "gemini-2.5-flash";
+
+var DEFAULT_PRICING = {
+  discount: 20,
+  minimum: 89,
+  tva: 21,
+  items: [
+    { id: "canape23", label: "Canapé 2/3 places", base: 89, prem: 109 },
+    { id: "canape45", label: "Canapé 4/5 places", base: 99, prem: 119 },
+    { id: "canape67", label: "Canapé 6/7 places", base: 119, prem: 139 },
+    { id: "canape89", label: "Canapé 8/9 places", base: 139, prem: 159 },
+    { id: "tapisS", label: "Tapis petit (moins de 2m²)", base: 49, prem: 69 },
+    { id: "tapisM", label: "Tapis moyen (2 à 4m²)", base: 59, prem: 79 },
+    { id: "tapisL", label: "Tapis grand (4 à 6m²)", base: 79, prem: 99 },
+    { id: "matelasBB", label: "Matelas bébé", base: 35, prem: 45 },
+    { id: "matelas1", label: "Matelas 1 personne", base: 69, prem: 79 },
+    { id: "matelas2", label: "Matelas 2 personnes", base: 79, prem: 89 },
+    { id: "voiture", label: "Voiture (5 sièges)", base: 89, prem: 109 },
+    { id: "chaise", label: "Chaise", base: 10, prem: 15 },
+    { id: "pouf", label: "Pouf", base: 19, prem: 24 },
+    { id: "moquette", label: "Moquette (au m²)", base: 0, prem: 0 }
+  ],
+  moquette: [
+    { max: 30, prix: 8 },
+    { max: 60, prix: 7 },
+    { max: 100, prix: 6 },
+    { max: 99999, prix: 5 }
+  ]
+};
+
+var DEFAULT_SETTINGS = {
+  maxPerDay: 3,
+  morningStart: "09:00",
+  afternoonStart: "14:00",
+  defaultDuration: 120,
+  provider: "gemini",
+  geminiKey: "",
+  apiKey: "",
+  sync: { url: "", anonKey: "" },
+  pricing: null,
+  durations: [
+    { label: "Canapé 2/3 places", kw: "canape 2", min: 90 },
+    { label: "Canapé 4/5 places", kw: "canape 4", min: 120 },
+    { label: "Canapé 6/7 places", kw: "canape 6", min: 150 },
+    { label: "Canapé 8/9 places", kw: "canape 8", min: 180 },
+    { label: "Fauteuil", kw: "fauteuil", min: 45 },
+    { label: "Matelas", kw: "matelas", min: 60 },
+    { label: "Tapis / moquette", kw: "tapis", min: 60 },
+    { label: "Moquette", kw: "moquette", min: 90 },
+    { label: "Chaises", kw: "chaise", min: 60 },
+    { label: "Pouf", kw: "pouf", min: 30 },
+    { label: "Voiture / sièges auto", kw: "voiture", min: 120 },
+    { label: "Sièges auto", kw: "siege", min: 120 }
+  ]
+};
+
+/* ------------------------------ état ------------------------------ */
+
+function mergeSettings(s) {
+  var m = Object.assign({}, DEFAULT_SETTINGS, s || {});
+  m.sync = Object.assign({}, DEFAULT_SETTINGS.sync, (s && s.sync) || {});
+  if (!m.pricing) m.pricing = JSON.parse(JSON.stringify(DEFAULT_PRICING));
+  else {
+    m.pricing = Object.assign(JSON.parse(JSON.stringify(DEFAULT_PRICING)), m.pricing);
+    if (!m.pricing.items || !m.pricing.items.length) m.pricing.items = JSON.parse(JSON.stringify(DEFAULT_PRICING.items));
+    if (!m.pricing.moquette || !m.pricing.moquette.length) m.pricing.moquette = JSON.parse(JSON.stringify(DEFAULT_PRICING.moquette));
+  }
+  return m;
+}
+function load() {
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (raw) {
+      var d = JSON.parse(raw);
+      return { bookings: d.bookings || [], settings: mergeSettings(d.settings), updatedAt: d.updatedAt || 0 };
+    }
+  } catch (e) {}
+  return { bookings: [], settings: mergeSettings(null), updatedAt: 0 };
+}
+var DB = load();
+function saveLocal() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(DB));
+    showWarn("");
+    return true;
+  } catch (e) {
+    showWarn("Sauvegarde locale impossible (stockage plein ?). Exporte une sauvegarde depuis Réglages.");
+    return false;
+  }
+}
+function save() {
+  DB.updatedAt = Date.now();
+  saveLocal();
+  schedulePush();
+}
+
+var ui = {
+  tab: "planning", weekOffset: 0,
+  imgs: [], busy: false,
+  detailId: null, showDevis: false, showManuel: false,
+  fileTarget: "resa",
+  qImgs: [], qBusy: false, qDraft: null, qFormule: "premium",
+  dImgs: [], dBusy: false,
+  cloud: "off", pickFormule: false
+};
+
+/* ----------------------------- utils ------------------------------ */
+
+function pad(n) { return String(n).padStart(2, "0"); }
+function fmtDate(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+function parseDateStr(s) { var p = s.split("-"); return new Date(+p[0], +p[1] - 1, +p[2]); }
+function addDaysStr(s, n) { var d = parseDateStr(s); d.setDate(d.getDate() + n); return fmtDate(d); }
+function startOfWeek(d) { var x = new Date(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); x.setHours(0, 0, 0, 0); return x; }
+var JOURS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+var JOURS_FULL = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+var MOIS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+var MOIS_FULL = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+function euro(n) { return (Math.round((n || 0) * 100) / 100).toLocaleString("fr-BE", { maximumFractionDigits: 0 }) + " €"; }
+function norm(s) { return (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
+function toMin(h) { var p = (h || "09:00").split(":"); return (+p[0]) * 60 + (+p[1] || 0); }
+function fromMin(m) { return pad(Math.floor(m / 60)) + ":" + pad(m % 60); }
+function fmtH(min) {
+  var h = Math.floor(min / 60), m = min % 60;
+  if (h === 0) return m + "min";
+  return h + "h" + (m ? pad(m) : "");
+}
+function uid() { return "bk_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function humanDate(s) { var d = parseDateStr(s); return JOURS[(d.getDay() + 6) % 7] + " " + d.getDate() + " " + MOIS[d.getMonth()]; }
+function esc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function todayStr() { return fmtDate(new Date()); }
+function P() { return DB.settings.pricing; }
+function findItem(id) { return P().items.find(function (x) { return x.id === id; }); }
+
+/* ------------------------- durée & placement ----------------------- */
+
+function computeDuration(prestations, settings) {
+  var total = 0;
+  (prestations || []).forEach(function (p) {
+    var n = norm(p.nom);
+    var hit = settings.durations.find(function (r) { return r.kw && n.indexOf(norm(r.kw)) !== -1; });
+    if (hit) total += hit.min * (p.qte || 1);
+  });
+  return total > 0 ? total : settings.defaultDuration;
+}
+
+function placeBooking(parsed, bookings, settings) {
+  var tStr = todayStr();
+  function activeOn(d) { return bookings.filter(function (b) { return b.statut !== "annule" && b.date === d; }); }
+  var dur = computeDuration(parsed.prestations, settings);
+
+  var date = parsed.date || addDaysStr(tStr, 1);
+  if (date < tStr) date = tStr;
+  var shiftedDay = false;
+
+  var guardDays = 0;
+  while (activeOn(date).length >= settings.maxPerDay && guardDays < 90) {
+    date = addDaysStr(date, 1); shiftedDay = true; guardDays++;
+  }
+
+  function slotStart() {
+    return parsed.heure || (parsed.creneau === "matin" ? settings.morningStart : settings.afternoonStart);
+  }
+
+  var heure = slotStart();
+  var shiftedTime = false;
+  var guard = 0;
+  while (guard < 20) {
+    var s = toMin(heure), e = s + dur;
+    var clash = activeOn(date).find(function (b) {
+      var bs = toMin(b.heure), be = bs + (b.durationMin || 120);
+      return s < be + 30 && bs < e + 30;
+    });
+    if (!clash) break;
+    heure = fromMin(toMin(clash.heure) + (clash.durationMin || 120) + 30);
+    shiftedTime = true;
+    if (toMin(heure) + dur > 19 * 60) {
+      date = addDaysStr(date, 1); shiftedDay = true;
+      var g2 = 0;
+      while (activeOn(date).length >= settings.maxPerDay && g2 < 90) { date = addDaysStr(date, 1); g2++; }
+      heure = slotStart(); shiftedTime = false;
+    }
+    guard++;
+  }
+  return { date: date, heure: heure, dur: dur, shiftedDay: shiftedDay, shiftedTime: shiftedTime, dateOrigine: parsed.date };
+}
+
+function caActif(bookings) {
+  return bookings.filter(function (b) { return b.statut !== "annule"; })
+    .reduce(function (s, b) { return s + (b.total || 0); }, 0);
+}
+
+/* ------------------------ appels IA (2 moteurs) --------------------- */
+
+function activeKeyMissing() {
+  if (DB.settings.provider === "anthropic") return !DB.settings.apiKey;
+  return !DB.settings.geminiKey;
+}
+
+function callIA(prompt, images) {
+  images = images || [];
+  if (DB.settings.provider === "anthropic") {
+    var content = [];
+    images.forEach(function (im) {
+      content.push({ type: "image", source: { type: "base64", media_type: im.media, data: im.b64 } });
+    });
+    content.push({ type: "text", text: prompt });
+    return fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": DB.settings.apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 2000, messages: [{ role: "user", content: content }] })
+    }).then(function (r) {
+      return r.json().then(function (data) {
+        if (!r.ok) throw new Error((data && data.error && data.error.message) || ("Erreur " + r.status));
+        return (data.content || []).filter(function (c) { return c.type === "text"; }).map(function (c) { return c.text; }).join("\n");
+      });
+    });
+  }
+  var parts = [];
+  images.forEach(function (im) { parts.push({ inline_data: { mime_type: im.media, data: im.b64 } }); });
+  parts.push({ text: prompt });
+  var url = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent?key=" + encodeURIComponent(DB.settings.geminiKey);
+  return fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contents: [{ parts: parts }], generationConfig: { maxOutputTokens: 2048, responseMimeType: "application/json" } })
+  }).then(function (r) {
+    return r.json().then(function (data) {
+      if (!r.ok) throw new Error((data && data.error && data.error.message) || ("Erreur " + r.status));
+      try {
+        return (data.candidates[0].content.parts || []).map(function (p) { return p.text || ""; }).join("\n");
+      } catch (e) { throw new Error("Réponse vide"); }
+    });
+  });
+}
+
+function jsonFrom(raw) {
+  var clean = raw.replace(/```json|```/g, "").trim();
+  var a = clean.indexOf("{"), b = clean.lastIndexOf("}");
+  if (a === -1 || b === -1) throw new Error("Réponse illisible");
+  return JSON.parse(clean.slice(a, b + 1));
+}
+
+function dateHeader() {
+  var now = new Date();
+  return JOURS_FULL[(now.getDay() + 6) % 7] + " " + fmtDate(now);
+}
+
+function parseReservations(text, images) {
+  var prompt = "Tu es l'assistant de Stay Clean (nettoyage textile professionnel, Bruxelles). Analyse le texte et/ou les " + (images.length || 0) + " capture(s) d'écran jointes (WhatsApp, mails, formulaires...).\n" +
+    "Elles peuvent contenir PLUSIEURS demandes de réservation différentes : clients différents, dates différentes, une demande étalée sur plusieurs captures. Identifie chaque demande distincte.\n" +
+    "Date d'aujourd'hui : " + dateHeader() + ".\n" +
+    "Réponds UNIQUEMENT avec un JSON valide et COMPACT, sans backticks, sans texte autour :\n" +
+    '{"reservations":[{"client":string|null,"telephone":string|null,"adresse":string|null,"date":"YYYY-MM-DD"|null,"creneau":"matin"|"apres-midi"|null,"heure":"HH:MM"|null,"prestations":[{"nom":string,"prix":number|null}],"total":number|null,"facture":true|false|null,"remarques":string|null}]}\n' +
+    "Règles :\n- Une entrée par demande/client distinct. Maximum 8 entrées.\n- Si deux captures montrent la MÊME demande, fusionne-les en UNE seule entrée.\n- Ne fusionne JAMAIS deux clients différents.\n- Convertis les dates relatives en YYYY-MM-DD.\n- \"heure\" seulement si une heure précise est mentionnée. Sinon null.\n- \"total\" = montant total en euros, nombre sans symbole.\n- Information absente => null. N'invente rien." +
+    (text.trim() ? '\nTexte fourni :\n"""\n' + text + '\n"""' : "");
+  return callIA(prompt, images).then(function (raw) {
+    var parsed = jsonFrom(raw);
+    if (Array.isArray(parsed.reservations)) return parsed.reservations;
+    if (parsed.client || parsed.date || parsed.prestations) return [parsed];
+    return [];
+  });
+}
+
+function parseQuote(text, images) {
+  var codes = P().items.map(function (it) { return it.id + " = " + it.label; }).join(" ; ");
+  var prompt = "Tu es l'assistant de Stay Clean (nettoyage textile, Bruxelles). Un client demande un devis. Analyse le texte et/ou les " + (images.length || 0) + " photo(s)/capture(s).\n" +
+    "Identifie les articles à nettoyer et les coordonnées éventuelles.\n" +
+    "Codes articles autorisés : " + codes + ".\n" +
+    "Pour un tapis sur photo, estime la taille probable (petit <2m², moyen 2-4m², grand 4-6m²) d'après le contexte (meubles, pièce). Un canapé : compte les places visibles. Marque incertain=true si tu devines.\n" +
+    "Réponds UNIQUEMENT avec un JSON valide et COMPACT :\n" +
+    '{"client":string|null,"telephone":string|null,"adresse":string|null,"commune":string|null,"articles":[{"item":string,"quantite":number,"surface_m2":number|null,"incertain":true|false}],"remarques":string|null}\n' +
+    "Règles : item = un des codes autorisés uniquement. surface_m2 uniquement pour moquette. quantite >= 1. N'invente pas de coordonnées." +
+    (text.trim() ? '\nTexte du client :\n"""\n' + text + '\n"""' : "");
+  return callIA(prompt, images).then(function (raw) {
+    var parsed = jsonFrom(raw);
+    parsed.articles = (parsed.articles || []).filter(function (a) { return findItem(a.item); });
+    parsed.articles.forEach(function (a) { a.quantite = Math.max(1, Math.round(a.quantite || 1)); });
+    return parsed;
+  });
+}
+
+function parseComplete(text, images) {
+  var prompt = "Tu es l'assistant de Stay Clean (Bruxelles). Voici un message/une capture d'UN client qui complète sa réservation (adresse, téléphone, date, heure...).\n" +
+    "Date d'aujourd'hui : " + dateHeader() + ".\n" +
+    "Réponds UNIQUEMENT avec un JSON valide et COMPACT :\n" +
+    '{"client":string|null,"telephone":string|null,"adresse":string|null,"date":"YYYY-MM-DD"|null,"heure":"HH:MM"|null,"remarques":string|null}\n' +
+    "Convertis les dates relatives. Information absente => null. N'invente rien." +
+    (text.trim() ? '\nMessage :\n"""\n' + text + '\n"""' : "");
+  return callIA(prompt, images).then(jsonFrom);
+}
+
+/* -------------------- images : resize + base64 --------------------- */
+
+function resizeImage(file, maxDim) {
+  maxDim = maxDim || 1400;
+  return new Promise(function (resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var el = new Image();
+      el.onload = function () {
+        var scale = Math.min(1, maxDim / Math.max(el.width, el.height));
+        var w = Math.max(1, Math.round(el.width * scale));
+        var h = Math.max(1, Math.round(el.height * scale));
+        var canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(el, 0, 0, w, h);
+        var url = canvas.toDataURL("image/jpeg", 0.82);
+        resolve({ id: uid(), b64: url.split(",")[1], media: "image/jpeg", preview: url });
+      };
+      el.onerror = function () { reject(new Error("Image illisible")); };
+      el.src = String(reader.result);
+    };
+    reader.onerror = function () { reject(new Error("Lecture impossible")); };
+    reader.readAsDataURL(file);
+  });
+}
+
+function imgListFor(target) {
+  if (target === "quote") return ui.qImgs;
+  if (target === "detail") return ui.dImgs;
+  return ui.imgs;
+}
+function setImgListFor(target, arr) {
+  if (target === "quote") ui.qImgs = arr;
+  else if (target === "detail") ui.dImgs = arr;
+  else ui.imgs = arr;
+}
+
+function addFiles(fileList, target) {
+  var files = Array.prototype.slice.call(fileList || []).filter(function (f) { return /^image\//.test(f.type); });
+  if (!files.length) return;
+  var cur = imgListFor(target);
+  var room = MAX_IMGS - cur.length;
+  if (room <= 0) { toast("err", [MAX_IMGS + " captures maximum par analyse."]); return; }
+  Promise.all(files.slice(0, room).map(function (f) { return resizeImage(f); })).then(function (resized) {
+    setImgListFor(target, cur.concat(resized).slice(0, MAX_IMGS));
+    if (target === "quote") renderMain(); else renderModals();
+  }).catch(function () {
+    toast("err", ["Une image n'a pas pu être lue. Réessaie avec une capture PNG ou JPEG."]);
+  });
+}
+
+/* --------------------------- création RDV -------------------------- */
+
+function buildBooking(parsed, placed) {
+  var manquants = [];
+  if (!parsed.client) manquants.push("client");
+  if (!parsed.telephone) manquants.push("téléphone");
+  if (!parsed.adresse) manquants.push("adresse");
+  if (parsed.total == null) manquants.push("montant");
+  if (!parsed.date) manquants.push("date");
+  return {
+    booking: {
+      id: uid(),
+      client: parsed.client || "À COMPLÉTER",
+      telephone: parsed.telephone || "",
+      adresse: parsed.adresse || "",
+      date: placed.date,
+      heure: placed.heure,
+      durationMin: placed.dur,
+      prestations: parsed.prestations || [],
+      total: parsed.total == null ? 0 : parsed.total,
+      facture: parsed.facture === true,
+      remarques: parsed.remarques || "",
+      statut: "confirme",
+      incomplet: manquants,
+      creeLe: todayStr()
+    },
+    manquants: manquants
+  };
+}
+
+function commitReservations(list) {
+  var avant = caActif(DB.bookings);
+  var working = DB.bookings.slice();
+  var created = [];
+  list.forEach(function (parsed) {
+    var placed = placeBooking(parsed, working, DB.settings);
+    var made = buildBooking(parsed, placed);
+    working.push(made.booking);
+    created.push({ booking: made.booking, placed: placed, manquants: made.manquants });
+  });
+  DB.bookings = working;
+  save();
+  var apres = caActif(DB.bookings);
+
+  var lignes;
+  if (created.length === 1) {
+    var c = created[0];
+    lignes = [humanDate(c.placed.date) + " à " + c.placed.heure + " — " + c.booking.client];
+    lignes.push(euro(c.booking.total) + " · CA actif : " + euro(avant) + " → " + euro(apres));
+    if (c.placed.shiftedDay && c.placed.dateOrigine)
+      lignes.push("⚠ " + humanDate(c.placed.dateOrigine) + " complet (" + DB.settings.maxPerDay + " max) → décalé");
+    else if (c.placed.shiftedTime) lignes.push("⚠ Créneau occupé → heure décalée");
+    if (c.manquants.length) lignes.push("À compléter : " + c.manquants.join(", "));
+  } else {
+    lignes = [created.length + " RDV planifiés"];
+    created.slice(0, 5).forEach(function (c) {
+      lignes.push(humanDate(c.placed.date) + " " + c.placed.heure + " — " + c.booking.client + " (" + euro(c.booking.total) + ")" + (c.placed.shiftedDay ? " ⚠ décalé" : ""));
+    });
+    if (created.length > 5) lignes.push("… +" + (created.length - 5) + " autres");
+    lignes.push("CA actif : " + euro(avant) + " → " + euro(apres));
+    var inc = created.filter(function (c) { return c.manquants.length; });
+    if (inc.length) lignes.push("À compléter : " + inc.map(function (c) { return c.booking.client; }).join(", "));
+  }
+  toast("ok", lignes);
+
+  var target = startOfWeek(parseDateStr(created[0].placed.date));
+  var cur = startOfWeek(new Date());
+  ui.weekOffset = Math.round((target - cur) / (7 * 864e5));
+  ui.tab = "planning";
+}
+
+function handleAnalyse() {
+  var text = (document.getElementById("devis-text") || { value: "" }).value;
+  if (!text.trim() && ui.imgs.length === 0) return;
+  if (activeKeyMissing()) {
+    toast("err", [keyErrMsg(), "Sans clé, utilise la saisie manuelle."]);
+    return;
+  }
+  ui.busy = true; renderModals();
+  parseReservations(text, ui.imgs).then(function (list) {
+    ui.busy = false;
+    if (!list.length) {
+      toast("err", ["Aucune demande de réservation détectée dans ce contenu."]);
+      renderModals(); return;
+    }
+    ui.showDevis = false; ui.imgs = [];
+    commitReservations(list);
+    renderAll();
+  }).catch(function (e) {
+    ui.busy = false;
+    toast("err", ["Analyse impossible : " + (e && e.message ? e.message : "erreur réseau"), "Vérifie ta clé et ta connexion."]);
+    renderModals();
+  });
+}
+
+function keyErrMsg() {
+  return DB.settings.provider === "anthropic"
+    ? "Ajoute d'abord ta clé API Anthropic dans Réglages."
+    : "Ajoute d'abord ta clé Gemini (gratuite) dans Réglages.";
+}
+
+function handleManuel() {
+  function v(id) { var el = document.getElementById(id); return el ? el.value : ""; }
+  var parsed = {
+    client: v("m-client") || null,
+    telephone: v("m-tel") || null,
+    adresse: v("m-adr") || null,
+    date: v("m-date") || null,
+    creneau: v("m-creneau") || null,
+    heure: v("m-heure") || null,
+    prestations: v("m-presta") ? [{ nom: v("m-presta"), prix: v("m-total") ? Number(v("m-total")) : null }] : [],
+    total: v("m-total") ? Number(v("m-total")) : null,
+    facture: document.getElementById("m-fac") ? document.getElementById("m-fac").checked : false,
+    remarques: v("m-rem") || null
+  };
+  ui.showManuel = false;
+  commitReservations([parsed]);
+  renderAll();
+}
+
+/* ---------------------- modifications RDV ------------------------ */
+
+function findBk(id) { return DB.bookings.find(function (b) { return b.id === id; }); }
+
+function refreshIncomplet(b) {
+  b.incomplet = [];
+  if (!b.client || b.client === "À COMPLÉTER") b.incomplet.push("client");
+  if (!b.telephone) b.incomplet.push("téléphone");
+  if (!b.adresse) b.incomplet.push("adresse");
+  if (!b.total) b.incomplet.push("montant");
+}
+
+function cancelBooking(id) {
+  var b = findBk(id); if (!b) return;
+  var avant = caActif(DB.bookings);
+  b.statut = "annule"; b.annuleLe = todayStr();
+  save();
+  toast("ok", ["RDV annulé — " + b.client, "CA actif : " + euro(avant) + " → " + euro(caActif(DB.bookings)) + " (−" + euro(b.total) + ")"]);
+  ui.detailId = null;
+  renderAll();
+}
+
+function restoreBooking(id) {
+  var b = findBk(id); if (!b) return;
+  var avant = caActif(DB.bookings);
+  b.statut = "confirme";
+  save();
+  toast("ok", ["RDV restauré — " + b.client, "CA actif : " + euro(avant) + " → " + euro(caActif(DB.bookings))]);
+  renderAll();
+}
+
+function deleteBooking(id) {
+  DB.bookings = DB.bookings.filter(function (b) { return b.id !== id; });
+  save(); ui.detailId = null; renderAll();
+}
+
+function handleCompleteDetail() {
+  var b = findBk(ui.detailId); if (!b) return;
+  var text = (document.getElementById("d-text") || { value: "" }).value;
+  if (!text.trim() && ui.dImgs.length === 0) return;
+  if (activeKeyMissing()) { toast("err", [keyErrMsg()]); return; }
+  ui.dBusy = true; renderModals();
+  parseComplete(text, ui.dImgs).then(function (p) {
+    ui.dBusy = false; ui.dImgs = [];
+    var maj = [];
+    if (p.client && (b.client === "À COMPLÉTER" || !b.client)) { b.client = p.client; maj.push("client"); }
+    if (p.telephone) { b.telephone = p.telephone; maj.push("téléphone"); }
+    if (p.adresse) { b.adresse = p.adresse; maj.push("adresse"); }
+    if (p.date) { b.date = p.date; maj.push("date"); }
+    if (p.heure) { b.heure = p.heure; maj.push("heure"); }
+    if (p.remarques) { b.remarques = (b.remarques ? b.remarques + " · " : "") + p.remarques; }
+    refreshIncomplet(b);
+    save();
+    var dayCount = DB.bookings.filter(function (x) { return x.statut !== "annule" && x.date === b.date; }).length;
+    var lignes = maj.length ? ["Fiche complétée : " + maj.join(", ")] : ["Rien de nouveau trouvé dans ce message."];
+    if (dayCount > DB.settings.maxPerDay) lignes.push("⚠ " + humanDate(b.date) + " dépasse ta limite de " + DB.settings.maxPerDay + "/jour");
+    toast(maj.length ? "ok" : "err", lignes);
+    renderAll();
+  }).catch(function (e) {
+    ui.dBusy = false;
+    toast("err", ["Analyse impossible : " + (e && e.message ? e.message : "erreur")]);
+    renderModals();
+  });
+}
+
+/* ------------------------- calculateur devis ----------------------- */
+
+function moquettePrix(m2) {
+  m2 = Math.max(1, Math.round(m2 || 1));
+  var pal = P().moquette.find(function (t) { return m2 <= t.max; }) || P().moquette[P().moquette.length - 1];
+  return m2 * pal.prix;
+}
+
+function quoteTotals(draft) {
+  var base = 0, prem = 0, durMin = 0;
+  (draft.articles || []).forEach(function (a) {
+    var it = findItem(a.item); if (!it) return;
+    if (it.id === "moquette") {
+      var pm = moquettePrix(a.surface_m2 || 10) * (a.quantite || 1);
+      base += pm; prem += pm;
+    } else {
+      base += it.base * a.quantite;
+      prem += it.prem * a.quantite;
+    }
+    durMin += computeDuration([{ nom: it.label, qte: a.quantite }], DB.settings) * 1;
+  });
+  var minApplied = false;
+  if (base > 0 && base < P().minimum) { base = P().minimum; minApplied = true; }
+  if (prem > 0 && prem < P().minimum) { prem = P().minimum; }
+  return { base: base, prem: prem, durMin: durMin || DB.settings.defaultDuration, minApplied: minApplied };
+}
+
+function quoteText(draft) {
+  var t = quoteTotals(draft);
+  var d = P().discount;
+  var L = [];
+  var arts = (draft.articles || []).map(function (a) {
+    var it = findItem(a.item);
+    var lbl = (a.quantite > 1 ? a.quantite + "× " : "") + (it ? it.label : a.item);
+    if (it && it.id === "moquette") lbl += " (" + Math.round(a.surface_m2 || 10) + " m²)";
+    return lbl;
+  });
+  if (arts.length > 1 || (draft.articles[0] && draft.articles[0].quantite > 1)) {
+    L.push("Devis StayClean — " + arts.join(" + "));
+    L.push("");
+  }
+  L.push("Formule Basique :");
+  L.push(" " + (t.base + d) + "€❌—>" + t.base + "€✅");
+  L.push("✅🌿Aspiration complète des poussières et saletés");
+  L.push("✅ Nettoyage en profondeur avec shampouineuse et produit écologique");
+  L.push("");
+  L.push("Formule Premium : ");
+  L.push((t.prem + d) + "€❌—>" + t.prem + "€✅🏆");
+  L.push("✅ Aspiration complète des poussières et saletés");
+  L.push("✅ Nettoyage en profondeur avec shampouineuse et produit écologique");
+  L.push("✅ Désinfection vapeur pour éliminer acariens, bactéries et allergènes 🦠");
+  L.push("✅ Neutralisation des mauvaises odeurs (dans la limite du possible)");
+  L.push("");
+  L.push("📍 Intervention à domicile");
+  L.push("⏳ Durée estimée : " + fmtH(t.durMin) + " à " + fmtH(t.durMin + 30));
+  L.push("");
+  L.push("Bien à vous,");
+  L.push("L’équipe StayClean 🚿✨");
+  return L.join("\n");
+}
+
+function handleQuoteAnalyse() {
+  var text = (document.getElementById("q-text") || { value: "" }).value;
+  if (!text.trim() && ui.qImgs.length === 0) return;
+  if (activeKeyMissing()) { toast("err", [keyErrMsg()]); return; }
+  ui.qBusy = true; renderMain();
+  parseQuote(text, ui.qImgs).then(function (p) {
+    ui.qBusy = false;
+    if (!p.articles.length) {
+      toast("err", ["Aucun article reconnu. Ajoute-le manuellement ci-dessous."]);
+      p.articles = [{ item: "canape23", quantite: 1, surface_m2: null, incertain: true }];
+    }
+    ui.qDraft = p;
+    var el = document.getElementById("q-text"); if (el) p._text = el.value;
+    renderMain();
+    var inc = p.articles.filter(function (a) { return a.incertain; });
+    if (inc.length) toast("ok", ["Devis prêt — vérifie les tailles estimées avant d'envoyer."]);
+  }).catch(function (e) {
+    ui.qBusy = false;
+    toast("err", ["Analyse impossible : " + (e && e.message ? e.message : "erreur")]);
+    renderMain();
+  });
+}
+
+function quoteToBooking() {
+  var d = ui.qDraft; if (!d) return;
+  var t = quoteTotals(d);
+  var total = ui.qFormule === "basique" ? t.base : t.prem;
+  var prestas = d.articles.map(function (a) {
+    var it = findItem(a.item);
+    var nom = (it ? it.label : a.item) + (it && it.id === "moquette" ? " " + Math.round(a.surface_m2 || 10) + "m²" : "") + " — formule " + (ui.qFormule === "basique" ? "Basique" : "Premium");
+    return { nom: nom, prix: null, qte: a.quantite };
+  });
+  if (prestas.length) prestas[0].prix = total;
+  var parsed = {
+    client: d.client || null,
+    telephone: d.telephone || null,
+    adresse: d.adresse || null,
+    date: null, creneau: null, heure: null,
+    prestations: prestas,
+    total: total,
+    facture: false,
+    remarques: (d.commune ? d.commune + " · " : "") + "Devis accepté (" + (ui.qFormule === "basique" ? "Basique" : "Premium") + ")" + (d.remarques ? " · " + d.remarques : "")
+  };
+  ui.pickFormule = false;
+  commitReservations([parsed]);
+  ui.qDraft = null; ui.qImgs = [];
+  renderAll();
+}
+
+/* ------------------------ sync cloud Supabase ----------------------- */
+
+var sb = null, pushTimer = null, session = null;
+
+function sbConfigured() { return !!(DB.settings.sync.url && DB.settings.sync.anonKey); }
+function getSb() {
+  if (!sbConfigured()) return null;
+  if (!sb) {
+    try { sb = window.supabase.createClient(DB.settings.sync.url, DB.settings.sync.anonKey); }
+    catch (e) { return null; }
+  }
+  return sb;
+}
+function setCloud(state) {
+  ui.cloud = state;
+  var el = document.getElementById("cloudbadge");
+  if (!el) return;
+  el.className = "cloud " + (state === "on" ? "on" : state === "err" ? "err" : "off");
+  el.textContent = state === "on" ? "☁ Synchronisé" : state === "err" ? "⚠ Sync" : "Local";
+}
+function schedulePush() {
+  if (!session) return;
+  if (pushTimer) clearTimeout(pushTimer);
+  pushTimer = setTimeout(pushCloud, 1500);
+}
+function pushCloud() {
+  var c = getSb(); if (!c || !session) return Promise.resolve();
+  return c.from("agenda_state").upsert({
+    user_id: session.user.id,
+    data: { bookings: DB.bookings, settings: sanitizedSettings(), updatedAt: DB.updatedAt },
+    updated_at: new Date().toISOString()
+  }).then(function (res) {
+    setCloud(res.error ? "err" : "on");
+  });
+}
+function sanitizedSettings() {
+  var s = JSON.parse(JSON.stringify(DB.settings));
+  return s;
+}
+function pullCloud() {
+  var c = getSb(); if (!c || !session) return Promise.resolve();
+  return c.from("agenda_state").select("data").eq("user_id", session.user.id).maybeSingle().then(function (res) {
+    if (res.error) { setCloud("err"); return; }
+    if (res.data && res.data.data) {
+      var remote = res.data.data;
+      if ((remote.updatedAt || 0) > (DB.updatedAt || 0)) {
+        var localSync = DB.settings.sync;
+        DB = { bookings: remote.bookings || [], settings: mergeSettings(remote.settings), updatedAt: remote.updatedAt || Date.now() };
+        DB.settings.sync = localSync;
+        saveLocal();
+        renderAll();
+      } else if ((DB.updatedAt || 0) > (remote.updatedAt || 0)) {
+        pushCloud();
+      }
+      setCloud("on");
+    } else {
+      pushCloud();
+    }
+  });
+}
+function initSync() {
+  var c = getSb();
+  if (!c) { setCloud("off"); return; }
+  c.auth.getSession().then(function (res) {
+    session = res.data.session;
+    if (session) { setCloud("on"); pullCloud(); }
+    else setCloud("off");
+    renderMain();
+  });
+  c.auth.onAuthStateChange(function (_e, s) {
+    session = s;
+    if (session) { setCloud("on"); pullCloud(); } else setCloud("off");
+    renderMain();
+  });
+}
+function doLogin() {
+  var c = getSb(); if (!c) { toast("err", ["Configure d'abord l'URL et la clé Supabase dans Réglages."]); return; }
+  var email = (document.getElementById("sy-email") || {}).value || "";
+  var pass = (document.getElementById("sy-pass") || {}).value || "";
+  if (!email || !pass) { toast("err", ["Email et mot de passe requis."]); return; }
+  c.auth.signInWithPassword({ email: email, password: pass }).then(function (res) {
+    if (res.error) { toast("err", ["Connexion refusée : " + res.error.message]); return; }
+    toast("ok", ["Connecté — synchronisation activée sur cet appareil."]);
+  });
+}
+function doLogout() {
+  var c = getSb(); if (!c) return;
+  c.auth.signOut().then(function () { toast("ok", ["Déconnecté — l'app reste utilisable en local."]); });
+}
+
+/* --------------------------- statistiques ------------------------- */
+
+function computeStats() {
+  var active = DB.bookings.filter(function (b) { return b.statut !== "annule"; });
+  var annules = DB.bookings.filter(function (b) { return b.statut === "annule"; });
+  var ws = fmtDate(startOfWeek(new Date()));
+  var we = addDaysStr(ws, 6);
+  var tStr = todayStr();
+  var inWeek = active.filter(function (b) { return b.date >= ws && b.date <= we; });
+  var now = new Date();
+  var monthKey = now.getFullYear() + "-" + pad(now.getMonth() + 1);
+  var inMonth = active.filter(function (b) { return b.date.indexOf(monthKey) === 0; });
+  var annulesMois = annules.filter(function (b) { return b.date.indexOf(monthKey) === 0; });
+  function sum(a) { return a.reduce(function (s, b) { return s + (b.total || 0); }, 0); }
+
+  var weeks = [];
+  for (var i = 7; i >= 0; i--) {
+    var s = fmtDate(new Date(startOfWeek(new Date()).getTime() - i * 7 * 864e5));
+    var e = addDaysStr(s, 6);
+    var tot = sum(active.filter(function (b) { return b.date >= s && b.date <= e; }));
+    var d = parseDateStr(s);
+    weeks.push({ label: d.getDate() + "/" + (d.getMonth() + 1), total: tot, current: i === 0 });
+  }
+
+  var parPresta = {};
+  active.forEach(function (b) {
+    var arr = b.prestations.length ? b.prestations : [{ nom: "Autre", prix: b.total }];
+    arr.forEach(function (p) {
+      var n = norm(p.nom);
+      var hit = DB.settings.durations.find(function (r) { return r.kw && n.indexOf(norm(r.kw)) !== -1; });
+      var key = hit ? hit.label : (p.nom || "Autre");
+      parPresta[key] = (parPresta[key] || 0) + (p.prix == null ? 0 : p.prix);
+    });
+  });
+  var repartition = Object.keys(parPresta).map(function (k) { return [k, parPresta[k]]; })
+    .filter(function (x) { return x[1] > 0; })
+    .sort(function (a, b) { return b[1] - a[1]; }).slice(0, 6);
+
+  return {
+    caWeek: sum(inWeek), caMonth: sum(inMonth), caAnnuleMois: sum(annulesMois),
+    annules: annules,
+    aVenirWeek: sum(inWeek.filter(function (b) { return b.date > tStr || (b.date === tStr && b.statut !== "termine"); })),
+    nbWeek: inWeek.length, nbMonth: inMonth.length,
+    nbAVenir: active.filter(function (b) { return b.date >= tStr; }).length,
+    caActifTotal: caActif(DB.bookings),
+    panier: inMonth.length ? sum(inMonth) / inMonth.length : 0,
+    weeks: weeks, repartition: repartition, monthName: MOIS_FULL[now.getMonth()]
+  };
+}
+
+/* ------------------------------ rendu ------------------------------ */
+
+function showWarn(msg) {
+  var el = document.getElementById("warn");
+  if (!msg) { el.classList.add("hidden"); el.textContent = ""; }
+  else { el.classList.remove("hidden"); el.textContent = msg; }
+}
+
+var toastTimer = null;
+function toast(type, lignes) {
+  var box = document.getElementById("toastbox");
+  var html = '<div class="toast ' + type + '">';
+  lignes.forEach(function (l, i) {
+    html += "<p>" + (i === 0 && type === "ok" ? "✓ " : "") + esc(l) + "</p>";
+  });
+  html += "</div>";
+  box.innerHTML = html;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { box.innerHTML = ""; }, lignes.length > 3 ? 12000 : 8000);
+}
+
+function thumbsHtml(list, target) {
+  var h = '<div class="thumbs">';
+  list.forEach(function (im, idx) {
+    h += '<div class="thumb"><img src="' + im.preview + '" alt="Capture ' + (idx + 1) + '">' +
+      '<button class="rm" data-act="img-rm" data-target="' + target + '" data-id="' + im.id + '">×</button><span class="n tnum">' + (idx + 1) + "</span></div>";
+  });
+  if (list.length < MAX_IMGS) {
+    h += '<button class="addimg" data-act="img-add" data-target="' + target + '">+<small>capture</small></button>';
+  }
+  h += "</div>";
+  return h;
+}
+
+function weekDates() {
+  var start = startOfWeek(new Date());
+  start.setDate(start.getDate() + ui.weekOffset * 7);
+  var arr = [];
+  for (var i = 0; i < 7; i++) { var d = new Date(start); d.setDate(d.getDate() + i); arr.push(fmtDate(d)); }
+  return arr;
+}
+
+function renderPlanning() {
+  var st = computeStats();
+  var wk = weekDates();
+  var a = parseDateStr(wk[0]), b = parseDateStr(wk[6]);
+  var tStr = todayStr();
+  var h = '<p class="sub">' + st.nbAVenir + " intervention" + (st.nbAVenir > 1 ? "s" : "") + ' à venir · CA actif <b class="tnum">' + euro(st.caActifTotal) + "</b></p>";
+  h += '<div class="wknav"><button class="card arrow" data-act="wk" data-d="-1">‹</button>' +
+    '<button class="lbl" data-act="wk" data-d="0">' + a.getDate() + " " + MOIS[a.getMonth()] + " – " + b.getDate() + " " + MOIS[b.getMonth()] +
+    (ui.weekOffset !== 0 ? "<span>aujourd'hui</span>" : "") + "</button>" +
+    '<button class="card arrow" data-act="wk" data-d="1">›</button></div>';
+
+  wk.forEach(function (d, i) {
+    var dayB = DB.bookings.filter(function (x) { return x.date === d && x.statut !== "annule"; })
+      .sort(function (x, y) { return toMin(x.heure) - toMin(y.heure); });
+    var cancelled = DB.bookings.filter(function (x) { return x.date === d && x.statut === "annule"; });
+    var full = dayB.length >= DB.settings.maxPerDay;
+    var isToday = d === tStr;
+    var isPast = d < tStr;
+    h += '<section class="card day' + (isToday ? " today" : "") + (isPast && dayB.length === 0 ? " pastempty" : "") + '">';
+    h += '<div class="day-head"><span class="t">' + JOURS[i] + " " + parseDateStr(d).getDate() + (isToday ? "<small>aujourd'hui</small>" : "") + "</span><span class=\"dots\">";
+    for (var j = 0; j < DB.settings.maxPerDay; j++) h += '<i class="dot' + (j < dayB.length ? " on" : "") + '"></i>';
+    if (full) h += '<span class="full">COMPLET</span>';
+    h += "</span></div>";
+    dayB.forEach(function (x) {
+      h += '<button class="rdv" data-act="detail" data-id="' + x.id + '">' +
+        '<span class="l1"><span class="tnum">' + esc(x.heure) + '</span><span class="tnum"' + (x.statut === "termine" ? ' style="color:var(--bleu)"' : "") + ">" + euro(x.total) + "</span></span>" +
+        '<span class="cl">' + esc(x.client) + "</span>" +
+        '<span class="pr">' + esc(x.prestations.map(function (p) { return p.nom; }).join(" + ") || "Prestation à préciser") + "</span>";
+      var tags = "";
+      if (x.statut === "termine") tags += '<span class="tag done">✓ Terminé</span>';
+      if (x.incomplet && x.incomplet.length) tags += '<span class="tag todo">À compléter</span>';
+      if (x.facture) tags += '<span class="tag fac">Facture</span>';
+      if (tags) h += '<span class="tags">' + tags + "</span>";
+      h += "</button>";
+    });
+    if (cancelled.length) h += '<div class="annnote">' + cancelled.length + " annulée" + (cancelled.length > 1 ? "s" : "") + " — voir Revenus</div>";
+    if (!dayB.length && !cancelled.length) h += '<div class="libre">Libre</div>';
+    h += "</section>";
+  });
+  return h;
+}
+
+function renderDevisTab() {
+  var h = '<section class="card sec"><p class="k">Calculateur de devis</p>' +
+    '<p class="note" style="margin-top:0">Colle le message du client et/ou ses photos (canapé, tapis...). Les prix viennent de ta grille officielle — jamais inventés.</p>' +
+    '<textarea id="q-text" rows="4" placeholder="Ex : Bonjour, 2 canapés 5 places et un tapis à Molenbeek..." ' + (ui.qBusy ? "disabled" : "") + ">" + esc(ui.qDraft && ui.qDraft._text ? ui.qDraft._text : "") + "</textarea>" +
+    thumbsHtml(ui.qImgs, "quote") +
+    '<button class="btn-main" data-act="quote-analyse" ' + (ui.qBusy ? "disabled" : "") + ">" + (ui.qBusy ? "Analyse en cours…" : "Calculer le devis") + "</button>";
+  if (ui.qBusy) h += '<p class="busy">Identification des articles, calcul avec ta grille…</p>';
+  h += "</section>";
+
+  if (ui.qDraft) {
+    var d = ui.qDraft;
+    var t = quoteTotals(d);
+    h += '<section class="card sec"><p class="k">Articles détectés</p>';
+    d.articles.forEach(function (a, i) {
+      var it = findItem(a.item);
+      h += '<div class="art-row">' +
+        '<select data-qart="' + i + '" data-f="item">';
+      P().items.forEach(function (o) {
+        h += '<option value="' + o.id + '"' + (o.id === a.item ? " selected" : "") + ">" + esc(o.label) + (a.incertain && o.id === a.item ? " ⚠" : "") + "</option>";
+      });
+      h += "</select>";
+      if (it && it.id === "moquette") {
+        h += '<input class="m2 tnum" type="number" min="1" value="' + Math.round(a.surface_m2 || 10) + '" data-qart="' + i + '" data-f="m2" aria-label="Surface m²"><span style="font-size:12px;color:var(--gris)">m²</span>';
+      }
+      h += '<span class="qty"><button data-act="q-qty" data-i="' + i + '" data-d="-1">−</button><b class="tnum">' + a.quantite + '</b><button data-act="q-qty" data-i="' + i + '" data-d="1">+</button></span>' +
+        '<button class="del" data-act="q-del" data-i="' + i + '">×</button></div>';
+    });
+    h += '<button class="addline" data-act="q-add">+ Ajouter un article</button>';
+    h += '<div style="margin-top:12px;border-top:1px solid var(--bordure);padding-top:8px">' +
+      '<div class="totline"><span>Formule Basique</span><span class="tnum"><span class="old">' + (t.base + P().discount) + ' €</span><b>' + euro(t.base) + '</b></span></div>' +
+      '<div class="totline"><span>Formule Premium 🏆</span><span class="tnum"><span class="old">' + (t.prem + P().discount) + ' €</span><b>' + euro(t.prem) + '</b></span></div>' +
+      (t.minApplied ? '<p class="note">Minimum d\u2019intervention ' + P().minimum + ' € appliqué.</p>' : "") +
+      '<p class="note">Facture demandée ? TVA ' + P().tva + '% : Basique ' + euro(t.base * (1 + P().tva / 100)) + ' · Premium ' + euro(t.prem * (1 + P().tva / 100)) + '</p>' +
+      "</div></section>";
+
+    h += '<section class="card sec"><p class="k">Message prêt à envoyer</p>' +
+      '<textarea id="q-msg" class="quote-pre">' + esc(quoteText(d)) + "</textarea>" +
+      '<div class="qbtns">' +
+      '<button class="q-copy" data-act="q-copy">Copier</button>' +
+      (d.telephone ? '<a class="q-wa" data-act="q-wa" href="#">WhatsApp</a>' : '<button class="q-wa" data-act="q-copy-wa">Copier → WhatsApp</button>') +
+      '<button class="q-rdv" data-act="q-rdv">Client OK → RDV</button>' +
+      "</div>";
+    if (ui.pickFormule) {
+      h += '<p class="note" style="margin-top:12px">Quelle formule le client a-t-il choisie ?</p><div class="pick2">' +
+        '<button class="' + (ui.qFormule === "basique" ? "selq" : "") + '" data-act="q-formule" data-f="basique">Basique · ' + euro(t.base) + "</button>" +
+        '<button class="' + (ui.qFormule === "premium" ? "selq" : "") + '" data-act="q-formule" data-f="premium">Premium · ' + euro(t.prem) + "</button>" +
+        '</div><button class="btn-main" data-act="q-confirm">Créer le RDV (' + euro(ui.qFormule === "basique" ? t.base : t.prem) + ")</button>";
+    }
+    h += "</section>";
+  }
+  return h;
+}
+
+function renderRevenus() {
+  var st = computeStats();
+  var h = '<section class="card hero"><p class="k">CA cette semaine</p><p class="v grad tnum">' + euro(st.caWeek) + '</p>' +
+    '<p class="s">' + st.nbWeek + " intervention" + (st.nbWeek > 1 ? "s" : "") + (st.aVenirWeek > 0 ? " · dont " + euro(st.aVenirWeek) + " à venir" : "") + "</p></section>";
+  h += '<div class="row2"><section class="card mini"><p class="k">' + esc(st.monthName) + '</p><p class="v tnum">' + euro(st.caMonth) + '</p><p class="s">' + st.nbMonth + ' interv.</p></section>' +
+    '<section class="card mini"><p class="k">Panier moyen</p><p class="v tnum">' + euro(st.panier) + '</p><p class="s">sur le mois</p></section></div>';
+
+  h += '<section class="card sec"><p class="k">8 dernières semaines</p><div class="bars">';
+  var max = Math.max.apply(null, st.weeks.map(function (w) { return w.total; }).concat([1]));
+  st.weeks.forEach(function (w) {
+    var pct = Math.max((w.total / max) * 100, w.total > 0 ? 8 : 3);
+    h += '<div class="bar' + (w.current ? " cur" : "") + '"><i style="height:' + pct + '%"></i><span class="tnum">' + w.label + "</span></div>";
+  });
+  h += "</div></section>";
+
+  if (st.repartition.length) {
+    h += '<section class="card sec"><p class="k">Par prestation (total)</p>';
+    var m0 = st.repartition[0][1];
+    st.repartition.forEach(function (r) {
+      h += '<div class="rep"><div class="l"><span>' + esc(r[0]) + '</span><b class="tnum">' + euro(r[1]) + '</b></div><div class="g"><i style="width:' + (r[1] / m0 * 100) + '%"></i></div></div>';
+    });
+    h += "</section>";
+  }
+
+  h += '<section class="card sec"><div style="display:flex;justify-content:space-between;align-items:center"><p class="k" style="margin:0">Annulations</p><span class="tnum" style="font-size:12px;font-weight:700;color:var(--rouge)">−' + euro(st.caAnnuleMois) + " ce mois</span></div>";
+  if (!st.annules.length) {
+    h += '<p class="note" style="margin-top:8px">Aucune annulation. Annule un RDV depuis sa fiche : le CA se recalcule automatiquement.</p>';
+  } else {
+    st.annules.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; }).forEach(function (x) {
+      h += '<div class="annrow"><div class="inf"><p>' + esc(x.client) + "</p><small>" + humanDate(x.date) + " · " + esc(x.prestations.map(function (p) { return p.nom; }).join(" + ") || "—") + "</small></div>" +
+        '<span class="m tnum">−' + euro(x.total) + "</span>" +
+        '<button class="rest" data-act="restore" data-id="' + x.id + '">Restaurer</button>' +
+        '<button class="del" data-act="hard-delete" data-id="' + x.id + '" aria-label="Supprimer définitivement">×</button></div>';
+    });
+  }
+  h += "</section>";
+  return h;
+}
+
+function renderReglages() {
+  var S = DB.settings;
+  var h = '<section class="card sec"><p style="font-weight:700;font-size:14px;margin-bottom:4px">Synchronisation cloud (multi-appareils)</p>' +
+    '<p class="note">Un compte Supabase gratuit garde tes données identiques sur tes 2 téléphones et ton PC. Suis le guide fourni, puis colle ici l\u2019URL du projet et la clé anon.</p>';
+  if (!sbConfigured()) {
+    h += '<div class="fld"><label>URL du projet Supabase</label><input value="' + esc(S.sync.url) + '" placeholder="https://xxxx.supabase.co" data-set="syncUrl" autocomplete="off"></div>' +
+      '<div class="fld"><label>Clé anon (public)</label><input type="password" value="' + esc(S.sync.anonKey) + '" placeholder="eyJ..." data-set="syncKey" autocomplete="off"></div>';
+  } else if (!session) {
+    h += '<div class="fld"><label>Email</label><input id="sy-email" type="email" autocomplete="username"></div>' +
+      '<div class="fld"><label>Mot de passe</label><input id="sy-pass" type="password" autocomplete="current-password"></div>' +
+      '<button class="btn-main" style="margin-top:4px" data-act="sy-login">Se connecter</button>' +
+      '<button class="linkline" data-act="sy-reset">Modifier l\u2019URL / la clé</button>';
+  } else {
+    h += '<p class="note">✓ Connecté en tant que <b>' + esc(session.user.email) + '</b>. Tout se synchronise automatiquement.</p>' +
+      '<div class="setbtns"><button data-act="sy-now">Synchroniser maintenant</button><button data-act="sy-logout">Se déconnecter</button></div>';
+  }
+  h += "</section>";
+
+  h += '<section class="card sec"><p style="font-weight:700;font-size:14px;margin-bottom:8px">Capacité &amp; horaires</p>';
+  h += '<div class="set-row"><span>Max réservations / jour</span><input type="number" min="1" max="10" value="' + S.maxPerDay + '" data-set="maxPerDay"></div>';
+  h += '<div class="set-row"><span>Créneau matin</span><input type="time" value="' + esc(S.morningStart) + '" data-set="morningStart"></div>';
+  h += '<div class="set-row"><span>Créneau après-midi</span><input type="time" value="' + esc(S.afternoonStart) + '" data-set="afternoonStart"></div>';
+  h += '<div class="set-row"><span>Durée par défaut (min)</span><input type="number" min="15" step="15" value="' + S.defaultDuration + '" data-set="defaultDuration"></div>';
+  h += "</section>";
+
+  h += '<section class="card sec"><p style="font-weight:700;font-size:14px">Tarifs (Basique / Premium)</p>' +
+    '<p class="note">La grille officielle du calculateur. Prix barré affiché = prix + <input type="number" style="width:56px;display:inline-block;padding:4px;text-align:center" value="' + P().discount + '" data-set="pxDiscount"> €. Minimum d\u2019intervention <input type="number" style="width:64px;display:inline-block;padding:4px;text-align:center" value="' + P().minimum + '" data-set="pxMin"> €.</p>';
+  P().items.forEach(function (it, i) {
+    if (it.id === "moquette") return;
+    h += '<div class="price-row"><span class="lab">' + esc(it.label) + '</span>' +
+      '<input class="tnum" type="number" value="' + it.base + '" data-px="' + i + '" data-f="base" aria-label="Prix basique">' +
+      '<input class="tnum" type="number" value="' + it.prem + '" data-px="' + i + '" data-f="prem" aria-label="Prix premium"></div>';
+  });
+  h += '<p class="note" style="margin-top:8px">Moquette au m² (paliers) : ';
+  P().moquette.forEach(function (t, i) {
+    h += '<input type="number" style="width:52px;display:inline-block;padding:4px;text-align:center;margin:2px" value="' + t.prix + '" data-moq="' + i + '" aria-label="Prix palier"> €';
+    if (i < P().moquette.length - 1) h += " · ";
+  });
+  h += "</p></section>";
+
+  h += '<section class="card sec"><p style="font-weight:700;font-size:14px">Grille des durées</p>' +
+    '<p class="note">Si le nom de la prestation contient le mot-clé, cette durée s\u2019applique (elle sert aussi à la durée estimée du devis).</p>';
+  S.durations.forEach(function (r, i) {
+    h += '<div class="dur-row">' +
+      '<input class="lab" value="' + esc(r.label) + '" data-dur="' + i + '" data-f="label">' +
+      '<input class="kw" value="' + esc(r.kw) + '" placeholder="mot-clé" data-dur="' + i + '" data-f="kw">' +
+      '<input class="mn tnum" type="number" min="15" step="15" value="' + r.min + '" data-dur="' + i + '" data-f="min">' +
+      '<button class="del" data-act="dur-del" data-i="' + i + '" aria-label="Supprimer">×</button></div>';
+  });
+  h += '<button class="addline" data-act="dur-add">+ Ajouter une ligne</button></section>';
+
+  h += '<section class="card sec"><p style="font-weight:700;font-size:14px">Analyse (IA)</p>' +
+    '<div class="set-row"><span>Moteur</span><select data-set="provider" style="width:auto">' +
+    '<option value="gemini"' + (S.provider !== "anthropic" ? " selected" : "") + '>Gemini (gratuit)</option>' +
+    '<option value="anthropic"' + (S.provider === "anthropic" ? " selected" : "") + '>Claude (Anthropic)</option>' +
+    "</select></div>";
+  if (S.provider !== "anthropic") {
+    h += '<p class="note">Clé gratuite : aistudio.google.com/apikey → Create API key.</p>' +
+      '<input type="password" placeholder="AIza..." value="' + esc(S.geminiKey) + '" data-set="geminiKey" autocomplete="off">' +
+      '<p class="note" style="margin-top:8px">' + (S.geminiKey ? "✓ Clé Gemini enregistrée — analyse activée, 0 €." : "Sans clé : saisie manuelle uniquement.") + "</p>";
+  } else {
+    h += '<p class="note">console.anthropic.com → API Keys (à l\u2019usage).</p>' +
+      '<input type="password" placeholder="sk-ant-..." value="' + esc(S.apiKey) + '" data-set="apiKey" autocomplete="off">' +
+      '<p class="note" style="margin-top:8px">' + (S.apiKey ? "✓ Clé Anthropic enregistrée." : "Sans clé : saisie manuelle uniquement.") + "</p>";
+  }
+  h += "</section>";
+
+  h += '<section class="card sec"><p style="font-weight:700;font-size:14px">Sauvegarde</p>' +
+    '<p class="note">Exporte un fichier de secours de temps en temps, même avec la synchronisation.</p>' +
+    '<div class="setbtns"><button data-act="export">Exporter</button><button data-act="import">Importer</button></div>' +
+    '<input type="file" id="importfile" accept="application/json" class="hidden"></section>';
+  return h;
+}
+
+function renderMain() {
+  var main = document.getElementById("main");
+  ["planning", "devis", "revenus", "reglages"].forEach(function (t) {
+    var el = document.getElementById("tab-" + t);
+    if (el) el.classList.toggle("on", ui.tab === t);
+  });
+  if (ui.tab === "planning") main.innerHTML = renderPlanning();
+  else if (ui.tab === "devis") main.innerHTML = renderDevisTab();
+  else if (ui.tab === "revenus") main.innerHTML = renderRevenus();
+  else main.innerHTML = renderReglages();
+}
+
+function renderModals() {
+  var box = document.getElementById("modals");
+  var h = "";
+
+  if (ui.showDevis) {
+    h += '<div class="overlay" id="ov-devis"><div class="sheet">' +
+      '<div class="sheet-head"><h2>Nouvelle réservation</h2>' +
+      '<button class="x" data-act="close-devis">×</button></div>' +
+      '<p class="hint">Colle le ou les messages clients et/ou jusqu\u2019à ' + MAX_IMGS + ' captures. Plusieurs clients = plusieurs RDV créés automatiquement.</p>' +
+      '<textarea id="devis-text" rows="5" placeholder="Colle ici le ou les messages clients…" ' + (ui.busy ? "disabled" : "") + "></textarea>" +
+      thumbsHtml(ui.imgs, "resa");
+    if (ui.imgs.length) h += '<p class="imgcount">' + ui.imgs.length + "/" + MAX_IMGS + " capture" + (ui.imgs.length > 1 ? "s" : "") + "</p>";
+    h += '<button class="btn-main" data-act="analyse" ' + (ui.busy ? "disabled" : "") + ">" +
+      (ui.busy ? "Analyse en cours…" : "Analyser et planifier") + "</button>";
+    if (ui.busy) h += '<p class="busy">Lecture, séparation des demandes, placement au meilleur créneau…</p>';
+    h += '<button class="linkline" data-act="open-manuel">ou saisir un RDV manuellement</button>';
+    h += "</div></div>";
+  }
+
+  if (ui.showManuel) {
+    h += '<div class="overlay" id="ov-manuel"><div class="sheet">' +
+      '<div class="sheet-head"><h2>Saisie manuelle</h2><button class="x" data-act="close-manuel">×</button></div>' +
+      '<div class="fld"><label>Client</label><input id="m-client"></div>' +
+      '<div class="two"><div class="fld"><label>Téléphone</label><input id="m-tel" inputmode="tel"></div>' +
+      '<div class="fld"><label>Montant (€)</label><input id="m-total" type="number" inputmode="decimal"></div></div>' +
+      '<div class="fld"><label>Adresse</label><input id="m-adr"></div>' +
+      '<div class="fld"><label>Prestation</label><input id="m-presta" placeholder="Canapé 6/7 places — Premium"></div>' +
+      '<div class="two"><div class="fld"><label>Date</label><input id="m-date" type="date" value="' + addDaysStr(todayStr(), 1) + '"></div>' +
+      '<div class="fld small"><label>Heure précise</label><input id="m-heure" type="time"></div></div>' +
+      '<div class="fld"><label>Créneau (si pas d\u2019heure)</label><select id="m-creneau"><option value="apres-midi">Après-midi</option><option value="matin">Matin</option></select></div>' +
+      '<div class="fld" style="display:flex;align-items:center;gap:8px"><input id="m-fac" type="checkbox" style="width:auto"><label style="margin:0">Facture demandée</label></div>' +
+      '<div class="fld"><label>Remarques</label><input id="m-rem"></div>' +
+      '<button class="btn-main" data-act="manuel-save">Planifier ce RDV</button>' +
+      "</div></div>";
+  }
+
+  var bk = ui.detailId ? findBk(ui.detailId) : null;
+  if (bk) {
+    h += '<div class="overlay" id="ov-detail"><div class="sheet">' +
+      '<div class="sheet-head"><h2>' + esc(bk.client) + '</h2><button class="x" data-act="close-detail">×</button></div>' +
+      '<p class="hint">' + esc(bk.prestations.map(function (p) { return p.nom; }).join(" + ") || "Prestation à préciser") + ' · <b class="tnum" style="color:var(--nuit)">' + euro(bk.total) + "</b>" + (bk.facture ? " · avec facture" : "") + "</p>";
+
+    if (bk.incomplet && bk.incomplet.length) {
+      h += '<div class="mini-analyse"><p class="t">⚡ Compléter avec un message ou une capture</p>' +
+        '<textarea id="d-text" rows="3" placeholder="Colle la réponse du client (adresse, GSM, date...)" ' + (ui.dBusy ? "disabled" : "") + "></textarea>" +
+        thumbsHtml(ui.dImgs, "detail") +
+        '<button class="btn-main" style="margin-top:10px;padding:11px" data-act="d-complete" ' + (ui.dBusy ? "disabled" : "") + ">" + (ui.dBusy ? "Analyse…" : "Compléter automatiquement") + "</button></div>";
+    }
+
+    h += '<div class="two"><div class="fld"><label>Date</label><input type="date" value="' + bk.date + '" data-bk="date"></div>' +
+      '<div class="fld small"><label>Heure</label><input type="time" value="' + bk.heure + '" data-bk="heure"></div></div>' +
+      '<div class="fld"><label>Client</label><input value="' + esc(bk.client) + '" data-bk="client" class="' + (!bk.client || bk.client === "À COMPLÉTER" ? "warn" : "") + '"></div>' +
+      '<div class="fld"><label>Téléphone</label><input value="' + esc(bk.telephone) + '" data-bk="telephone" inputmode="tel" class="' + (!bk.telephone ? "warn" : "") + '"></div>' +
+      '<div class="fld"><label>Adresse</label><input value="' + esc(bk.adresse) + '" data-bk="adresse" class="' + (!bk.adresse ? "warn" : "") + '"></div>' +
+      '<div class="fld"><label>Montant (€)</label><input type="number" value="' + bk.total + '" data-bk="total" inputmode="decimal" class="' + (!bk.total ? "warn" : "") + '"></div>' +
+      (bk.remarques ? '<p class="rem">' + esc(bk.remarques) + "</p>" : "");
+    var acts = "";
+    if (bk.telephone) acts += '<a href="tel:' + esc(bk.telephone.replace(/\s/g, "")) + '">Appeler</a>';
+    if (bk.adresse) acts += '<a href="https://maps.google.com/?q=' + encodeURIComponent(bk.adresse) + '" target="_blank" rel="noreferrer">Itinéraire</a>';
+    if (acts) h += '<div class="acts">' + acts + "</div>";
+    h += '<div class="acts2">';
+    if (bk.statut !== "termine") h += '<button class="b-done" data-act="mark-done" data-id="' + bk.id + '">✓ Marquer terminé</button>';
+    else h += '<button class="b-open" data-act="mark-open" data-id="' + bk.id + '">Rouvrir</button>';
+    h += '<button class="b-cancel" data-act="cancel" data-id="' + bk.id + '">Annuler le RDV</button></div>';
+    h += "</div></div>";
+  }
+
+  box.innerHTML = h;
+}
+
+function renderAll() { renderMain(); renderModals(); }
+
+/* --------------------------- interactions -------------------------- */
+
+var fileTarget = "resa";
+
+document.addEventListener("click", function (e) {
+  var el = e.target.closest("[data-act]");
+  if (!el) {
+    var ov = e.target.classList && e.target.classList.contains("overlay") ? e.target : null;
+    if (ov && ov.id === "ov-detail") { ui.detailId = null; ui.dImgs = []; renderAll(); }
+    return;
+  }
+  var act = el.getAttribute("data-act");
+  switch (act) {
+    case "tab": ui.tab = el.getAttribute("data-tab"); renderMain(); break;
+    case "wk": {
+      var dd = +el.getAttribute("data-d");
+      ui.weekOffset = dd === 0 ? 0 : ui.weekOffset + dd;
+      renderMain(); break;
+    }
+    case "open-devis": ui.showDevis = true; renderModals(); break;
+    case "close-devis": if (!ui.busy) { ui.showDevis = false; ui.imgs = []; renderModals(); } break;
+    case "open-manuel": ui.showDevis = false; ui.showManuel = true; renderModals(); break;
+    case "close-manuel": ui.showManuel = false; renderModals(); break;
+    case "img-add": fileTarget = el.getAttribute("data-target") || "resa"; document.getElementById("filepick").click(); break;
+    case "img-rm": {
+      var tgt = el.getAttribute("data-target") || "resa";
+      var id = el.getAttribute("data-id");
+      setImgListFor(tgt, imgListFor(tgt).filter(function (x) { return x.id !== id; }));
+      if (tgt === "quote") renderMain(); else renderModals();
+      break;
+    }
+    case "analyse": handleAnalyse(); break;
+    case "manuel-save": handleManuel(); break;
+    case "detail": ui.detailId = el.getAttribute("data-id"); ui.dImgs = []; renderModals(); break;
+    case "close-detail": ui.detailId = null; ui.dImgs = []; renderAll(); break;
+    case "d-complete": handleCompleteDetail(); break;
+    case "mark-done": { var b1 = findBk(el.getAttribute("data-id")); if (b1) { b1.statut = "termine"; save(); renderAll(); } break; }
+    case "mark-open": { var b2 = findBk(el.getAttribute("data-id")); if (b2) { b2.statut = "confirme"; save(); renderAll(); } break; }
+    case "cancel": cancelBooking(el.getAttribute("data-id")); break;
+    case "restore": restoreBooking(el.getAttribute("data-id")); break;
+    case "hard-delete": deleteBooking(el.getAttribute("data-id")); break;
+    case "quote-analyse": handleQuoteAnalyse(); break;
+    case "q-qty": {
+      if (!ui.qDraft) break;
+      var qi = +el.getAttribute("data-i");
+      var art = ui.qDraft.articles[qi];
+      if (art) { art.quantite = Math.max(1, art.quantite + (+el.getAttribute("data-d"))); syncQText(); renderMain(); }
+      break;
+    }
+    case "q-del": {
+      if (!ui.qDraft) break;
+      ui.qDraft.articles.splice(+el.getAttribute("data-i"), 1);
+      syncQText(); renderMain(); break;
+    }
+    case "q-add": {
+      if (!ui.qDraft) ui.qDraft = { articles: [], _text: "" };
+      ui.qDraft.articles.push({ item: "canape23", quantite: 1, surface_m2: null, incertain: false });
+      syncQText(); renderMain(); break;
+    }
+    case "q-copy": case "q-copy-wa": {
+      var msg = (document.getElementById("q-msg") || {}).value || "";
+      copyText(msg).then(function () {
+        toast("ok", [act === "q-copy-wa" ? "Devis copié — colle-le dans WhatsApp." : "Devis copié."]);
+      });
+      break;
+    }
+    case "q-wa": {
+      e.preventDefault();
+      var msg2 = (document.getElementById("q-msg") || {}).value || "";
+      var tel = (ui.qDraft && ui.qDraft.telephone || "").replace(/[^0-9+]/g, "").replace(/^\+/, "").replace(/^0/, "32");
+      window.open("https://wa.me/" + tel + "?text=" + encodeURIComponent(msg2), "_blank");
+      break;
+    }
+    case "q-rdv": ui.pickFormule = true; renderMain(); break;
+    case "q-formule": ui.qFormule = el.getAttribute("data-f"); renderMain(); break;
+    case "q-confirm": quoteToBooking(); break;
+    case "sy-login": doLogin(); break;
+    case "sy-logout": doLogout(); break;
+    case "sy-now": pullCloud().then(function () { return pushCloud(); }).then(function () { toast("ok", ["Synchronisation effectuée."]); }); break;
+    case "sy-reset": DB.settings.sync = { url: "", anonKey: "" }; sb = null; session = null; saveLocal(); setCloud("off"); renderMain(); break;
+    case "dur-add":
+      DB.settings.durations.push({ label: "Nouvelle prestation", kw: "", min: 60 });
+      save(); renderMain(); break;
+    case "dur-del": {
+      DB.settings.durations.splice(+el.getAttribute("data-i"), 1);
+      save(); renderMain(); break;
+    }
+    case "export": {
+      var blob = new Blob([JSON.stringify(DB, null, 2)], { type: "application/json" });
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "stayclean-agenda-sauvegarde-" + todayStr() + ".json";
+      document.body.appendChild(a); a.click(); a.remove();
+      toast("ok", ["Sauvegarde exportée."]); break;
+    }
+    case "import": document.getElementById("importfile").click(); break;
+  }
+});
+
+function copyText(txt) {
+  if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(txt).catch(function () { return fallbackCopy(txt); });
+  return Promise.resolve(fallbackCopy(txt));
+}
+function fallbackCopy(txt) {
+  var ta = document.createElement("textarea");
+  ta.value = txt; document.body.appendChild(ta); ta.select();
+  try { document.execCommand("copy"); } catch (e) {}
+  ta.remove();
+}
+function syncQText() {
+  var el = document.getElementById("q-text");
+  if (el && ui.qDraft) ui.qDraft._text = el.value;
+}
+
+document.addEventListener("change", function (e) {
+  var t = e.target;
+
+  if (t.id === "filepick") { addFiles(t.files, fileTarget); t.value = ""; return; }
+
+  if (t.id === "importfile") {
+    var f = t.files && t.files[0]; t.value = "";
+    if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var d = JSON.parse(String(reader.result));
+        if (!d || !Array.isArray(d.bookings)) throw new Error("bad");
+        if (!confirm("Remplacer toutes les données actuelles par cette sauvegarde ?")) return;
+        var keepSync = DB.settings.sync;
+        DB = { bookings: d.bookings, settings: mergeSettings(d.settings), updatedAt: Date.now() };
+        DB.settings.sync = keepSync;
+        save(); renderAll();
+        toast("ok", ["Sauvegarde importée — " + DB.bookings.length + " RDV chargés."]);
+      } catch (err) {
+        toast("err", ["Fichier de sauvegarde invalide."]);
+      }
+    };
+    reader.readAsText(f);
+    return;
+  }
+
+  var setKey = t.getAttribute("data-set");
+  if (setKey) {
+    var v = t.value;
+    if (setKey === "maxPerDay") { DB.settings.maxPerDay = Math.max(1, Math.min(10, Number(v) || 1)); }
+    else if (setKey === "defaultDuration") { DB.settings.defaultDuration = Number(v) || 120; }
+    else if (setKey === "syncUrl") { DB.settings.sync.url = v.trim(); sb = null; }
+    else if (setKey === "syncKey") { DB.settings.sync.anonKey = v.trim(); sb = null; }
+    else if (setKey === "pxDiscount") { P().discount = Number(v) || 0; }
+    else if (setKey === "pxMin") { P().minimum = Number(v) || 0; }
+    else { DB.settings[setKey] = v; }
+    save();
+    if (["apiKey", "geminiKey", "provider", "syncUrl", "syncKey", "pxDiscount", "pxMin"].indexOf(setKey) !== -1) {
+      if (setKey === "syncUrl" || setKey === "syncKey") { if (sbConfigured()) initSync(); }
+      renderMain();
+    }
+    return;
+  }
+
+  var pxIdx = t.getAttribute("data-px");
+  if (pxIdx != null) {
+    var itp = P().items[+pxIdx];
+    if (itp) { itp[t.getAttribute("data-f")] = Number(t.value) || 0; save(); if (ui.tab === "devis") renderMain(); }
+    return;
+  }
+  var moqIdx = t.getAttribute("data-moq");
+  if (moqIdx != null) {
+    var pal = P().moquette[+moqIdx];
+    if (pal) { pal.prix = Number(t.value) || 0; save(); }
+    return;
+  }
+
+  var qArt = t.getAttribute("data-qart");
+  if (qArt != null && ui.qDraft) {
+    var art2 = ui.qDraft.articles[+qArt];
+    if (art2) {
+      var f = t.getAttribute("data-f");
+      if (f === "item") { art2.item = t.value; art2.incertain = false; if (t.value === "moquette" && !art2.surface_m2) art2.surface_m2 = 10; }
+      else if (f === "m2") { art2.surface_m2 = Math.max(1, Number(t.value) || 1); }
+      syncQText(); renderMain();
+    }
+    return;
+  }
+
+  var durIdx = t.getAttribute("data-dur");
+  if (durIdx != null) {
+    var f2 = t.getAttribute("data-f");
+    var row = DB.settings.durations[+durIdx];
+    if (row) { row[f2] = f2 === "min" ? (Number(t.value) || 60) : t.value; save(); }
+    return;
+  }
+
+  var bkField = t.getAttribute("data-bk");
+  if (bkField && ui.detailId) {
+    var bk = findBk(ui.detailId);
+    if (bk) {
+      bk[bkField] = bkField === "total" ? (Number(t.value) || 0) : t.value;
+      refreshIncomplet(bk);
+      save();
+      renderMain();
+    }
+  }
+});
+
+document.addEventListener("paste", function (e) {
+  var target = ui.showDevis ? "resa" : (ui.detailId ? "detail" : (ui.tab === "devis" ? "quote" : null));
+  if (!target) return;
+  var items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  var files = [];
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].type && items[i].type.indexOf("image/") === 0) {
+      var f = items[i].getAsFile();
+      if (f) files.push(f);
+    }
+  }
+  if (files.length) { addFiles(files, target); e.preventDefault(); }
+});
+
+document.addEventListener("visibilitychange", function () {
+  if (document.visibilityState === "visible" && session) pullCloud();
+});
+
+/* --------------------------- démarrage ----------------------------- */
+
+renderAll();
+if (sbConfigured()) initSync(); else setCloud("off");
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(function () {});
+}
+</script>
+</body>
+</html>
