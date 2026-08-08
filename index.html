@@ -949,6 +949,8 @@ function doLogin() {
   var email = (document.getElementById("sy-email") || {}).value || "";
   var pass = (document.getElementById("sy-pass") || {}).value || "";
   if (!email || !pass) { toast("err", ["Email et mot de passe requis."]); return; }
+  DB.settings.syncEmail = email;
+  saveLocal();
   c.auth.signInWithPassword({ email: email, password: pass }).then(function (res) {
     if (res.error) { toast("err", ["Connexion refusée : " + res.error.message]); return; }
     toast("ok", ["Connecté — synchronisation activée sur cet appareil."]);
@@ -1190,10 +1192,12 @@ function renderReglages() {
   var h = '<section class="card sec"><p style="font-weight:700;font-size:14px;margin-bottom:4px">Synchronisation cloud (multi-appareils)</p>' +
     '<p class="note">Un compte Supabase gratuit garde tes données identiques sur tes 2 téléphones et ton PC. Suis le guide fourni, puis colle ici l\u2019URL du projet et la clé anon.</p>';
   if (!sbConfigured()) {
-    h += '<div class="fld"><label>URL du projet Supabase</label><input value="' + esc(S.sync.url) + '" placeholder="https://xxxx.supabase.co" data-set="syncUrl" autocomplete="off"></div>' +
+    h += '<div class="fld"><label>Code de configuration (tout-en-un)</label><input placeholder="Colle ici le code donné par Claude" data-set="setupCode" autocomplete="off"></div>' +
+      '<p class="note">— ou remplis les deux champs manuellement :</p>' +
+      '<div class="fld"><label>URL du projet Supabase</label><input value="' + esc(S.sync.url) + '" placeholder="https://xxxx.supabase.co" data-set="syncUrl" autocomplete="off"></div>' +
       '<div class="fld"><label>Clé anon (public)</label><input type="password" value="' + esc(S.sync.anonKey) + '" placeholder="eyJ..." data-set="syncKey" autocomplete="off"></div>';
   } else if (!session) {
-    h += '<div class="fld"><label>Email</label><input id="sy-email" type="email" autocomplete="username"></div>' +
+    h += '<div class="fld"><label>Email</label><input id="sy-email" type="email" value="' + esc(S.syncEmail || "") + '" autocomplete="username"></div>' +
       '<div class="fld"><label>Mot de passe</label><input id="sy-pass" type="password" autocomplete="current-password"></div>' +
       '<button class="btn-main" style="margin-top:4px" data-act="sy-login">Se connecter</button>' +
       '<button class="linkline" data-act="sy-reset">Modifier l\u2019URL / la clé</button>';
@@ -1489,6 +1493,26 @@ document.addEventListener("change", function (e) {
     var v = t.value;
     if (setKey === "maxPerDay") { DB.settings.maxPerDay = Math.max(1, Math.min(10, Number(v) || 1)); }
     else if (setKey === "defaultDuration") { DB.settings.defaultDuration = Number(v) || 120; }
+    else if (setKey === "setupCode") {
+      try {
+        var conf = JSON.parse(atob(v.replace(/\s/g, "")));
+        if (conf.u && conf.k) {
+          DB.settings.sync.url = conf.u;
+          DB.settings.sync.anonKey = conf.k;
+          if (conf.e) DB.settings.syncEmail = conf.e;
+          sb = null;
+          saveLocal();
+          toast("ok", ["Configuration chargée.", "Entre ton mot de passe et connecte-toi."]);
+          if (sbConfigured()) initSync();
+        } else {
+          toast("err", ["Code incomplet — recopie-le en entier."]);
+        }
+      } catch (err2) {
+        toast("err", ["Code invalide — recopie-le en entier avec le bouton Copier."]);
+      }
+      renderMain();
+      return;
+    }
     else if (setKey === "syncUrl") { DB.settings.sync.url = v.trim(); sb = null; }
     else if (setKey === "syncKey") { DB.settings.sync.anonKey = v.trim(); sb = null; }
     else if (setKey === "pxDiscount") { P().discount = Number(v) || 0; }
@@ -1567,6 +1591,23 @@ document.addEventListener("visibilitychange", function () {
 });
 
 /* --------------------------- démarrage ----------------------------- */
+
+(function () {
+  try {
+    var hh = location.hash;
+    if (hh && hh.indexOf("#setup=") === 0) {
+      var conf = JSON.parse(atob(decodeURIComponent(hh.slice(7)).replace(/\s/g, "")));
+      if (conf.u && conf.k) {
+        DB.settings.sync.url = conf.u;
+        DB.settings.sync.anonKey = conf.k;
+        if (conf.e) DB.settings.syncEmail = conf.e;
+        saveLocal();
+        ui.tab = "reglages";
+      }
+      history.replaceState(null, "", location.pathname + location.search);
+    }
+  } catch (e) {}
+})();
 
 renderAll();
 if (sbConfigured()) initSync(); else setCloud("off");
