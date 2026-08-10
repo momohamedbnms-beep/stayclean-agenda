@@ -1,4 +1,4 @@
-var V = "stayclean-agenda-cache-v3";
+var V = "stayclean-agenda-cache-v4";
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 self.addEventListener("install", function (e) {
   self.skipWaiting();
