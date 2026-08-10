@@ -110,6 +110,8 @@ main{padding:16px 20px 100px}
 .dayrow small{color:var(--gris);font-weight:400}
 .dayrow b{font-weight:800}
 .dayrow:active{opacity:.6}
+.bars.tight{gap:1px}
+.bars.tight .bar span{font-size:8px;min-height:10px}
 .set-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;gap:12px}
 .set-row span{font-size:14px}
 .set-row input,.set-row select{width:auto}
@@ -353,6 +355,7 @@ function save() {
 
 var ui = {
   tab: "planning", weekOffset: 0,
+  revPeriod: "semaine", revWeekOff: 0, revMonth: null, revYear: null,
   imgs: [], busy: false,
   detailId: null, showDevis: false, showManuel: false,
   fileTarget: "resa",
@@ -1285,62 +1288,128 @@ function renderDevisTab() {
   return h;
 }
 
+function rangeFor(period) {
+  var now = new Date();
+  if (period === "mois") {
+    var mc = ui.revMonth || { y: now.getFullYear(), m: now.getMonth() };
+    ui.revMonth = mc;
+    var s = mc.y + "-" + pad(mc.m + 1) + "-01";
+    var e = mc.y + "-" + pad(mc.m + 1) + "-" + pad(new Date(mc.y, mc.m + 1, 0).getDate());
+    return { s: s, e: e, label: MOIS_FULL[mc.m] + " " + mc.y, current: mc.y === now.getFullYear() && mc.m === now.getMonth(), gran: "mois" };
+  }
+  if (period === "annee") {
+    var y = ui.revYear || now.getFullYear();
+    ui.revYear = y;
+    return { s: y + "-01-01", e: y + "-12-31", label: "Ann\u00e9e " + y, current: y === now.getFullYear(), gran: "annee" };
+  }
+  var start = startOfWeek(new Date());
+  start.setDate(start.getDate() + ui.revWeekOff * 7);
+  var sw = fmtDate(start), ew = addDaysStr(sw, 6);
+  var a = parseDateStr(sw), b2 = parseDateStr(ew);
+  return { s: sw, e: ew, label: a.getDate() + " " + MOIS[a.getMonth()] + " \u2013 " + b2.getDate() + " " + MOIS[b2.getMonth()], current: ui.revWeekOff === 0, gran: "semaine" };
+}
+
+function periodStats(r) {
+  var active = DB.bookings.filter(function (b) { return b.statut !== "annule" && b.date >= r.s && b.date <= r.e; });
+  var annul = DB.bookings.filter(function (b) { return b.statut === "annule" && b.date >= r.s && b.date <= r.e; });
+  var tStr = todayStr();
+  function sum(a) { return a.reduce(function (s, b) { return s + (b.total || 0); }, 0); }
+  var byDay = {};
+  active.forEach(function (b) {
+    if (!byDay[b.date]) byDay[b.date] = { t: 0, n: 0 };
+    byDay[b.date].t += b.total || 0; byDay[b.date].n++;
+  });
+  var parJour = Object.keys(byDay).sort().reverse().map(function (d) {
+    return { date: d, total: byDay[d].t, nb: byDay[d].n, futur: d > tStr };
+  });
+  var bars = [];
+  if (r.gran === "semaine") {
+    for (var i = 0; i < 7; i++) {
+      var d = addDaysStr(r.s, i);
+      bars.push({ label: JOURS[i], total: (byDay[d] || { t: 0 }).t, current: d === tStr });
+    }
+  } else if (r.gran === "mois") {
+    var days = parseInt(r.e.slice(8), 10);
+    for (var j = 1; j <= days; j++) {
+      var dj = r.s.slice(0, 8) + pad(j);
+      bars.push({ label: (j === 1 || j % 5 === 0) ? String(j) : "", total: (byDay[dj] || { t: 0 }).t, current: dj === tStr });
+    }
+  } else {
+    var y = parseInt(r.s.slice(0, 4), 10);
+    var nowD = new Date();
+    for (var m2 = 0; m2 < 12; m2++) {
+      var mk = y + "-" + pad(m2 + 1);
+      var mt = 0;
+      active.forEach(function (b) { if (b.date.indexOf(mk) === 0) mt += b.total || 0; });
+      bars.push({ label: MOIS[m2].charAt(0).toUpperCase(), total: mt, current: y === nowD.getFullYear() && m2 === nowD.getMonth() });
+    }
+  }
+  var parPresta = {};
+  active.forEach(function (b) {
+    var arr = b.prestations.length ? b.prestations : [{ nom: "Autre", prix: b.total }];
+    arr.forEach(function (p) {
+      var n = norm(p.nom);
+      var hit = DB.settings.durations.find(function (rr) { return rr.kw && n.indexOf(norm(rr.kw)) !== -1; });
+      var key = hit ? hit.label : (p.nom || "Autre");
+      parPresta[key] = (parPresta[key] || 0) + (p.prix == null ? 0 : p.prix);
+    });
+  });
+  var repartition = Object.keys(parPresta).map(function (k) { return [k, parPresta[k]]; })
+    .filter(function (x) { return x[1] > 0; })
+    .sort(function (a, b) { return b[1] - a[1]; }).slice(0, 6);
+  var aVenir = sum(active.filter(function (b) { return b.date > tStr || (b.date === tStr && b.statut !== "termine"); }));
+  return { ca: sum(active), nb: active.length, panier: active.length ? sum(active) / active.length : 0, aVenir: aVenir, bars: bars, parJour: parJour, repartition: repartition, annules: annul, caAnnule: sum(annul) };
+}
+
 function renderRevenus() {
   var st = computeStats();
-  var h = '<div class="kpis">' +
-    '<section class="kpi today"><p class="k">Aujourd\u2019hui</p><p class="v tnum">' + euro(st.caToday) + '</p><p class="s">' + st.nbToday + " intervention" + (st.nbToday > 1 ? "s" : "") + "</p></section>" +
-    '<section class="card kpi"><p class="k">Cette semaine</p><p class="v grad tnum">' + euro(st.caWeek) + '</p><p class="s">' + st.nbWeek + " interv." + (st.aVenirWeek > 0 ? " \u00b7 " + euro(st.aVenirWeek) + " \u00e0 venir" : "") + "</p></section>" +
-    '<section class="card kpi"><p class="k">' + esc(st.monthName) + '</p><p class="v tnum">' + euro(st.caMonth) + '</p><p class="s">' + st.nbMonth + " interv. \u00b7 panier " + euro(st.panier) + "</p></section>" +
-    '<section class="card kpi"><p class="k">Ann\u00e9e ' + st.year + '</p><p class="v tnum">' + euro(st.caYear) + '</p><p class="s">' + st.nbYear + " interventions cumul\u00e9es</p></section>" +
+  var period = ui.revPeriod || "semaine";
+  var r = rangeFor(period);
+  var p = periodStats(r);
+  var h = '<p class="sub">Aujourd\u2019hui : <b class="tnum">' + euro(st.caToday) + '</b> \u00b7 Ann\u00e9e ' + st.year + ' : <b class="tnum">' + euro(st.caYear) + "</b></p>";
+  h += '<div class="seg">' +
+    '<button class="' + (period === "semaine" ? "on" : "") + '" data-act="rev-period" data-v="semaine">Semaine</button>' +
+    '<button class="' + (period === "mois" ? "on" : "") + '" data-act="rev-period" data-v="mois">Mois</button>' +
+    '<button class="' + (period === "annee" ? "on" : "") + '" data-act="rev-period" data-v="annee">Ann\u00e9e</button>' +
     "</div>";
-
-  h += '<section class="card sec"><p class="k">8 dernières semaines</p><div class="bars">';
-  var max = Math.max.apply(null, st.weeks.map(function (w) { return w.total; }).concat([1]));
-  st.weeks.forEach(function (w) {
+  h += '<div class="wknav"><button class="card arrow" data-act="rev-nav" data-d="-1">\u2039</button>' +
+    '<button class="lbl" data-act="rev-nav" data-d="0">' + r.label + (!r.current ? "<span>aujourd\u2019hui</span>" : "") + "</button>" +
+    '<button class="card arrow" data-act="rev-nav" data-d="1">\u203a</button></div>';
+  h += '<section class="card hero"><p class="k">Chiffre d\u2019affaires</p><p class="v grad tnum">' + euro(p.ca) + '</p>' +
+    '<p class="s">' + p.nb + " intervention" + (p.nb > 1 ? "s" : "") + (p.nb ? " \u00b7 panier " + euro(p.panier) : "") + (p.aVenir > 0 ? " \u00b7 dont " + euro(p.aVenir) + " \u00e0 venir" : "") + "</p></section>";
+  h += '<section class="card sec"><p class="k">' + (r.gran === "annee" ? "Par mois" : "Par jour") + '</p><div class="bars' + (r.gran === "mois" ? " tight" : "") + '">';
+  var max = Math.max.apply(null, p.bars.map(function (w) { return w.total; }).concat([1]));
+  p.bars.forEach(function (w) {
     var pct = Math.max((w.total / max) * 100, w.total > 0 ? 8 : 3);
     h += '<div class="bar' + (w.current ? " cur" : "") + '"><i style="height:' + pct + '%"></i><span class="tnum">' + w.label + "</span></div>";
   });
   h += "</div></section>";
-
-  h += '<section class="card sec"><p class="k">Ann\u00e9e ' + st.year + ' par mois</p><div class="bars">';
-  var maxM = Math.max.apply(null, st.months.map(function (w) { return w.total; }).concat([1]));
-  st.months.forEach(function (w) {
-    var pct = Math.max((w.total / maxM) * 100, w.total > 0 ? 8 : 3);
-    h += '<div class="bar' + (w.current ? " cur" : "") + '"><i style="height:' + pct + '%"></i><span>' + w.label.charAt(0).toUpperCase() + "</span></div>";
-  });
-  h += "</div></section>";
-
-  if (st.repartition.length) {
-    h += '<section class="card sec"><p class="k">Par prestation (total)</p>';
-    var m0 = st.repartition[0][1];
-    st.repartition.forEach(function (r) {
-      h += '<div class="rep"><div class="l"><span>' + esc(r[0]) + '</span><b class="tnum">' + euro(r[1]) + '</b></div><div class="g"><i style="width:' + (r[1] / m0 * 100) + '%"></i></div></div>';
+  if (p.parJour.length) {
+    h += '<section class="card sec"><p class="k">D\u00e9tail par jour</p>';
+    p.parJour.forEach(function (dj) {
+      h += '<button class="dayrow" data-act="cal-day" data-d="' + dj.date + '">' +
+        '<span>' + humanDate(dj.date) + ' <small>\u00b7 ' + dj.nb + ' interv.' + (dj.futur ? " \u00b7 \u00e0 venir" : "") + '</small></span>' +
+        '<b class="tnum">' + euro(dj.total) + "</b></button>";
+    });
+    h += '<p class="note" style="margin-top:8px">Touche une ligne pour ouvrir le d\u00e9tail du jour.</p></section>';
+  }
+  if (p.repartition.length) {
+    h += '<section class="card sec"><p class="k">Par prestation</p>';
+    var m0 = p.repartition[0][1];
+    p.repartition.forEach(function (rr) {
+      h += '<div class="rep"><div class="l"><span>' + esc(rr[0]) + '</span><b class="tnum">' + euro(rr[1]) + '</b></div><div class="g"><i style="width:' + (rr[1] / m0 * 100) + '%"></i></div></div>';
     });
     h += "</section>";
   }
-
-  h += '<section class="card sec"><p class="k">CA par jour</p>';
-  if (!st.parJour.length) {
-    h += '<p class="note" style="margin-top:4px">Tes journ\u00e9es appara\u00eetront ici d\u00e8s ta premi\u00e8re intervention.</p>';
+  h += '<section class="card sec"><div style="display:flex;justify-content:space-between;align-items:center"><p class="k" style="margin:0">Annulations \u00b7 p\u00e9riode</p><span class="tnum" style="font-size:12px;font-weight:700;color:var(--rouge)">\u2212' + euro(p.caAnnule) + "</span></div>";
+  if (!p.annules.length) {
+    h += '<p class="note" style="margin-top:8px">Aucune annulation sur cette p\u00e9riode.</p>';
   } else {
-    st.parJour.forEach(function (dj) {
-      h += '<button class="dayrow" data-act="cal-day" data-d="' + dj.date + '">' +
-        '<span>' + humanDate(dj.date) + ' <small>\u00b7 ' + dj.nb + ' interv.</small></span>' +
-        '<b class="tnum">' + euro(dj.total) + '</b></button>';
-    });
-    h += '<p class="note" style="margin-top:8px">14 derniers jours d\u2019activit\u00e9 \u2014 touche une ligne pour ouvrir le d\u00e9tail du jour.</p>';
-  }
-  h += "</section>";
-
-  h += '<section class="card sec"><div style="display:flex;justify-content:space-between;align-items:center"><p class="k" style="margin:0">Annulations</p><span class="tnum" style="font-size:12px;font-weight:700;color:var(--rouge)">−' + euro(st.caAnnuleMois) + " ce mois</span></div>";
-  if (!st.annules.length) {
-    h += '<p class="note" style="margin-top:8px">Aucune annulation. Annule un RDV depuis sa fiche : le CA se recalcule automatiquement.</p>';
-  } else {
-    st.annules.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; }).forEach(function (x) {
-      h += '<div class="annrow"><div class="inf"><p>' + esc(x.client) + "</p><small>" + humanDate(x.date) + " · " + esc(x.prestations.map(function (p) { return p.nom; }).join(" + ") || "—") + "</small></div>" +
-        '<span class="m tnum">−' + euro(x.total) + "</span>" +
+    p.annules.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; }).forEach(function (x) {
+      h += '<div class="annrow"><div class="inf"><p>' + esc(x.client) + "</p><small>" + humanDate(x.date) + " \u00b7 " + esc(x.prestations.map(function (pp) { return pp.nom; }).join(" + ") || "\u2014") + "</small></div>" +
+        '<span class="m tnum">\u2212' + euro(x.total) + "</span>" +
         '<button class="rest" data-act="restore" data-id="' + x.id + '">Restaurer</button>' +
-        '<button class="del" data-act="hard-delete" data-id="' + x.id + '" aria-label="Supprimer définitivement">×</button></div>';
+        '<button class="del" data-act="hard-delete" data-id="' + x.id + '" aria-label="Supprimer d\u00e9finitivement">\u00d7</button></div>';
     });
   }
   h += "</section>";
@@ -1542,6 +1611,24 @@ document.addEventListener("click", function (e) {
       renderMain(); break;
     }
     case "cal-day": ui.tab = "planning"; ui.calView = "jour"; ui.dayCursor = el.getAttribute("data-d"); renderMain(); break;
+    case "rev-period": ui.revPeriod = el.getAttribute("data-v"); ui.revWeekOff = 0; ui.revMonth = null; ui.revYear = null; renderMain(); break;
+    case "rev-nav": {
+      var rdv2 = +el.getAttribute("data-d");
+      var pd = ui.revPeriod || "semaine";
+      var nw = new Date();
+      if (pd === "semaine") ui.revWeekOff = rdv2 === 0 ? 0 : ui.revWeekOff + rdv2;
+      else if (pd === "mois") {
+        if (rdv2 === 0) ui.revMonth = { y: nw.getFullYear(), m: nw.getMonth() };
+        else {
+          var mcx = ui.revMonth || { y: nw.getFullYear(), m: nw.getMonth() };
+          var nmx = mcx.m + rdv2;
+          ui.revMonth = { y: mcx.y + Math.floor(nmx / 12), m: ((nmx % 12) + 12) % 12 };
+        }
+      } else {
+        ui.revYear = rdv2 === 0 ? nw.getFullYear() : (ui.revYear || nw.getFullYear()) + rdv2;
+      }
+      renderMain(); break;
+    }
     case "open-devis": ui.showDevis = true; renderModals(); break;
     case "close-devis": if (!ui.busy) { ui.showDevis = false; ui.imgs = []; renderModals(); } break;
     case "open-manuel": ui.showDevis = false; ui.showManuel = true; renderModals(); break;
