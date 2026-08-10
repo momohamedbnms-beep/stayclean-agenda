@@ -296,6 +296,7 @@ var DEFAULT_SETTINGS = {
   geminiKey: "",
   apiKey: "",
   sync: { url: "", anonKey: "" },
+  reviewLink: "",
   pricing: null,
   durations: [
     { label: "Canapé 2/3 places", kw: "canape 2", min: 90 },
@@ -1485,6 +1486,11 @@ function renderReglages() {
   }
   h += "</section>";
 
+  h += '<section class="card sec"><p style="font-weight:700;font-size:14px">Avis Google \u2b50</p>' +
+    '<p class="note">Colle ton lien d\u2019avis : fiche Google Business \u2192 bouton \u00ab Demander des avis \u00bb \u2192 copie le lien (g.page/r/\u2026). Ensuite, chaque RDV termin\u00e9 aura un bouton pour l\u2019envoyer au client sur WhatsApp.</p>' +
+    '<input placeholder="https://g.page/r/..." value="' + esc(S.reviewLink || "") + '" data-set="reviewLink" autocomplete="off">' +
+    '<p class="note" style="margin-top:8px">' + (S.reviewLink ? "\u2713 Lien enregistr\u00e9 \u2014 bouton actif sur les RDV termin\u00e9s." : "Sans lien, le bouton n\u2019appara\u00eet pas.") + '</p></section>';
+
   h += '<section class="card sec"><p style="font-weight:700;font-size:14px">Sauvegarde</p>' +
     '<p class="note">Exporte un fichier de secours de temps en temps, même avec la synchronisation.</p>' +
     '<div class="setbtns"><button data-act="export">Exporter</button><button data-act="import">Importer</button></div>' +
@@ -1564,6 +1570,10 @@ function renderModals() {
     if (bk.telephone) acts += '<a href="tel:' + esc(bk.telephone.replace(/\s/g, "")) + '">Appeler</a>';
     if (bk.adresse) acts += '<a href="https://maps.google.com/?q=' + encodeURIComponent(bk.adresse) + '" target="_blank" rel="noreferrer">Itinéraire</a>';
     if (acts) h += '<div class="acts">' + acts + "</div>";
+    if (bk.statut === "termine" && DB.settings.reviewLink) {
+      h += '<button class="btn-main" style="margin:0 0 10px;padding:12px;background:#25D366" data-act="ask-review" data-id="' + bk.id + '">\u2b50 Demander un avis (WhatsApp)</button>';
+      if (bk.avisDemande) h += '<p class="note" style="margin:-4px 0 10px;text-align:center">Avis d\u00e9j\u00e0 demand\u00e9 le ' + humanDate(bk.avisDemande) + '</p>';
+    }
     h += '<div class="acts2">';
     if (bk.statut !== "termine") h += '<button class="b-done" data-act="mark-done" data-id="' + bk.id + '">✓ Marquer terminé</button>';
     else h += '<button class="b-open" data-act="mark-open" data-id="' + bk.id + '">Rouvrir</button>';
@@ -1611,6 +1621,19 @@ document.addEventListener("click", function (e) {
       renderMain(); break;
     }
     case "cal-day": ui.tab = "planning"; ui.calView = "jour"; ui.dayCursor = el.getAttribute("data-d"); renderMain(); break;
+    case "ask-review": {
+      var bkr = findBk(el.getAttribute("data-id"));
+      if (!bkr) break;
+      if (!bkr.telephone) { toast("err", ["Ajoute d\u2019abord le t\u00e9l\u00e9phone du client."]); break; }
+      var prenom = (bkr.client || "").split(" ")[0];
+      var msgR = "Bonjour " + prenom + " \ud83d\ude4f Merci pour votre confiance ! Si vous \u00eates satisfait du nettoyage StayClean, un petit avis Google nous aiderait \u00e9norm\u00e9ment : " + DB.settings.reviewLink + " \u2014 \u00c0 tr\u00e8s bient\u00f4t, l\u2019\u00e9quipe StayClean \ud83d\udebf\u2728";
+      var telR = bkr.telephone.replace(/[^0-9+]/g, "").replace(/^\+/, "").replace(/^0/, "32");
+      window.open("https://wa.me/" + telR + "?text=" + encodeURIComponent(msgR), "_blank");
+      bkr.avisDemande = todayStr();
+      save(); renderAll();
+      toast("ok", ["Demande d\u2019avis envoy\u00e9e \u00e0 " + bkr.client, "La v\u00e9locit\u00e9 d\u2019avis, c\u2019est ton levier n\u00b01 sur Google."]);
+      break;
+    }
     case "rev-period": ui.revPeriod = el.getAttribute("data-v"); ui.revWeekOff = 0; ui.revMonth = null; ui.revYear = null; renderMain(); break;
     case "rev-nav": {
       var rdv2 = +el.getAttribute("data-d");
