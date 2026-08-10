@@ -106,6 +106,10 @@ main{padding:16px 20px 100px}
 .annrow .m{font-size:14px;font-weight:700;color:var(--rouge);flex-shrink:0}
 .annrow .rest{font-size:12px;font-weight:700;background:var(--pale);color:var(--bleu-dark);padding:6px 10px;border-radius:999px;flex-shrink:0}
 .annrow .del{color:var(--rouge);font-size:18px;padding:0 4px;flex-shrink:0}
+.dayrow{display:flex;align-items:center;justify-content:space-between;width:100%;padding:9px 0;border-top:1px solid var(--bordure);font-size:13px;text-align:left}
+.dayrow small{color:var(--gris);font-weight:400}
+.dayrow b{font-weight:800}
+.dayrow:active{opacity:.6}
 .set-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;gap:12px}
 .set-row span{font-size:14px}
 .set-row input,.set-row select{width:auto}
@@ -1006,6 +1010,17 @@ function computeStats() {
   var inToday = active.filter(function (b) { return b.date === tStr; });
   var yearKey = String(now.getFullYear());
   var inYear = active.filter(function (b) { return b.date.indexOf(yearKey) === 0; });
+  var byDay = {};
+  active.forEach(function (b) {
+    if (b.date <= tStr) {
+      if (!byDay[b.date]) byDay[b.date] = { t: 0, n: 0 };
+      byDay[b.date].t += b.total || 0;
+      byDay[b.date].n++;
+    }
+  });
+  var parJour = Object.keys(byDay).sort().reverse().slice(0, 14).map(function (dk) {
+    return { date: dk, total: byDay[dk].t, nb: byDay[dk].n };
+  });
   function sum(a) { return a.reduce(function (s, b) { return s + (b.total || 0); }, 0); }
 
   var weeks = [];
@@ -1043,6 +1058,7 @@ function computeStats() {
     caWeek: sum(inWeek), caMonth: sum(inMonth), caAnnuleMois: sum(annulesMois),
     caToday: sum(inToday), nbToday: inToday.length,
     caYear: sum(inYear), nbYear: inYear.length,
+    parJour: parJour,
     months: months, year: yearKey,
     annules: annules,
     aVenirWeek: sum(inWeek.filter(function (b) { return b.date > tStr || (b.date === tStr && b.statut !== "termine"); })),
@@ -1303,6 +1319,19 @@ function renderRevenus() {
     h += "</section>";
   }
 
+  h += '<section class="card sec"><p class="k">CA par jour</p>';
+  if (!st.parJour.length) {
+    h += '<p class="note" style="margin-top:4px">Tes journ\u00e9es appara\u00eetront ici d\u00e8s ta premi\u00e8re intervention.</p>';
+  } else {
+    st.parJour.forEach(function (dj) {
+      h += '<button class="dayrow" data-act="cal-day" data-d="' + dj.date + '">' +
+        '<span>' + humanDate(dj.date) + ' <small>\u00b7 ' + dj.nb + ' interv.</small></span>' +
+        '<b class="tnum">' + euro(dj.total) + '</b></button>';
+    });
+    h += '<p class="note" style="margin-top:8px">14 derniers jours d\u2019activit\u00e9 \u2014 touche une ligne pour ouvrir le d\u00e9tail du jour.</p>';
+  }
+  h += "</section>";
+
   h += '<section class="card sec"><div style="display:flex;justify-content:space-between;align-items:center"><p class="k" style="margin:0">Annulations</p><span class="tnum" style="font-size:12px;font-weight:700;color:var(--rouge)">−' + euro(st.caAnnuleMois) + " ce mois</span></div>";
   if (!st.annules.length) {
     h += '<p class="note" style="margin-top:8px">Aucune annulation. Annule un RDV depuis sa fiche : le CA se recalcule automatiquement.</p>';
@@ -1512,7 +1541,7 @@ document.addEventListener("click", function (e) {
       ui.monthCursor = curm;
       renderMain(); break;
     }
-    case "cal-day": ui.calView = "jour"; ui.dayCursor = el.getAttribute("data-d"); renderMain(); break;
+    case "cal-day": ui.tab = "planning"; ui.calView = "jour"; ui.dayCursor = el.getAttribute("data-d"); renderMain(); break;
     case "open-devis": ui.showDevis = true; renderModals(); break;
     case "close-devis": if (!ui.busy) { ui.showDevis = false; ui.imgs = []; renderModals(); } break;
     case "open-manuel": ui.showDevis = false; ui.showManuel = true; renderModals(); break;
