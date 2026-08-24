@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StayClean — Mes disponibilités</title>
+<meta name="robots" content="noindex">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sc-blue:#3AB0EC; --sc-blue-dark:#1a8fd1; --sc-blue-light:#e8f6fd; --sc-blue-pale:#f0faff;
+  --sc-g50:#f8fafc; --sc-g100:#f1f5f9; --sc-g200:#e2e8f0; --sc-g400:#94a3b8;
+  --sc-g600:#475569; --sc-g800:#1e293b; --sc-wa:#25D366;
+  --sc-r:16px; --sc-rs:12px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',system-ui,sans-serif;background:linear-gradient(160deg,#f0faff 0%,#fff 45%,#e8f6fd 100%);
+  min-height:100vh;color:var(--sc-g800);padding:20px 16px 40px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:560px;margin:0 auto}
+.head{text-align:center;padding:14px 0 22px}
+.badge{display:inline-block;background:var(--sc-blue-light);color:var(--sc-blue-dark);font-family:'Outfit',sans-serif;
+  font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:6px 14px;border-radius:999px}
+h1{font-family:'Outfit',sans-serif;font-size:26px;font-weight:700;margin:14px 0 8px;line-height:1.25}
+h1 b{color:var(--sc-blue)}
+.sub{font-size:14.5px;color:var(--sc-g600);line-height:1.5}
+.card{background:#fff;border:1.5px solid var(--sc-g200);border-radius:var(--sc-r);padding:18px 16px;margin-bottom:14px}
+.hint{background:var(--sc-blue-pale);border:1px dashed var(--sc-blue);border-radius:var(--sc-rs);
+  padding:12px 14px;font-size:13px;color:var(--sc-g600);margin-bottom:12px}
+.cal-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px}
+.cal-title{font-family:'Outfit',sans-serif;font-size:17px;font-weight:700;text-transform:capitalize}
+.nav{width:40px;height:40px;border-radius:50%;border:none;background:transparent;font-size:20px;
+  color:var(--sc-g600);cursor:pointer;line-height:1;transition:all .15s}
+.nav:hover:not(:disabled){background:var(--sc-g100);color:var(--sc-blue-dark)}
+.nav:disabled{opacity:.2;cursor:default}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px 0}
+.wd{text-align:center;font-size:11.5px;font-weight:600;color:var(--sc-g400);padding:0 0 10px}
+.cd{display:flex;align-items:center;justify-content:center;height:44px}
+.cd span{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;
+  font-family:'Outfit',sans-serif;font-size:15.5px;font-weight:500;transition:all .15s;position:relative}
+.cd.off span{color:#C7D0DA;text-decoration:line-through;text-decoration-thickness:1.5px}
+.cd.can{cursor:pointer}
+.cd.can span{font-weight:600}
+.cd.can:hover span{background:var(--sc-blue-light);color:var(--sc-blue-dark)}
+.cd.sel span{background:var(--sc-blue);color:#fff;font-weight:700;box-shadow:0 4px 12px rgba(58,176,236,.4)}
+.cd.today span::after{content:'';position:absolute;bottom:4px;left:50%;transform:translateX(-50%);
+  width:4px;height:4px;border-radius:50%;background:var(--sc-blue)}
+.cd.sel span::after{background:#fff}
+.note{margin-top:14px;padding-top:12px;border-top:1px solid var(--sc-g100);font-size:11.5px;color:var(--sc-g400);text-align:center}
+.htitle{font-size:13.5px;font-weight:700;margin:0 0 10px}
+.hs{display:flex;gap:8px;flex-wrap:wrap}
+.h{flex:1;min-width:96px;padding:12px 8px;border:2px solid var(--sc-g200);border-radius:var(--sc-rs);
+  background:#fff;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;color:var(--sc-g600);
+  cursor:pointer;text-align:center;transition:all .15s}
+.h:hover{border-color:var(--sc-blue);color:var(--sc-blue-dark)}
+.h.on{border-color:var(--sc-blue);background:var(--sc-blue-light);color:var(--sc-blue-dark)}
+.h.reco::after{content:' ★';font-size:10px;color:var(--sc-blue)}
+.more{display:inline-flex;align-items:center;gap:6px;margin-top:10px;background:none;border:none;
+  color:var(--sc-blue-dark);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;cursor:pointer;padding:6px 0}
+.sub2{font-size:11.5px;font-weight:700;color:var(--sc-g400);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 8px}
+.chosen{display:flex;align-items:center;gap:10px;background:#F0FDF4;border:2px solid #86EFAC;color:#15803D;
+  border-radius:var(--sc-rs);padding:13px 14px;font-size:13.5px;font-weight:600;margin-top:14px}
+label{display:block;font-size:11.5px;font-weight:700;color:var(--sc-g600);text-transform:uppercase;
+  letter-spacing:.04em;margin:0 0 6px}
+.f{margin-bottom:13px}
+input,textarea{width:100%;padding:13px 14px;border:1.5px solid var(--sc-g200);border-radius:var(--sc-rs);
+  font-family:'DM Sans',sans-serif;font-size:15px;color:var(--sc-g800);background:#fff;transition:border-color .15s}
+input:focus,textarea:focus{outline:none;border-color:var(--sc-blue)}
+input::placeholder,textarea::placeholder{color:#C7D0DA}
+.req{color:var(--sc-blue)}
+.btn{width:100%;padding:16px;border:none;border-radius:var(--sc-rs);font-family:'DM Sans',sans-serif;
+  font-size:15.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px;
+  transition:all .15s;margin-top:6px}
+.btn:disabled{opacity:.5;cursor:default}
+.btn-p{background:var(--sc-blue);color:#fff;box-shadow:0 4px 16px rgba(58,176,236,.35)}
+.btn-p:hover:not(:disabled){background:var(--sc-blue-dark)}
+.btn-wa{background:var(--sc-wa);color:#fff;box-shadow:0 4px 16px rgba(37,211,102,.3)}
+.btn-wa:hover{background:#1da851}
+.ico{width:19px;height:19px;flex-shrink:0}
+.done{text-align:center;padding:26px 18px}
+.done-i{width:66px;height:66px;border-radius:50%;background:#F0FDF4;border:3px solid #86EFAC;color:#15803D;
+  display:flex;align-items:center;justify-content:center;font-size:33px;margin:0 auto 18px}
+.done h2{font-family:'Outfit',sans-serif;font-size:23px;margin-bottom:10px}
+.done p{font-size:14.5px;color:var(--sc-g600);line-height:1.6;margin-bottom:10px}
+.recap{background:var(--sc-blue-pale);border-radius:var(--sc-rs);padding:15px 16px;margin:18px 0;text-align:left;font-size:14px}
+.recap div{padding:4px 0}
+.foot{text-align:center;font-size:12px;color:var(--sc-g400);margin-top:18px;line-height:1.6}
+.foot a{color:var(--sc-blue-dark);font-weight:700;text-decoration:none}
+.err{background:#FFF7ED;border:1px solid #FB923C;color:#9A3412;border-radius:var(--sc-rs);
+  padding:13px 14px;font-size:13.5px;margin-bottom:12px;line-height:1.5}
+.hide{display:none}
+@media(max-width:400px){.cd span{width:36px;height:36px;font-size:14.5px}.card{padding:14px 11px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="head">
+    <span class="badge">✦ StayClean — Nettoyage textile</span>
+    <h1>Mes <b>disponibilités</b></h1>
+    <p class="sub">Choisissez la date et l’heure qui vous arrangent.<br>Je vous confirme personnellement ensuite.</p>
+  </div>
+
+  <div id="etape1">
+    <div class="card">
+      <div class="hint" id="statut">⏳ Chargement des disponibilités…</div>
+
+      <div id="cal" class="hide">
+        <div class="cal-head">
+          <button type="button" class="nav" id="prev" onclick="moisNav(-1)">‹</button>
+          <div class="cal-title" id="titre"></div>
+          <button type="button" class="nav" id="next" onclick="moisNav(1)">›</button>
+        </div>
+        <div class="grid" id="grille"></div>
+        <div class="note" id="legende">Les dates barrées sont complètes ou indisponibles.</div>
+      </div>
+    </div>
+
+    <div class="card hide" id="bloc-heures">
+      <p class="htitle" id="titre-heures"></p>
+      <div class="sub2" id="lbl-reco">Horaires conseillés</div>
+      <div class="hs" id="heures"></div>
+      <button type="button" class="more hide" id="plus" onclick="plusHeures()"></button>
+      <div class="sub2 hide" id="lbl-autres">Autres horaires possibles</div>
+      <div class="hs hide" id="heures-autres"></div>
+      <div class="chosen hide" id="choisi"></div>
+    </div>
+
+    <div class="card hide" id="bloc-infos">
+      <p class="htitle">Vos coordonnées</p>
+      <div class="f"><label>Prénom et nom <span class="req">*</span></label>
+        <input id="f-nom" type="text" placeholder="Jean Dupont" autocomplete="name"></div>
+      <div class="f"><label>Téléphone <span class="req">*</span></label>
+        <input id="f-tel" type="tel" placeholder="+32 4xx xx xx xx" autocomplete="tel"></div>
+      <div class="f"><label>Adresse ou commune <span class="req">*</span></label>
+        <input id="f-adr" type="text" placeholder="Rue Haute 42, Bruxelles" autocomplete="street-address"></div>
+      <div class="f"><label>Ce qu’il y a à nettoyer</label>
+        <textarea id="f-msg" rows="3" placeholder="Ex : un canapé 3 places et un tapis"></textarea></div>
+      <div class="err hide" id="erreur"></div>
+      <button class="btn btn-p" id="valider" onclick="envoyer()">Réserver ce créneau</button>
+      <p class="note" style="border:none;padding-top:10px">Aucun paiement ici — je vous confirme le prix et l’heure avant l’intervention.</p>
+    </div>
+
+    <p class="foot">Une question ? <a id="wa-direct" href="https://wa.me/32497010840" target="_blank" rel="noreferrer">Écrivez-moi sur WhatsApp</a></p>
+  </div>
+
+  <div id="etape2" class="hide">
+    <div class="card done">
+      <div class="done-i">✓</div>
+      <h2>Créneau réservé</h2>
+      <p><b>Il est bloqué à votre nom</b> — personne d’autre ne peut le prendre.</p>
+      <p>Je vérifie que tout est réalisable et je vous confirme personnellement par WhatsApp, en général sous quelques heures.</p>
+      <div class="recap" id="recap"></div>
+      <p style="font-size:13.5px">💡 Envoyez-moi une photo de vos textiles : ma confirmation sera plus rapide et plus précise.</p>
+      <button class="btn btn-wa" onclick="waPhotos()">
+        <svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+        Envoyer mes photos sur WhatsApp
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ===================================================================
+   Lien de disponibilités StayClean — connecté au même agenda.
+   =================================================================== */
+var SC_URL = "https://rgfanwbyzsfjlhwwhudg.supabase.co";
+var SC_KEY = "sb_publishable_WHb6CLrjubW_GxRGdKbPWA_B6SnRFNU";
+var SC_TEL = "32497010840";
+
+var JOURS = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"];
+var WD = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
+var MOIS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+var MOISL = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+
+var conf = { pas:30, tampon:30, conseilles:["10:00","13:00","16:00"], ouverture:"10:00",
+             fermeture:"19:00", joursSem:[1,2,3,4,5,6,7], delaiJours:1, dureeDefaut:120 };
+var fenetres = {}, fermes = {}, mois = null, jourSel = null, heureSel = null, autresVus = false, pret = false;
+
+function headers(){ var h={apikey:SC_KEY,"Content-Type":"application/json"};
+  if(SC_KEY.indexOf("eyJ")===0) h.Authorization="Bearer "+SC_KEY; return h; }
+function min(h){ var p=String(h).split(":"); return (+p[0])*60+(+p[1]||0); }
+function hhmm(m){ return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0"); }
+function dureeTxt(m){ var h=Math.floor(m/60),r=m%60; return h?h+"h"+(r?String(r).padStart(2,"0"):""):r+" min"; }
+function aujourdhui(){ var d=new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function go(u){ window.location.href = u; }
+
+function panne(raison){
+  document.getElementById("cal").classList.add("hide");
+  document.getElementById("statut").innerHTML =
+    "😕 Je n’arrive pas à afficher mes disponibilités pour le moment.<br>" +
+    "Écrivez-moi directement sur WhatsApp, je vous réponds vite : <a href=\"https://wa.me/" + SC_TEL + "\">wa.me/" + SC_TEL + "</a>";
+  document.getElementById("statut").style.borderStyle = "solid";
+  if (raison) console.warn("[StayClean]", raison);
+}
+
+function charger(){
+  var qF = fetch(SC_URL+"/rest/v1/sc_dispo?select=jour,debut,fin&order=jour.asc,debut.asc",{headers:headers()})
+    .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); });
+  var qB = fetch(SC_URL+"/rest/v1/sc_fermes?select=jour",{headers:headers()})
+    .then(function(r){ return r.ok?r.json():[]; }).catch(function(){ return []; });
+  var qC = fetch(SC_URL+"/rest/v1/sc_reglages?select=data",{headers:headers()})
+    .then(function(r){ return r.ok?r.json():[]; }).catch(function(){ return []; });
+
+  Promise.all([qF,qB,qC]).then(function(res){
+    fenetres = {}; fermes = {};
+    (res[0]||[]).forEach(function(w){ (fenetres[w.jour]=fenetres[w.jour]||[]).push({d:min(w.debut),f:min(w.fin)}); });
+    Object.keys(fenetres).forEach(function(j){          /* fusion des doublons */
+      var out=[]; fenetres[j].sort(function(a,b){return a.d-b.d;}).forEach(function(w){
+        var l=out[out.length-1];
+        if(l && w.d<=l.f){ if(w.f>l.f) l.f=w.f; } else out.push({d:w.d,f:w.f});
+      });
+      fenetres[j]=out;
+    });
+    (res[1]||[]).forEach(function(b){ fermes[b.jour]=true; });
+    if(!res[2] || !res[2][0] || !res[2][0].data){ panne("réglages absents"); return; }
+    var d = res[2][0].data;
+    conf = {
+      pas: d.pas||30, tampon: d.tampon||30,
+      conseilles: d.conseilles || conf.conseilles,
+      ouverture: d.ouverture || "10:00", fermeture: d.fermeture || "19:00",
+      joursSem: d.joursSem || [1,2,3,4,5,6,7],
+      delaiJours: Math.max(1, d.delaiJours || 1),
+      dureeDefaut: d.dureeDefaut || 120
+    };
+    pret = true;
+    mois = aujourdhui().slice(0,7);
+    document.getElementById("cal").classList.remove("hide");
+    document.getElementById("statut").innerHTML = "👇 Choisissez une date disponible, puis l’heure qui vous arrange.";
+    afficher();
+  }).catch(function(e){ panne(e.message); });
+}
+
+function premierJour(){
+  var d=new Date(); d.setDate(d.getDate()+(conf.delaiJours||1));
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function ouvrable(jour){
+  if(jour < premierJour()) return false;
+  if(fermes[jour]) return false;
+  var isodow = ((new Date(jour+"T12:00:00").getDay()+6)%7)+1;
+  return (conf.joursSem||[1,2,3,4,5,6,7]).indexOf(isodow) !== -1;
+}
+function heuresPossibles(jour){
+  if(!ouvrable(jour)) return [];
+  var fen = fenetres[jour] || [{d:min(conf.ouverture), f:min(conf.fermeture)}];
+  var duree = conf.dureeDefaut, pas = conf.pas||30, out=[];
+  fen.forEach(function(w){
+    var p = Math.ceil(w.d/pas)*pas; if(p<w.d) p=w.d;
+    for(var m=p; m+duree<=w.f; m+=pas) out.push(m);
+  });
+  return out.sort(function(a,b){return a-b;});
+}
+
+function bornes(){
+  var d=new Date(); d.setFullYear(d.getFullYear()+1);
+  return { min: aujourdhui().slice(0,7), max: d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0") };
+}
+function moisNav(n){
+  var y=+mois.slice(0,4), m=+mois.slice(5,7)-1+n, d=new Date(y,m,1);
+  mois = d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+  afficher();
+}
+
+function afficher(){
+  var b = bornes();
+  document.getElementById("prev").disabled = mois <= b.min;
+  document.getElementById("next").disabled = mois >= b.max;
+  var y=+mois.slice(0,4), m=+mois.slice(5,7)-1;
+  document.getElementById("titre").textContent = MOIS[m]+" "+y;
+
+  var td = aujourdhui();
+  var nb = new Date(y,m+1,0).getDate();
+  var off = (new Date(y,m,1).getDay()+6)%7;
+  var h = WD.map(function(w){ return '<div class="wd">'+w+"</div>"; }).join("");
+  for(var v=0; v<off; v++) h += '<div class="cd"></div>';
+  var dispo = 0;
+  for(var d=1; d<=nb; d++){
+    var jour = mois+"-"+String(d).padStart(2,"0");
+    var poss = jour<td ? [] : heuresPossibles(jour);
+    var cls="cd", clic="";
+    if(poss.length){ dispo++; cls+=" can"; clic=' onclick="choisirJour(\'' + jour + '\', this)"'; }
+    else cls+=" off";
+    if(jour===td) cls+=" today";
+    if(jourSel===jour) cls+=" sel";
+    h += '<div class="'+cls+'" data-jour="'+jour+'"'+clic+"><span>"+d+"</span></div>";
+  }
+  document.getElementById("grille").innerHTML = h;
+  document.getElementById("legende").textContent = dispo
+    ? "Les dates barrées sont complètes ou indisponibles."
+    : "Aucune disponibilité ce mois-ci — voyez le mois suivant ›";
+}
+
+function choisirJour(jour, el){
+  jourSel = jour; heureSel = null; autresVus = false;
+  document.querySelectorAll("#grille .cd").forEach(function(o){ o.classList.remove("sel"); });
+  if(el) el.classList.add("sel");
+  var d = new Date(jour+"T12:00:00");
+  document.getElementById("titre-heures").textContent =
+    JOURS[d.getDay()]+" "+d.getDate()+" "+MOISL[d.getMonth()]+" — à quelle heure ?";
+  afficherHeures();
+  document.getElementById("bloc-heures").classList.remove("hide");
+  document.getElementById("bloc-infos").classList.remove("hide");
+  document.getElementById("choisi").classList.add("hide");
+  document.getElementById("bloc-heures").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+function puce(m){
+  var hh = hhmm(m);
+  var ic = m<12*60 ? "☀️" : (m<17*60 ? "🌤️" : "🌙");
+  var reco = (conf.conseilles||[]).indexOf(hh) !== -1;
+  return '<button type="button" class="h'+(reco?" reco":"")+'" data-h="'+hh+'" onclick="choisirHeure(this)">'+ic+" "+hh+"</button>";
+}
+
+function afficherHeures(){
+  var poss = heuresPossibles(jourSel);
+  var reco = poss.filter(function(m){ return (conf.conseilles||[]).indexOf(hhmm(m)) !== -1; });
+  var autres = poss.filter(function(m){ return reco.indexOf(m) === -1; });
+  var box = document.getElementById("heures");
+  var lblReco = document.getElementById("lbl-reco");
+  var lblAutres = document.getElementById("lbl-autres");
+  var boxAutres = document.getElementById("heures-autres");
+  var more = document.getElementById("plus");
+
+  if(reco.length){ box.innerHTML = reco.map(puce).join(""); lblReco.classList.remove("hide"); }
+  else { box.innerHTML = autres.slice(0,6).map(puce).join(""); autres = autres.slice(6); lblReco.classList.add("hide"); }
+  boxAutres.innerHTML = autres.map(puce).join("");
+
+  var ya = autres.length > 0;
+  more.textContent = "＋ Voir "+autres.length+" autre"+(autres.length>1?"s":"")+" horaire"+(autres.length>1?"s":"");
+  more.classList.toggle("hide", !(ya && !autresVus));
+  lblAutres.classList.toggle("hide", !(ya && autresVus));
+  boxAutres.classList.toggle("hide", !(ya && autresVus));
+}
+function plusHeures(){ autresVus = true; afficherHeures(); }
+
+function choisirHeure(el){
+  document.querySelectorAll("#heures .h, #heures-autres .h").forEach(function(o){ o.classList.remove("on"); });
+  el.classList.add("on");
+  heureSel = el.dataset.h;
+  var d = new Date(jourSel+"T12:00:00");
+  var box = document.getElementById("choisi");
+  box.innerHTML = "✅ <span>Votre créneau : <b>"+JOURS[d.getDay()]+" "+d.getDate()+" "+MOISL[d.getMonth()]+
+    " à "+heureSel+"</b> — durée prévue environ "+dureeTxt(conf.dureeDefaut)+".</span>";
+  box.classList.remove("hide");
+  document.getElementById("bloc-infos").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+function erreur(txt){
+  var e = document.getElementById("erreur");
+  if(!txt){ e.classList.add("hide"); return; }
+  e.textContent = txt; e.classList.remove("hide");
+  e.scrollIntoView({behavior:"smooth",block:"center"});
+}
+
+function envoyer(){
+  erreur("");
+  var nom = document.getElementById("f-nom").value.trim();
+  var tel = document.getElementById("f-tel").value.trim();
+  var adr = document.getElementById("f-adr").value.trim();
+  var msg = document.getElementById("f-msg").value.trim();
+  if(nom.length < 2) return erreur("Merci d’indiquer votre prénom et votre nom.");
+  if(tel.length < 6) return erreur("Merci d’indiquer un numéro de téléphone pour que je puisse vous confirmer.");
+  if(adr.length < 5) return erreur("Merci d’indiquer votre adresse ou au moins votre commune.");
+  if(!jourSel || !heureSel) return erreur("Choisissez d’abord une date et une heure dans le calendrier.");
+
+  var btn = document.getElementById("valider");
+  btn.disabled = true; btn.textContent = "Réservation en cours…";
+
+  fetch(SC_URL+"/rest/v1/rpc/sc_reserver_v3",{
+    method:"POST", headers:headers(),
+    body: JSON.stringify({
+      p_jour: jourSel, p_debut: heureSel, p_duree: conf.dureeDefaut,
+      p_nom: nom, p_tel: tel, p_email: null, p_adresse: adr,
+      p_facture: false, p_message: msg || null,
+      p_items: [{ label: "Demande via le lien de disponibilités", sub: 0 }], p_total: 0
+    })
+  }).then(function(r){ return r.json(); }).then(function(res){
+    btn.disabled = false; btn.textContent = "Réserver ce créneau";
+    if(res && res.ok){ merci(nom, adr, msg); return; }
+    if(res && res.raison === "creneau_pris"){
+      erreur("Ce créneau vient d’être pris. Choisissez-en un autre — la liste vient d’être mise à jour.");
+      jourSel = null; heureSel = null;
+      document.getElementById("bloc-heures").classList.add("hide");
+      charger();
+      return;
+    }
+    if(res && res.raison === "trop_de_demandes")
+      return erreur("Vous avez déjà envoyé plusieurs demandes. Écrivez-moi directement sur WhatsApp.");
+    if(res && (res.raison === "trop_tot" || res.raison === "ferme"))
+      return erreur("Cette date n’est plus proposée. Choisissez-en une autre dans le calendrier.");
+    erreur("Je n’ai pas pu enregistrer votre demande. Écrivez-moi sur WhatsApp, je m’en occupe.");
+  }).catch(function(){
+    btn.disabled = false; btn.textContent = "Réserver ce créneau";
+    erreur("Connexion impossible. Écrivez-moi sur WhatsApp, je m’en occupe.");
+  });
+}
+
+function merci(nom, adr, msg){
+  var d = new Date(jourSel+"T12:00:00");
+  document.getElementById("recap").innerHTML =
+    "<div>📅 <b>"+JOURS[d.getDay()]+" "+d.getDate()+" "+MOISL[d.getMonth()]+" à "+heureSel+"</b></div>"+
+    "<div>👤 "+nom+"</div><div>📍 "+adr+"</div>"+
+    (msg ? "<div>🧽 "+msg+"</div>" : "");
+  document.getElementById("etape1").classList.add("hide");
+  document.getElementById("etape2").classList.remove("hide");
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+function waPhotos(){
+  var d = new Date(jourSel+"T12:00:00");
+  var txt = "Bonjour StayClean 👋\n\nJe viens de réserver un créneau :\n📅 "+
+    JOURS[d.getDay()]+" "+d.getDate()+" "+MOISL[d.getMonth()]+" à "+heureSel+
+    "\n👤 "+document.getElementById("f-nom").value.trim()+
+    "\n\nVoici les photos de mes textiles :";
+  go("https://wa.me/"+SC_TEL+"?text="+encodeURIComponent(txt));
+}
+
+document.getElementById("wa-direct").href = "https://wa.me/"+SC_TEL;
+charger();
+</script>
+</body>
+</html>
