@@ -4296,6 +4296,7 @@ function renderModals() {
       '<div class="fld" style="display:flex;align-items:center;gap:8px"><input id="m-fac" type="checkbox" style="width:auto"><label style="margin:0">Facture demandée</label></div>' +
       '<div class="fld"><label>Remarques</label><input id="m-rem"></div>' +
       '<button class="btn-main" data-act="manuel-save">Planifier ce RDV</button>' +
+      '<button class="linkline" data-act="manuel-ia">📸 ou coller une capture / un message et laisser l\u2019IA remplir la réservation →</button>' +
       "</div></div>";
   }
 
@@ -5200,6 +5201,7 @@ document.addEventListener("click", function (e) {
     case "open-devis": ui.showDevis = true; renderModals(); break;
     case "close-devis": if (!ui.busy) { ui.showDevis = false; ui.imgs = []; renderModals(); } break;
     case "open-manuel": ui.showDevis = false; ui.showManuel = true; renderModals(); break;
+    case "manuel-ia": ui.showManuel = false; ui.manuelDate = null; ui.showDevis = true; renderModals(); break;
     case "close-manuel": ui.showManuel = false; ui.manuelDate = null; renderModals(); break;
     case "img-add": fileTarget = el.getAttribute("data-target") || "resa"; document.getElementById("filepick").click(); break;
     case "img-rm": {
