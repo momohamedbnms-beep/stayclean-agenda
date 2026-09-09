@@ -200,6 +200,13 @@ textarea{resize:none;border-radius:16px;padding:12px}
 .dayhead{border-radius:18px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between}
 .dayhead .l .t{font-size:17px;font-weight:800}
 .dayhead .l .s{font-size:11px;color:var(--gris);margin-top:2px}
+.rdvacts{display:flex;gap:8px;margin-top:6px}
+.rdvacts button{flex:1;padding:9px;border-radius:12px;font-size:13px;font-weight:700;border:1px solid var(--bordure);background:#fff}
+.rdvacts .rc{color:var(--rouge);border-color:#F5C2C2;background:var(--rouge-bg)}
+.rdvacts .rm{color:var(--bleu-dark)}
+.addday{display:block;width:100%;margin-top:12px;padding:12px;border-radius:14px;border:1.5px dashed var(--bleu);color:var(--bleu-dark);font-weight:700;font-size:13.5px;background:var(--pale)}
+.dayplus{margin-left:auto;width:28px;height:28px;border-radius:50%;background:var(--bleu);color:#fff;font-size:18px;font-weight:800;line-height:1;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.day-head{gap:8px}.day-head .dots{margin-left:auto}.dayplus{margin-left:6px}
 .bigrdv{display:block;width:100%;text-align:left;margin-top:10px;border-radius:16px;padding:14px 16px;background:#fff;border:1px solid var(--bordure);box-shadow:0 4px 14px rgba(74,163,227,.07)}
 .bigrdv:active{opacity:.7}
 .bigrdv .hr{display:flex;justify-content:space-between;align-items:baseline}
@@ -1118,7 +1125,7 @@ function handleManuel() {
     facture: document.getElementById("m-fac") ? document.getElementById("m-fac").checked : false,
     remarques: v("m-rem") || null
   };
-  ui.showManuel = false;
+  ui.showManuel = false; ui.manuelDate = null;
   commitReservations([parsed]);
   renderAll();
 }
@@ -1254,6 +1261,18 @@ function plageDuree(moy, seulCode) {
   return [bas, Math.min(600, haut)];
 }
 /* v3.3 : sélecteur de durée sur place (Mohamed peut raccourcir pour caser un autre client) */
+/* v3.4 : le jour « sous les yeux » selon la vue (jour / semaine / mois) */
+function jourCible() {
+  var t = todayStr();
+  if (ui.calView === "jour") return ui.dayCursor || t;
+  if (ui.calView === "mois") {
+    var mc = ui.monthCursor; if (!mc) return t;
+    var tp = parseDateStr(t);
+    if (tp.getFullYear() === mc.y && tp.getMonth() === mc.m) return t;
+    return mc.y + "-" + pad(mc.m + 1) + "-01";
+  }
+  var wk = weekDates(); return wk.indexOf(t) !== -1 ? t : wk[0];
+}
 function dureeOptions(cur, heure) {
   var vals = [30, 45, 60, 90, 120, 150, 180, 210, 240, 300, 360, 420, 480];
   cur = Number(cur) || 120;
@@ -3727,7 +3746,13 @@ function renderPlanningJour(st) {
     if (b.facture) tags += '<span class="tag fac">Facture</span>';
     if (tags) h += '<span class="tags">' + tags + "</span>";
     h += "</button>";
+    /* v3.4 : annuler / modifier sans ouvrir la fiche */
+    if (b.statut !== "termine") {
+      h += '<div class="rdvacts"><button class="rc" data-act="day-cancel" data-id="' + b.id + '">✖ Annuler ce RDV</button>' +
+        '<button class="rm" data-act="detail" data-id="' + b.id + '">✏️ Modifier</button></div>';
+    }
   });
+  if (!isPerso && !cgJ) h += '<button class="addday" data-act="add-on-day" data-d="' + d + '">+ Ajouter une réservation ce jour</button>';
   dayT.sort(function (a, b) { return toMin(a.heure || "23:59") - toMin(b.heure || "23:59"); })
     .forEach(function (t) {
       h += '<button class="tdv' + (t.dom === "perso" ? " perso" : "") + (t.done ? " done2" : "") + '" data-act="td-open" data-id="' + t.id + '">' +
@@ -3808,6 +3833,7 @@ function renderPlanningSemaine(st) {
       if (full) h += '<span class="full">COMPLET</span>';
       h += "</span>";
     }
+    if (!isPersoW && !cg && !isPast) h += '<button class="dayplus" data-act="add-on-day" data-d="' + d + '" aria-label="Ajouter une réservation">+</button>';
     h += "</div>";
     if (cg) h += '<div class="cgline' + (cg.type === "travail" ? " wk" : "") + '"><span>' + congeIcone(cg) + " " + esc(cg.motif) + '</span><button data-act="cg-del" data-id="' + cg.id + '">Débloquer</button></div>';
     dayB.forEach(function (x) {
@@ -4258,13 +4284,13 @@ function renderModals() {
 
   if (ui.showManuel) {
     h += '<div class="overlay" id="ov-manuel"><div class="sheet">' +
-      '<div class="sheet-head"><h2>Saisie manuelle</h2><button class="x" data-act="close-manuel">×</button></div>' +
+      '<div class="sheet-head"><h2>' + (ui.manuelDate ? "Réservation · " + humanDate(ui.manuelDate) : "Saisie manuelle") + '</h2><button class="x" data-act="close-manuel">×</button></div>' +
       '<div class="fld"><label>Client</label><input id="m-client"></div>' +
       '<div class="two"><div class="fld"><label>Téléphone</label><input id="m-tel" inputmode="tel"></div>' +
       '<div class="fld"><label>Montant (€)</label><input id="m-total" type="number" inputmode="decimal"></div></div>' +
       '<div class="fld"><label>Adresse</label><input id="m-adr"></div>' +
       '<div class="fld"><label>Prestation</label><input id="m-presta" placeholder="Canapé 6/7 places — Premium"></div>' +
-      '<div class="two"><div class="fld"><label>Date</label><input id="m-date" type="date" value="' + addDaysStr(todayStr(), 1) + '"></div>' +
+      '<div class="two"><div class="fld"><label>Date</label><input id="m-date" type="date" value="' + (ui.manuelDate || addDaysStr(todayStr(), 1)) + '"></div>' +
       '<div class="fld small"><label>Heure précise</label><input id="m-heure" type="time"></div></div>' +
       '<div class="fld"><label>Créneau (si pas d\u2019heure)</label><select id="m-creneau"><option value="apres-midi">Après-midi</option><option value="matin">Matin</option></select></div>' +
       '<div class="fld" style="display:flex;align-items:center;gap:8px"><input id="m-fac" type="checkbox" style="width:auto"><label style="margin:0">Facture demandée</label></div>' +
@@ -5122,7 +5148,17 @@ document.addEventListener("click", function (e) {
       break;
     }
     case "chat-refuse": ui.chatAction = null; renderModals(); break;
-    case "qa-open": ui.showQuick = true; ui.qa = { titre: "", date: null, heure: null, type: "tache", dom: (ui.space === "perso" ? "perso" : "pro"), prio: 0 }; renderModals(); var qaEl = document.getElementById("qa-text"); if (qaEl) qaEl.focus(); break;
+    case "qa-open":
+      /* v3.4 : dans StayClean, le + ajoute directement une réservation sur le jour affiché */
+      if (ui.space !== "perso") { ui.manuelDate = jourCible(); ui.showDevis = false; ui.showManuel = true; renderModals(); var mcEl = document.getElementById("m-client"); if (mcEl) mcEl.focus(); break; }
+      ui.showQuick = true; ui.qa = { titre: "", date: null, heure: null, type: "tache", dom: "perso", prio: 0 }; renderModals(); var qaEl = document.getElementById("qa-text"); if (qaEl) qaEl.focus(); break;
+    case "add-on-day": ui.manuelDate = el.getAttribute("data-d") || jourCible(); ui.showDevis = false; ui.showManuel = true; renderModals(); var mcEl2 = document.getElementById("m-client"); if (mcEl2) mcEl2.focus(); break;
+    case "day-cancel": {
+      var bkC = findBk(el.getAttribute("data-id")); if (!bkC) break;
+      if (!confirm("Annuler le RDV de " + (bkC.client || "ce client") + " (" + humanDate(bkC.date) + " à " + bkC.heure + ") ?\n\nLe créneau se rouvre tout de suite sur ton site et pour l'assistant.")) break;
+      cancelBooking(bkC.id);
+      break;
+    }
     case "qa-close": ui.showQuick = false; ui.qa = null; renderModals(); break;
     case "qa-resa": ui.showQuick = false; ui.qa = null; ui.showDevis = true; renderModals(); break;
     case "qa-type": if (ui.qa) { syncQa(); ui.qa.type = el.getAttribute("data-v"); renderModals(); } break;
@@ -5164,7 +5200,7 @@ document.addEventListener("click", function (e) {
     case "open-devis": ui.showDevis = true; renderModals(); break;
     case "close-devis": if (!ui.busy) { ui.showDevis = false; ui.imgs = []; renderModals(); } break;
     case "open-manuel": ui.showDevis = false; ui.showManuel = true; renderModals(); break;
-    case "close-manuel": ui.showManuel = false; renderModals(); break;
+    case "close-manuel": ui.showManuel = false; ui.manuelDate = null; renderModals(); break;
     case "img-add": fileTarget = el.getAttribute("data-target") || "resa"; document.getElementById("filepick").click(); break;
     case "img-rm": {
       var tgt = el.getAttribute("data-target") || "resa";
