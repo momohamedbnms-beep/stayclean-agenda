@@ -1240,17 +1240,29 @@ function quoteResolvedTotals(draft) {
 
 /* Durée estimée affichée sur le devis, basée sur le montant (moyenne des
    deux formules) — modifiable à la main dans le calculateur. */
-function quoteDurationLabel(t) {
-  var p = (t.base + t.prem) / 2;
-  if (p < 100) return "40 min à 1h";
-  if (p < 150) return "1h à 1h30";
-  if (p < 200) return "1h30 à 2h";
-  if (p < 300) return "2h à 2h30";
-  return "3h à 4h";
+/* v3 : la règle de Mohamed, identique sur le site et dans l'assistant IA.
+   moins de 100 € → 40 min à 1h30 · 100 à 199 € → 1h à 2h ·
+   200 € et plus → 1 h par palier de 100 €, ± 30 min. Canapés seuls : plages fixes. */
+var PLAGES_CANAPE = { canape23: [40, 90], canape45: [60, 90], canape67: [60, 120], canape89: [90, 120] };
+function plageDuree(moy, seulCode) {
+  if (seulCode && PLAGES_CANAPE[seulCode]) return PLAGES_CANAPE[seulCode];
+  if (moy < 100) return [40, 90];
+  if (moy < 200) return [60, 120];
+  var c = (moy / 100) * 60;
+  var bas = Math.max(60, Math.round((c - 30) / 30) * 30);
+  var haut = Math.max(bas + 30, Math.round((c + 30) / 30) * 30);
+  return [bas, Math.min(600, haut)];
+}
+function plageTxt(m) { var h = Math.floor(m / 60), r = m % 60; return h ? h + "h" + (r ? String(r).padStart(2, "0") : "") : r + " min"; }
+function quoteDurationLabel(t, draft) {
+  var arts = (draft && draft.articles) || [];
+  var seul = (arts.length === 1 && (arts[0].quantite || 1) === 1) ? arts[0].item : "";
+  var pl = plageDuree((t.base + t.prem) / 2, seul);
+  return plageTxt(pl[0]) + " à " + plageTxt(pl[1]);
 }
 
 function quoteDurationResolved(draft, t) {
-  return draft.dureeCustom || quoteDurationLabel(t);
+  return draft.dureeCustom || quoteDurationLabel(t, draft);
 }
 
 function quoteText(draft) {
@@ -3245,6 +3257,12 @@ function sitePublier() {
 }
 
 function sitePublierMaintenant() {
+  /* v3 : on récupère d'abord les demandes en attente (site + assistant IA).
+     Sans ça, une demande pas encore vue serait effacée de l'agenda publié
+     et son créneau rouvert. Si la lecture échoue, on NE publie PAS. */
+  return siteRecevoir().then(function () { return sitePublierEtat(); });
+}
+function sitePublierEtat() {
   var c = getSb();
   var cfg = siteCfg();
   var fen = [], blq = [];
@@ -3858,6 +3876,7 @@ function renderDevisTab() {
       '<div class="qbtns">' +
       '<button class="q-copy" data-act="q-copy">Copier</button>' +
       '<button class="q-wa" data-act="q-wa">WhatsApp</button>' +
+      '<button class="q-copy" data-act="q-lien" title="Cr\u00e9e un lien de r\u00e9servation qui affiche CE prix, sans recalcul">\ud83d\udd17 Lien r\u00e9sa</button>' +
       '<button class="q-rdv" data-act="q-rdv">Client OK \u2192 RDV</button>' +
       "</div>";
     if (ui.pickFormule) {
@@ -5199,6 +5218,45 @@ document.addEventListener("click", function (e) {
       });
       break;
     }
+    case "q-lien": {
+      /* v3 : devis figé — le lien affiche exactement ce prix sur la page du site,
+         même si tu l'as saisi à la main. Jamais de recalcul côté client. */
+      var c3 = getSb();
+      if (!c3 || !session) { toast("err", ["Connecte-toi au cloud (Réglages) pour créer un lien."]); break; }
+      var dq = ui.qDraft; if (!dq) break;
+      var tq = quoteResolvedTotals(dq);
+      var lignesQ = (dq.articles || []).map(function (a) {
+        var it = findItem(a.item); if (!it) return null;
+        var lbl = (a.quantite > 1 ? a.quantite + "× " : "") + it.label + (it.id === "moquette" ? " (" + Math.round(a.surface_m2 || 10) + " m²)" : "");
+        var b0 = it.id === "moquette" ? moquettePrix(a.surface_m2 || 10) * (a.quantite || 1) : it.base * a.quantite;
+        var p0 = it.id === "moquette" ? b0 : it.prem * a.quantite;
+        return { label: lbl, base: b0, prem: p0 };
+      }).filter(Boolean);
+      var seulQ = (dq.articles || []).length === 1 && (dq.articles[0].quantite || 1) === 1 ? dq.articles[0].item : "";
+      var plQ = plageDuree((tq.base + tq.prem) / 2, seulQ);
+      var tokQ = Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 8);
+      var telQ = (dq.telephone || "").replace(/[^0-9+]/g, "");
+      if (telQ && telQ.indexOf("+") !== 0) telQ = "+32" + telQ.replace(/^0/, "");
+      c3.from("sc_devis").insert({
+        token: tokQ, tel: telQ || null, nom: dq.client || null,
+        lignes: lignesQ, resume: lignesQ.map(function (l) { return l.label; }).join(" + ") || "Devis",
+        formule: ui.qFormule || null,
+        total_basique: tq.base, total_premium: tq.prem,
+        duree_min: plQ[1], duree_texte: plageTxt(plQ[0]) + " à " + plageTxt(plQ[1]),
+        source: "app"
+      }).then(function (res) {
+        if (res.error) throw res.error;
+        var lienQ = "https://stayclean.be/reservation/?d=" + tokQ;
+        var ta = document.getElementById("q-msg");
+        if (ta && ta.value.indexOf("?d=") === -1) ta.value = ta.value.replace(/\s+$/, "") + "\n\n📅 Réservez votre créneau ici (prix convenu) :\n" + lienQ;
+        return copyText(lienQ).then(function () {
+          toast("ok", ["🔗 Lien copié et ajouté au message.", "Le client verra exactement ce prix — même si tu l'as modifié à la main."]);
+        });
+      }).catch(function (e) {
+        toast("err", ["Lien impossible : " + (e && e.message ? e.message : "erreur"), "Le script 7-supabase-devis.sql est-il installé ?"]);
+      });
+      break;
+    }
     case "q-rdv": ui.pickFormule = true; renderMain(); break;
     case "q-formule": ui.qFormule = el.getAttribute("data-f"); renderMain(); break;
     case "q-confirm": quoteToBooking(); break;
@@ -5435,7 +5493,7 @@ document.addEventListener("change", function (e) {
 
   if (t.getAttribute("data-qdur") != null && ui.qDraft) {
     var dv = t.value.trim();
-    var autoLbl = quoteDurationLabel(quoteResolvedTotals(ui.qDraft));
+    var autoLbl = quoteDurationLabel(quoteResolvedTotals(ui.qDraft), ui.qDraft);
     ui.qDraft.dureeCustom = (dv === "" || dv === autoLbl) ? null : dv;
     renderMain();
     return;
@@ -5653,6 +5711,19 @@ document.addEventListener("visibilitychange", function () {
 
 renderAll();
 if (sbConfigured()) initSync(); else setCloud("off");
+/* v3 : les demandes du site et de l'assistant IA arrivent toutes seules,
+   sans appuyer sur « Vérifier » — toutes les 3 minutes tant que l'app est
+   ouverte, et dès qu'on revient dessus. */
+(function () {
+  function tick() {
+    if (document.hidden || !session || !siteCfg().actif) return;
+    siteRecevoir().then(function (n) {
+      if (n) { toast("ok", ["📥 " + n + " nouvelle(s) demande(s) — onglet Demandes."]); renderChrome(); }
+    }).catch(function () {});
+  }
+  setInterval(tick, 180000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) tick(); });
+})();
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(function () {});
 }
