@@ -1253,6 +1253,16 @@ function plageDuree(moy, seulCode) {
   var haut = Math.max(bas + 30, Math.round((c + 30) / 30) * 30);
   return [bas, Math.min(600, haut)];
 }
+/* v3.3 : sélecteur de durée sur place (Mohamed peut raccourcir pour caser un autre client) */
+function dureeOptions(cur, heure) {
+  var vals = [30, 45, 60, 90, 120, 150, 180, 210, 240, 300, 360, 420, 480];
+  cur = Number(cur) || 120;
+  if (vals.indexOf(cur) === -1) { vals.push(cur); vals.sort(function (a, b) { return a - b; }); }
+  return vals.map(function (v) {
+    var fin = heure ? " → fin " + fromMin(Math.min(toMin(heure) + v, 1439)) : "";
+    return '<option value="' + v + '"' + (v === cur ? " selected" : "") + ">" + plageTxt(v) + fin + "</option>";
+  }).join("");
+}
 function plageTxt(m) { var h = Math.floor(m / 60), r = m % 60; return h ? h + "h" + (r ? String(r).padStart(2, "0") : "") : r + " min"; }
 function quoteDurationLabel(t, draft) {
   var arts = (draft && draft.articles) || [];
@@ -4278,6 +4288,8 @@ function renderModals() {
 
     h += '<div class="two"><div class="fld"><label>Date</label><input type="date" value="' + bk.date + '" data-bk="date"></div>' +
       '<div class="fld small"><label>Heure</label><input type="time" value="' + bk.heure + '" data-bk="heure"></div></div>' +
+      '<div class="fld"><label>Durée sur place <span style="font-weight:400;color:var(--gris)">(raccourcis-la pour libérer la suite)</span></label>' +
+      '<select data-bk="durationMin">' + dureeOptions(bk.durationMin || DB.settings.defaultDuration || 120, bk.heure) + '</select></div>' +
       '<div class="fld"><label>Client</label><input value="' + esc(bk.client) + '" data-bk="client" class="' + (!bk.client || bk.client === "À COMPLÉTER" ? "warn" : "") + '"></div>' +
       '<div class="fld"><label>Téléphone</label><input value="' + esc(bk.telephone) + '" data-bk="telephone" inputmode="tel" class="' + (!bk.telephone ? "warn" : "") + '"></div>' +
       '<div class="fld"><label>Adresse</label><input value="' + esc(bk.adresse) + '" data-bk="adresse" class="' + (!bk.adresse ? "warn" : "") + '"></div>' +
@@ -4541,7 +4553,7 @@ function renderModals() {
   var dem = ui.demId ? findDem(ui.demId) : null;
   if (dem) {
     if (!ui.demForm || ui.demForm.id !== dem.id) {
-      ui.demForm = { id: dem.id, depl: 0, note: "", total: Number(dem.total || 0) };
+      ui.demForm = { id: dem.id, depl: 0, note: "", total: Number(dem.total || 0), duree: Number(dem.duree_min) || 0 };
     }
     var df = ui.demForm;
     var totalFinal = Math.round(((Number(df.total) || 0) + (Number(df.depl) || 0)) * 100) / 100;
@@ -4560,6 +4572,8 @@ function renderModals() {
       '<section class="card sec"><p class="k">Ton ajustement avant de confirmer</p>' +
       '<div class="two"><div class="fld"><label>Prix des prestations (€)</label><input type="number" step="1" value="' + df.total + '" data-dem="total"></div>' +
       '<div class="fld"><label>Frais de déplacement (€)</label><input type="number" step="5" value="' + df.depl + '" data-dem="depl"></div></div>' +
+      '<div class="fld"><label>Durée sur place <span style="font-weight:400;color:var(--gris)">(raccourcis-la si tu veux caser un autre client après)</span></label>' +
+      '<select data-dem="duree">' + dureeOptions(df.duree || dem.duree_min || DB.settings.defaultDuration || 120, dem.heure) + '</select></div>' +
       '<div class="fld"><label>Note pour toi (accès, étage, remarque…)</label><input value="' + esc(df.note) + '" data-dem="note"></div>' +
       '<div class="demtot"><span>Total final</span><b class="tnum" style="color:#047857">' + euro(totalFinal) + "</b></div>" +
       (totalFinal !== Number(dem.total || 0) ? '<p class="note">⚠️ Tu changes le prix annoncé (' + euro(dem.total || 0) + ") — préviens-le clairement dans ton message avant qu'il ne s'engage.</p>" : "") +
@@ -4845,6 +4859,7 @@ document.addEventListener("click", function (e) {
       var totOk = Math.round(((Number(fOk.total) || 0) + (Number(fOk.depl) || 0)) * 100) / 100;
       var noteOk = [fOk.note, (Number(fOk.depl) || 0) ? "Frais de déplacement " + euro(fOk.depl) : ""].filter(Boolean).join(" · ");
       var bkOk = demConfirmer(dOk, totOk, noteOk);
+      if (Number(fOk.duree) > 0 && bkOk.durationMin !== Number(fOk.duree)) { bkOk.durationMin = Number(fOk.duree); save(); }
       ui.demId = null; ui.demForm = null;
       ui.space = "pro"; ui.tab = "planning"; ui.detailId = bkOk.id;
       renderAll();
@@ -5662,10 +5677,11 @@ document.addEventListener("change", function (e) {
   if (bkField && ui.detailId) {
     var bk = findBk(ui.detailId);
     if (bk) {
-      bk[bkField] = bkField === "total" ? (Number(t.value) || 0) : t.value;
+      bk[bkField] = (bkField === "total" || bkField === "durationMin") ? (Number(t.value) || 0) : t.value;
+      if (bkField === "durationMin" && !bk.durationMin) bk.durationMin = 30;
       refreshIncomplet(bk);
       save();
-      if (bkField === "date" || bkField === "heure") siteSync(); /* déplacement → dispo du site à jour */
+      if (bkField === "date" || bkField === "heure" || bkField === "durationMin") siteSync(); /* déplacement ou durée → dispo du site à jour */
       renderMain();
     }
   }
