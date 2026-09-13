@@ -1328,6 +1328,22 @@ function quoteText(draft) {
   return L.join("\n");
 }
 
+/* Empreinte du devis affiché : sert à savoir si le lien de réservation déjà créé
+   correspond encore au prix actuel, ou s'il faut en recréer un (prix changé depuis). */
+function devisSignature(draft, t) {
+  return JSON.stringify({
+    b: t.base, p: t.prem, f: ui.qFormule || null,
+    a: (draft.articles || []).map(function (a) { return a.item + "x" + a.quantite + (a.surface_m2 ? ":" + Math.round(a.surface_m2) : ""); })
+  });
+}
+/* Retrouve le jeton d'un devis figé déjà envoyé, à partir du texte de la demande
+   (« Devis WhatsApp n°TOKEN · … ») — permet de retrouver/renvoyer le lien d'un
+   devis créé par l'IA ou par l'app, même depuis l'onglet Demandes. */
+function extraireTokenDevis(msg) {
+  var m = /Devis WhatsApp n°([A-Za-z0-9]{6,})/.exec(msg || "");
+  return m ? m[1] : null;
+}
+
 function handleQuoteAnalyse() {
   var text = (document.getElementById("q-text") || { value: "" }).value;
   if (!text.trim() && ui.qImgs.length === 0) return;
@@ -3906,13 +3922,27 @@ function renderDevisTab() {
       '<p class="note">Facture demand\u00e9e\u00a0? TVA ' + P().tva + '% : Basique ' + euro(t.base * (1 + P().tva / 100)) + ' \u00b7 Premium ' + euro(t.prem * (1 + P().tva / 100)) + '</p>' +
       "</div></section>";
 
+    var sigActuelle = devisSignature(d, t);
+    var lienPerime = d.lienUrl && d.lienSig !== sigActuelle;
     h += '<section class="card sec"><p class="k">Message pr\u00eat \u00e0 envoyer</p>' +
+      '<p class="note" style="margin-top:0">\u26a0\ufe0f Ceci est le <b>devis</b> (avec les prix). Le lien de r\u00e9servation personnalis\u00e9 se cr\u00e9e et s\u2019envoie \u00e0 part, ci-dessous \u2014 ce n\u2019est jamais le m\u00eame envoi.</p>' +
       '<div class="fld" style="margin-bottom:10px"><label>T\u00e9l\u00e9phone client (pour l\u2019envoi direct WhatsApp)</label><input id="q-tel" value="' + esc(d.telephone || "") + '" inputmode="tel" placeholder="Ex : 0498 12 34 56"></div>' +
       '<textarea id="q-msg" class="quote-pre">' + esc(quoteText(d)) + "</textarea>" +
       '<div class="qbtns">' +
-      '<button class="q-copy" data-act="q-copy">Copier</button>' +
-      '<button class="q-wa" data-act="q-wa">WhatsApp</button>' +
-      '<button class="q-copy" data-act="q-lien" title="Cr\u00e9e un lien de r\u00e9servation qui affiche CE prix, sans recalcul">\ud83d\udd17 Lien r\u00e9sa</button>' +
+      '<button class="q-copy" data-act="q-copy">Copier le devis</button>' +
+      '<button class="q-wa" data-act="q-wa">Devis \u2192 WhatsApp</button>' +
+      "</div>" +
+      '<div style="margin-top:14px;border-top:1px solid var(--bordure);padding-top:12px">' +
+      '<p class="k" style="margin-bottom:6px">\ud83d\udd17 Lien de r\u00e9servation personnalis\u00e9' + (d.lienUrl && !lienPerime ? " \u2014 pr\u00eat" : "") + '</p>' +
+      (d.lienUrl
+        ? '<p class="note" style="margin-top:0;word-break:break-all"><b class="tnum" style="user-select:all">' + esc(d.lienUrl) + "</b>" +
+          (lienPerime ? '<br><span style="color:var(--rouge);font-weight:700">\u26a0\ufe0f Le prix a chang\u00e9 depuis \u2014 recr\u00e9e le lien avant de l\u2019envoyer.</span>' : "") + "</p>"
+        : '<p class="note" style="margin-top:0">Aucun lien cr\u00e9\u00e9 pour ce devis pour le moment. Le client ne peut pas encore r\u00e9server ce prix en ligne.</p>') +
+      '<div class="qbtns">' +
+      '<button class="q-copy" data-act="q-lien" title="Enregistre ce prix c\u00f4t\u00e9 serveur et cr\u00e9e (ou met \u00e0 jour) le lien personnalis\u00e9, sans recalcul possible par le client">' + (d.lienUrl ? "\ud83d\udd04 " + (lienPerime ? "Recr\u00e9er le lien (prix chang\u00e9)" : "Recr\u00e9er le lien") : "\ud83d\udd17 Cr\u00e9er le lien de r\u00e9servation") + "</button>" +
+      (d.lienUrl && !lienPerime ? '<button class="q-wa" data-act="q-lien-wa" title="Envoie UNIQUEMENT le lien de r\u00e9servation \u2014 pas le devis">\ud83d\udcf2 Envoyer le lien</button>' : "") +
+      "</div></div>" +
+      '<div class="qbtns" style="margin-top:14px;border-top:1px solid var(--bordure);padding-top:12px">' +
       '<button class="q-rdv" data-act="q-rdv">Client OK \u2192 RDV</button>' +
       "</div>";
     if (ui.pickFormule) {
@@ -4593,6 +4623,19 @@ function renderModals() {
       (dem.email ? '<div class="demline"><span>✉️ Email</span><b>' + esc(dem.email) + "</b></div>" : "") +
       '<div class="demline"><span>🧾 Facture demandée</span><b>' + (dem.facture ? "Oui" : "Non") + "</b></div>" +
       (dem.message ? '<div class="docact" style="margin-top:10px">💬 ' + esc(dem.message) + "</div>" : "") +
+      (function () {
+        /* Récupère le jeton du devis figé mentionné dans le message de la demande
+           (site/IA) pour permettre de recopier/renvoyer le VRAI lien de réservation
+           personnalisé — jusqu'ici impossible depuis cet écran : Mohamed devait
+           chercher le lien à la main, avec le risque d'envoyer le devis à la place. */
+        var tokD = extraireTokenDevis(dem.message);
+        if (!tokD) return "";
+        var lienD = "https://stayclean.be/reservation/?d=" + tokD;
+        return '<div class="acts2" style="margin-top:10px">' +
+          '<button class="icsbtn" data-act="dem-copier-lien" data-lien="' + esc(lienD) + '">🔗 Copier le lien de réservation</button>' +
+          '<button class="icsbtn" data-act="dem-lien-wa" data-lien="' + esc(lienD) + '" data-tel="' + esc(dem.tel || "") + '" data-nom="' + esc(dem.nom || "") + '">📲 Renvoyer le lien</button>' +
+          "</div>";
+      })() +
       "</section>" +
       '<section class="card sec"><p class="k">Ce qu’il a commandé</p>' + demItemsHtml(dem) +
       '<div class="demtot"><span>Total annoncé sur le site</span><b class="tnum">' + euro(dem.total || 0) + "</b></div></section>" +
@@ -4901,6 +4944,28 @@ document.addEventListener("click", function (e) {
       ui.demId = null; ui.demForm = null;
       renderAll();
       toast("ok", ["Demande refusée — créneau rouvert sur le site.", "Pense à le prévenir toi-même par WhatsApp."]);
+      break;
+    }
+    case "dem-copier-lien": {
+      /* Retrouve/recopie le lien de réservation personnalisé déjà associé à CETTE
+         demande (jeton extrait du devis figé mentionné dans dem.message) — jamais
+         le devis, jamais un lien générique. */
+      var lienDc = el.getAttribute("data-lien"); if (!lienDc) break;
+      copyText(lienDc).then(function () {
+        toast("ok", ["🔗 Lien de réservation copié.", "C'est le lien personnalisé de ce devis — pas un lien générique."]);
+      });
+      break;
+    }
+    case "dem-lien-wa": {
+      var lienDw = el.getAttribute("data-lien"); if (!lienDw) break;
+      var nomDw = el.getAttribute("data-nom") || "";
+      var msgDw = (nomDw ? nomDw + ", voici" : "Voici") +
+        " votre lien pour choisir votre créneau (prix déjà convenu, il ne changera pas) :\n" + lienDw;
+      var telDw = (el.getAttribute("data-tel") || "").replace(/[^0-9+]/g, "").replace(/^\+/, "").replace(/^0/, "32");
+      copyText(msgDw).then(function () {
+        openWhatsApp(telDw);
+        toast("ok", ["📲 Lien de réservation copié — colle-le dans la conversation.", "Seul le lien part ; ce n'est pas le devis."]);
+      });
       break;
     }
     case "site-toggle": {
@@ -5273,11 +5338,25 @@ document.addEventListener("click", function (e) {
     }
     case "q-lien": {
       /* v3 : devis figé — le lien affiche exactement ce prix sur la page du site,
-         même si tu l'as saisi à la main. Jamais de recalcul côté client. */
+         même si tu l'as saisi à la main. Jamais de recalcul côté client.
+         v4 — correctif du bug « le système renvoie le devis au lieu du lien » :
+         la création du lien n'écrit plus jamais dans #q-msg (le devis et le lien
+         sont deux messages distincts, envoyés par deux boutons distincts — voir
+         "q-lien-wa"). Un lien déjà créé pour CE prix exact (mêmes articles, même
+         formule, même montant) est réutilisé au lieu d'en fabriquer un nouveau à
+         chaque clic — sinon un double-clic créait deux jetons différents pour le
+         même devis, et le lien copié pouvait ne plus correspondre à celui affiché. */
       var c3 = getSb();
       if (!c3 || !session) { toast("err", ["Connecte-toi au cloud (Réglages) pour créer un lien."]); break; }
       var dq = ui.qDraft; if (!dq) break;
       var tq = quoteResolvedTotals(dq);
+      var sigQ = devisSignature(dq, tq);
+      if (dq.lienUrl && dq.lienSig === sigQ) {
+        copyText(dq.lienUrl).then(function () {
+          toast("ok", ["🔗 Le lien pour ce prix existe déjà — recopié.", "Utilise « Envoyer le lien » pour l'envoyer seul au client."]);
+        });
+        break;
+      }
       var lignesQ = (dq.articles || []).map(function (a) {
         var it = findItem(a.item); if (!it) return null;
         var lbl = (a.quantite > 1 ? a.quantite + "× " : "") + it.label + (it.id === "moquette" ? " (" + Math.round(a.surface_m2 || 10) + " m²)" : "");
@@ -5300,13 +5379,33 @@ document.addEventListener("click", function (e) {
       }).then(function (res) {
         if (res.error) throw res.error;
         var lienQ = "https://stayclean.be/reservation/?d=" + tokQ;
-        var ta = document.getElementById("q-msg");
-        if (ta && ta.value.indexOf("?d=") === -1) ta.value = ta.value.replace(/\s+$/, "") + "\n\n📅 Réservez votre créneau ici (prix convenu) :\n" + lienQ;
+        dq.lienUrl = lienQ; dq.lienToken = tokQ; dq.lienSig = sigQ;
+        renderMain();
         return copyText(lienQ).then(function () {
-          toast("ok", ["🔗 Lien copié et ajouté au message.", "Le client verra exactement ce prix — même si tu l'as modifié à la main."]);
+          toast("ok", ["🔗 Lien de réservation créé et copié.", "Il n'est pas encore envoyé — utilise « Envoyer le lien » ci-dessous, ou colle-le toi-même."]);
         });
       }).catch(function (e) {
-        toast("err", ["Lien impossible : " + (e && e.message ? e.message : "erreur"), "Le script 7-supabase-devis.sql est-il installé ?"]);
+        toast("err", ["Lien impossible à créer : " + (e && e.message ? e.message : "erreur") + ".", "Le script 7-supabase-devis.sql est-il installé ? Rien n'a été envoyé — tu peux réessayer."]);
+      });
+      break;
+    }
+    case "q-lien-wa": {
+      /* Envoi du lien de réservation SEUL — jamais le devis. C'est l'action que
+         Mohamed déclenche quand il veut transmettre au client sa réservation
+         personnalisée, séparément du devis. */
+      var dq2 = ui.qDraft;
+      if (!dq2 || !dq2.lienUrl) { toast("err", ["Crée d'abord le lien de réservation (bouton 🔗 ci-dessus)."]); break; }
+      var tq2 = quoteResolvedTotals(dq2);
+      if (dq2.lienSig !== devisSignature(dq2, tq2)) {
+        toast("err", ["Le prix a changé depuis la création du lien.", "Recrée le lien avant de l'envoyer, sinon le client verrait un prix périmé."]);
+        break;
+      }
+      var msgLien = (dq2.client ? dq2.client + ", voici" : "Voici") +
+        " votre lien pour choisir votre créneau (prix déjà convenu, il ne changera pas) :\n" + dq2.lienUrl;
+      var telW = (dq2.telephone || "").replace(/[^0-9+]/g, "").replace(/^\+/, "").replace(/^0/, "32");
+      copyText(msgLien).then(function () {
+        openWhatsApp(telW);
+        toast("ok", ["📲 Lien de réservation copié — colle-le dans la conversation.", "Seul le lien part ; le devis n'est pas renvoyé."]);
       });
       break;
     }
