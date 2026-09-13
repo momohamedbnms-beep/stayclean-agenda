@@ -691,7 +691,8 @@ var ui = {
   docId: null, docBusy: false, docDraft: null, docFilter: null, showArch: false,
   showChat: false, chat: [], chatBusy: false, chatAction: null,
   depId: null, depBusy: false, depDraft: null, depMonth: null, depCat: null,
-  venId: null, venDraft: null, showVenPick: false, cptQ: null
+  venId: null, venDraft: null, showVenPick: false, cptQ: null,
+  devisAttenteEtat: "idle", devisAttente: [], devisAttenteAt: 0
 };
 
 /* ----------------------------- utils ------------------------------ */
@@ -1344,6 +1345,37 @@ function extraireTokenDevis(msg) {
   return m ? m[1] : null;
 }
 
+/* Jetons de devis déjà "sortis" d'une manière ou d'une autre : une demande a été
+   créée à partir d'eux (site ou IA), ou un RDV app les mentionne dans ses remarques.
+   Sert à ne montrer, dans "Devis en attente", que ceux qui n'ont produit AUCUNE suite
+   — ce n'est qu'une heuristique (un RDV pris par un tout autre canal, sans mention du
+   jeton, ne serait pas détecté), donc affichée comme telle plutôt que comme une vérité
+   absolue. */
+function jetonsDejaSuivis() {
+  var connus = {};
+  (DB.dem || []).forEach(function (d) { var t = extraireTokenDevis(d.message); if (t) connus[t] = true; });
+  (DB.bookings || []).forEach(function (b) { var t = extraireTokenDevis(b.remarques); if (t) connus[t] = true; });
+  return connus;
+}
+
+/* Devis figés (sc_devis) encore valides mais qui n'ont, à notre connaissance, donné
+   lieu à aucune demande ni réservation — candidats à une relance. Lecture seule,
+   limitée aux 30 derniers, jamais appelée automatiquement en boucle (voir ui.devisAttenteEtat). */
+function chargerDevisEnAttente() {
+  var c = getSb();
+  if (!c || !session) return Promise.resolve([]);
+  return c.from("sc_devis")
+    .select("token,tel,nom,resume,formule,total_basique,total_premium,cree_le,expire_le")
+    .gt("expire_le", new Date().toISOString())
+    .order("cree_le", { ascending: false })
+    .limit(30)
+    .then(function (res) {
+      if (res.error) throw res.error;
+      var connus = jetonsDejaSuivis();
+      return (res.data || []).filter(function (d) { return !connus[d.token]; });
+    });
+}
+
 function handleQuoteAnalyse() {
   var text = (document.getElementById("q-text") || { value: "" }).value;
   if (!text.trim() && ui.qImgs.length === 0) return;
@@ -1538,6 +1570,16 @@ function bkRowToday(b) {
     '<span class="dbadge pro">StayClean</span></button>';
 }
 
+function devisAttenteRow(d) {
+  var prix = d.formule === "premium" ? d.total_premium : d.total_basique;
+  return '<button class="trow" data-act="devattente-wa" data-token="' + esc(d.token) + '" data-tel="' + esc(d.tel || "") + '" data-nom="' + esc(d.nom || "") + '">' +
+    '<span class="chk"></span>' +
+    '<span class="pdot p1"></span>' +
+    '<span class="bd"><span class="ti">' + esc(d.nom || d.tel || "Client") + (prix != null ? " — " + euro(prix) : "") + '</span>' +
+    '<span class="mt">' + esc(d.resume || "Devis") + "</span></span>" +
+    '<span class="dbadge pro">📲 Relancer</span></button>';
+}
+
 function searchAll(q) {
   var nq = norm(q);
   var dom = spaceDom();
@@ -1588,6 +1630,20 @@ function renderToday(mode) {
         '<span class="mj">' + JOURS[(dW.getDay() + 6) % 7] + '</span><span class="mn">' + dW.getDate() + "</span>" + stW + "</button>";
     }
     h += "</div>";
+
+    /* devis en attente : jetons sc_devis valides sans demande ni RDV connu — candidats
+       à une relance. Heuristique (voir jetonsDejaSuivis) : affichée comme telle,
+       jamais comme une vérité absolue. */
+    if (ui.devisAttenteEtat === "loading") {
+      h += '<section class="card tsec"><p class="k">💤 Devis en attente</p><p class="emptyline">Chargement…</p></section>';
+    } else if (ui.devisAttenteEtat === "error") {
+      h += '<section class="card tsec"><p class="k">💤 Devis en attente</p><p class="emptyline">Impossible de vérifier pour l’instant (réseau ou synchro) — réessaie plus tard.</p></section>';
+    } else if (ui.devisAttenteEtat === "loaded" && ui.devisAttente.length) {
+      h += '<section class="card tsec"><p class="k">💤 Devis en attente <span class="cnt">' + ui.devisAttente.length + "</span></p>" +
+        '<p class="note" style="margin:0 0 6px">Devis encore valides, sans demande ni RDV connu à ce jour — candidats à une relance.</p>';
+      ui.devisAttente.slice(0, 5).forEach(function (d) { h += devisAttenteRow(d); });
+      h += "</section>";
+    }
   }
   h += '<div class="searchbar"><input id="srch" placeholder="' + (f === "perso" ? "Rechercher tâche, RDV…" : "Rechercher client, tâche, RDV…") + '" value="' + esc(ui.searchQ) + '"></div>';
 
@@ -1771,11 +1827,11 @@ function renderPortal() {
     "</div>";
 }
 
-var PRO_TABS = [["planning", "Planning"], ["demandes", "Demandes"], ["devis", "Devis"], ["tableau", "Tableau"], ["factures", "Factures"], ["revenus", "Revenus"]];
+var PRO_TABS = [["tableau", "Accueil"], ["planning", "Planning"], ["demandes", "Demandes"], ["devis", "Devis"], ["factures", "Factures"], ["revenus", "Revenus"]];
 var PRO_TABS_1 = [["planning", "📅 Planning"], ["demandes", "Demandes"], ["devis", "Devis"]];
 var PRO_TABS_2 = [["tableau", "Tableau"], ["factures", "Factures"], ["revenus", "Revenus"]];
 var PERSO_TABS = [["tableau", "Tableau"], ["agenda", "Agenda"], ["taches", "Tâches"], ["docs", "Docs"]];
-var PRO_TAB_LABEL = { tableau: "Tableau", demandes: "Demandes du site", planning: "Planning", devis: "Devis", factures: "Factures", revenus: "Revenus", reglages: "Réglages" };
+var PRO_TAB_LABEL = { tableau: "Accueil", demandes: "Demandes du site", planning: "Planning", devis: "Devis", factures: "Factures", revenus: "Revenus", reglages: "Réglages" };
 var PERSO_TAB_LABEL = { tableau: "Tableau", agenda: "Agenda", taches: "Tâches", docs: "Docs & dossiers" };
 var CPT_TABS = [["situation", "Situation"], ["depenses", "Dépenses"], ["ventes", "Ventes"], ["tva", "TVA"]];
 var CPT_TAB_LABEL = { situation: "Situation", depenses: "Dépenses", ventes: "Ventes", tva: "TVA" };
@@ -3403,7 +3459,15 @@ function demConfirmer(dem, total, note) {
   dem.totalFinal = total;
   save();
   if (c && session) {
-    c.from("sc_demandes").update({ statut: "confirmee", traite_le: new Date().toISOString(), total: total }).eq("id", dem.id).then(function () {});
+    /* Si cette écriture échoue, le RDV existe bien ici (rien n'est perdu), mais la
+       demande resterait marquée "nouvelle" côté serveur — sur une réinstallation ou
+       une resynchro complète, elle réapparaîtrait comme si elle n'avait jamais été
+       traitée. On prévient donc au lieu de laisser l'échec passer inaperçu. */
+    c.from("sc_demandes").update({ statut: "confirmee", traite_le: new Date().toISOString(), total: total }).eq("id", dem.id)
+      .then(function (res) { if (res && res.error) throw res.error; })
+      .catch(function (e) {
+        toast("err", ["RDV créé ici, mais pas confirmé sur le serveur (" + (e && e.message ? e.message : "erreur réseau") + ").", "Relance une synchro dans Réglages, sinon cette demande pourrait réapparaître comme nouvelle."]);
+      });
   }
   return bk;
 }
@@ -3428,7 +3492,10 @@ function siteLibererCreneau(bk) {
   var dem = findDem(bk.demId);
   if (dem) { dem.statut = "annulee_app"; saveLocal(); }
   c.from("sc_demandes").update({ statut: "annulee", traite_le: new Date().toISOString() }).eq("id", bk.demId)
-    .then(function () { siteSync(); }); /* la plage se rouvre à la republication */
+    .then(function (res) { if (res && res.error) throw res.error; siteSync(); }) /* la plage se rouvre à la republication */
+    .catch(function (e) {
+      toast("err", ["Annulation enregistrée ici, mais pas confirmée sur le serveur (" + (e && e.message ? e.message : "erreur réseau") + ").", "Relance une synchro dans Réglages pour que le créneau se rouvre vraiment sur le site."]);
+    });
 }
 
 /* Refus : le créneau redevient disponible pour quelqu'un d'autre */
@@ -3438,7 +3505,10 @@ function demRefuser(dem) {
   save();
   if (c && session) {
     c.from("sc_demandes").update({ statut: "refusee", traite_le: new Date().toISOString() }).eq("id", dem.id)
-      .then(function () { siteSync(); }); /* la plage se rouvre pour quelqu'un d'autre */
+      .then(function (res) { if (res && res.error) throw res.error; siteSync(); }) /* la plage se rouvre pour quelqu'un d'autre */
+      .catch(function (e) {
+        toast("err", ["Refus enregistré ici, mais pas confirmé sur le serveur (" + (e && e.message ? e.message : "erreur réseau") + ").", "Relance une synchro dans Réglages, sinon cette demande pourrait réapparaître."]);
+      });
   }
 }
 
@@ -4290,7 +4360,21 @@ function renderMain() {
   else if (ui.tab === "factures") main.innerHTML = renderFactures();
   else if (ui.tab === "revenus") main.innerHTML = renderRevenus();
   else if (ui.tab === "reglages") main.innerHTML = renderReglages();
-  else main.innerHTML = renderToday("pro");
+  else {
+    main.innerHTML = renderToday("pro");
+    /* charge les devis en attente une seule fois par arrivée sur l'accueil ;
+       jamais en boucle automatique (voir chargerDevisEnAttente). */
+    if (ui.tab === "tableau" && ui.devisAttenteEtat === "idle") {
+      ui.devisAttenteEtat = "loading";
+      chargerDevisEnAttente().then(function (list) {
+        ui.devisAttente = list; ui.devisAttenteEtat = "loaded"; ui.devisAttenteAt = Date.now();
+        if (ui.space === "pro" && ui.tab === "tableau") renderMain();
+      }).catch(function () {
+        ui.devisAttenteEtat = "error";
+        if (ui.space === "pro" && ui.tab === "tableau") renderMain();
+      });
+    }
+  }
 }
 
 function renderModals() {
@@ -4806,7 +4890,7 @@ document.addEventListener("click", function (e) {
       }
       renderMain(); break;
     }
-    case "go-pro": ui.space = "pro"; ui.tab = "planning"; ui.calView = "mois"; renderAll(); break;
+    case "go-pro": ui.space = "pro"; ui.tab = "tableau"; ui.calView = "mois"; if (ui.devisAttenteEtat === "error") ui.devisAttenteEtat = "idle"; renderAll(); break;
     case "go-perso": ui.space = "perso"; ui.tab = "tableau"; renderAll(); break;
     case "go-cpt": ui.space = "cpt"; ui.tab = "situation"; renderAll(); break;
     case "go-jour": ui.space = "jour"; renderAll(); break;
@@ -4967,6 +5051,22 @@ document.addEventListener("click", function (e) {
       var telDw = (el.getAttribute("data-tel") || "").replace(/[^0-9+]/g, "").replace(/^\+/, "").replace(/^0/, "32");
       copyText(msgDw).then(function () {
         openWhatsApp(telDw);
+        toast("ok", ["📲 Lien de réservation copié — colle-le dans la conversation.", "Seul le lien part ; ce n'est pas le devis."]);
+      });
+      break;
+    }
+    case "devattente-wa": {
+      /* Relance d'un devis figé (sc_devis) encore valide, sans demande ni RDV connu.
+         Même lien personnalisé que celui déjà transmis (aucun nouveau jeton créé),
+         même ton conversion que dem-lien-wa/q-lien-wa. */
+      var tokDa = el.getAttribute("data-token"); if (!tokDa) break;
+      var prenomDa = (el.getAttribute("data-nom") || "").split(" ")[0];
+      var lienDa = "https://stayclean.be/reservation/?d=" + tokDa;
+      var msgDa = (prenomDa ? prenomDa + ", voici" : "Voici") +
+        " nos prochaines disponibilités 📅 Choisissez votre créneau ici :\n" + lienDa;
+      var telDa = (el.getAttribute("data-tel") || "").replace(/[^0-9+]/g, "").replace(/^\+/, "").replace(/^0/, "32");
+      copyText(msgDa).then(function () {
+        openWhatsApp(telDa);
         toast("ok", ["📲 Lien de réservation copié — colle-le dans la conversation.", "Seul le lien part ; ce n'est pas le devis."]);
       });
       break;
