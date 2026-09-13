@@ -4958,9 +4958,12 @@ document.addEventListener("click", function (e) {
     }
     case "dem-lien-wa": {
       var lienDw = el.getAttribute("data-lien"); if (!lienDw) break;
-      var nomDw = el.getAttribute("data-nom") || "";
-      var msgDw = (nomDw ? nomDw + ", voici" : "Voici") +
-        " votre lien pour choisir votre créneau (prix déjà convenu, il ne changera pas) :\n" + lienDw;
+      var prenomDw = (el.getAttribute("data-nom") || "").split(" ")[0];
+      /* Ton conversion : on ouvre sur la disponibilité (positif, invite à l'action),
+         jamais sur des précisions de prix qui n'ont pas été demandées — ça sonne
+         défensif et ça crée un doute qui n'existait pas chez le client. */
+      var msgDw = (prenomDw ? prenomDw + ", voici" : "Voici") +
+        " nos prochaines disponibilités 📅 Choisissez votre créneau ici :\n" + lienDw;
       var telDw = (el.getAttribute("data-tel") || "").replace(/[^0-9+]/g, "").replace(/^\+/, "").replace(/^0/, "32");
       copyText(msgDw).then(function () {
         openWhatsApp(telDw);
@@ -5400,8 +5403,11 @@ document.addEventListener("click", function (e) {
         toast("err", ["Le prix a changé depuis la création du lien.", "Recrée le lien avant de l'envoyer, sinon le client verrait un prix périmé."]);
         break;
       }
-      var msgLien = (dq2.client ? dq2.client + ", voici" : "Voici") +
-        " votre lien pour choisir votre créneau (prix déjà convenu, il ne changera pas) :\n" + dq2.lienUrl;
+      var prenomQ2 = (dq2.client || "").split(" ")[0];
+      /* Même principe que "dem-lien-wa" : on met en avant la disponibilité, jamais
+         une précision de prix non demandée. */
+      var msgLien = (prenomQ2 ? prenomQ2 + ", voici" : "Voici") +
+        " nos prochaines disponibilités 📅 Choisissez votre créneau ici :\n" + dq2.lienUrl;
       var telW = (dq2.telephone || "").replace(/[^0-9+]/g, "").replace(/^\+/, "").replace(/^0/, "32");
       copyText(msgLien).then(function () {
         openWhatsApp(telW);
