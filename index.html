@@ -653,10 +653,10 @@ function load() {
     var raw = localStorage.getItem(KEY);
     if (raw) {
       var d = JSON.parse(raw);
-      return { bookings: d.bookings || [], todos: d.todos || [], factures: d.factures || [], docs: d.docs || [], cpt: d.cpt || { dep: [], ven: [], set: null }, dem: d.dem || [], conges: d.conges || [], settings: mergeSettings(d.settings), updatedAt: d.updatedAt || 0 };
+      return { bookings: d.bookings || [], todos: d.todos || [], factures: d.factures || [], docs: d.docs || [], cpt: d.cpt || { dep: [], ven: [], set: null }, dem: d.dem || [], conges: d.conges || [], corbeille: d.corbeille || [], settings: mergeSettings(d.settings), updatedAt: d.updatedAt || 0 };
     }
   } catch (e) {}
-  return { bookings: [], todos: [], factures: [], docs: [], cpt: { dep: [], ven: [], set: null }, dem: [], conges: [], settings: mergeSettings(null), updatedAt: 0 };
+  return { bookings: [], todos: [], factures: [], docs: [], cpt: { dep: [], ven: [], set: null }, dem: [], conges: [], corbeille: [], settings: mergeSettings(null), updatedAt: 0 };
 }
 var DB = load();
 function saveLocal() {
@@ -1165,11 +1165,53 @@ function restoreBooking(id) {
   renderAll();
 }
 
+/* La suppression n'efface plus jamais rien pour de bon sur le coup : le RDV part
+   dans la corbeille (30 jours, restaurable depuis Réglages) avant d'être vraiment
+   effacé. Réponse au cas vécu : un RDV supprimé par erreur (clic sur le mauvais
+   bouton) était introuvable ensuite, aucune trace nulle part. */
 function deleteBooking(id) {
   var b0 = findBk(id);
-  if (b0) siteLibererCreneau(b0);
+  if (!b0) return;
+  siteLibererCreneau(b0);
   DB.bookings = DB.bookings.filter(function (b) { return b.id !== id; });
+  DB.corbeille = DB.corbeille || [];
+  var copie = JSON.parse(JSON.stringify(b0));
+  copie.supprimeLe = Date.now();
+  DB.corbeille.unshift(copie);
+  purgerCorbeille();
   save(); siteSync(); ui.detailId = null; renderAll();
+}
+
+/* Effacement définitif (plus aucune trace) des éléments de la corbeille vieux de
+   plus de 30 jours — le seul moment où une suppression devient vraiment irréversible. */
+function purgerCorbeille() {
+  var seuil = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  DB.corbeille = (DB.corbeille || []).filter(function (x) { return (x.supprimeLe || 0) >= seuil; });
+}
+
+function joursRestantsCorbeille(x) {
+  var reste = 30 - Math.floor((Date.now() - (x.supprimeLe || 0)) / 86400000);
+  return reste < 0 ? 0 : reste;
+}
+
+function restaurerDepuisCorbeille(id) {
+  DB.corbeille = DB.corbeille || [];
+  var idx = DB.corbeille.findIndex(function (x) { return x.id === id; });
+  if (idx === -1) return;
+  var b = DB.corbeille[idx];
+  delete b.supprimeLe;
+  DB.corbeille.splice(idx, 1);
+  DB.bookings.push(b);
+  save(); siteSync();
+  var alerte = conflitsJour(b.date).some(function (c) { return c.id === b.id; });
+  toast("ok", ["RDV restauré — " + (b.client || "client") + " (" + humanDate(b.date) + ").",
+    alerte ? "⚠️ Il chevauche un autre RDV ce jour-là — vérifie le Planning." : "Recasé dans ton agenda, le créneau se reverrouille sur ton site."]);
+  renderAll();
+}
+
+function viderCorbeilleDefinitivement(id) {
+  DB.corbeille = (DB.corbeille || []).filter(function (x) { return x.id !== id; });
+  save(); renderAll();
 }
 
 function handleCompleteDetail() {
@@ -3559,7 +3601,7 @@ function pullCloud() {
       var remote = res.data.data;
       if ((remote.updatedAt || 0) > (DB.updatedAt || 0)) {
         var localSync = DB.settings.sync;
-        DB = { bookings: remote.bookings || [], todos: remote.todos || [], factures: remote.factures || [], docs: remote.docs || [], cpt: remote.cpt || { dep: [], ven: [], set: null }, dem: remote.dem || [], conges: remote.conges || [], settings: mergeSettings(remote.settings), updatedAt: remote.updatedAt || Date.now() };
+        DB = { bookings: remote.bookings || [], todos: remote.todos || [], factures: remote.factures || [], docs: remote.docs || [], cpt: remote.cpt || { dep: [], ven: [], set: null }, dem: remote.dem || [], conges: remote.conges || [], corbeille: remote.corbeille || [], settings: mergeSettings(remote.settings), updatedAt: remote.updatedAt || Date.now() };
         DB.settings.sync = localSync;
         saveLocal();
         renderAll();
@@ -4327,10 +4369,37 @@ function renderReglages() {
     '<input placeholder="https://g.page/r/..." value="' + esc(S.reviewLink || "") + '" data-set="reviewLink" autocomplete="off">' +
     '<p class="note" style="margin-top:8px">' + (S.reviewLink ? "\u2713 Lien enregistr\u00e9 \u2014 bouton actif sur les RDV termin\u00e9s." : "Sans lien, le bouton n\u2019appara\u00eet pas.") + '</p></section>';
 
+  h += renderCorbeilleSection();
+
   h += '<section class="card sec"><p style="font-weight:700;font-size:14px">Sauvegarde</p>' +
     '<p class="note">Exporte un fichier de secours de temps en temps, même avec la synchronisation.</p>' +
     '<div class="setbtns"><button data-act="export">Exporter</button><button data-act="import">Importer</button></div>' +
     '<input type="file" id="importfile" accept="application/json" class="hidden"></section>';
+  return h;
+}
+
+/* Corbeille : filet de sécurité contre une suppression par erreur (cas vécu : un
+   RDV supprimé par erreur, aucune trace, aucun moyen de le retrouver). Tout RDV
+   supprimé reste ici 30 jours, restaurable en un clic, avant d'être vraiment effacé. */
+function renderCorbeilleSection() {
+  purgerCorbeille();
+  var items = (DB.corbeille || []).slice().sort(function (a, b) { return (b.supprimeLe || 0) - (a.supprimeLe || 0); });
+  var h = '<section class="card sec"><p style="font-weight:700;font-size:14px">🗑 Corbeille' +
+    (items.length ? ' <span class="cnt">' + items.length + "</span>" : "") + "</p>";
+  if (!items.length) {
+    h += '<p class="note">Vide. Un RDV supprimé reste ici 30 jours, au cas où — restaurable en un clic.</p>';
+  } else {
+    h += '<p class="note" style="margin-bottom:8px">Restaurable pendant 30 jours après suppression, puis effacé pour de bon.</p>';
+    items.forEach(function (x) {
+      h += '<div class="annrow"><div class="inf"><p>' + esc(x.client || "Client") + "</p><small>" +
+        humanDate(x.date) + " · " + esc((x.prestations || []).map(function (p) { return p.nom; }).join(" + ") || "—") +
+        " · supprimé, encore " + joursRestantsCorbeille(x) + " j</small></div>" +
+        '<span class="m tnum">' + euro(x.total || 0) + "</span>" +
+        '<button class="rest" data-act="corb-restaurer" data-id="' + x.id + '">Restaurer</button>' +
+        '<button class="del" data-act="corb-effacer" data-id="' + x.id + '" aria-label="Effacer définitivement">×</button></div>';
+    });
+  }
+  h += "</section>";
   return h;
 }
 
@@ -4456,7 +4525,7 @@ function renderModals() {
     if (bk.statut !== "termine") h += '<button class="b-done" data-act="mark-done" data-id="' + bk.id + '">✓ Marquer terminé</button>';
     else h += '<button class="b-open" data-act="mark-open" data-id="' + bk.id + '">Rouvrir</button>';
     h += '<button class="b-cancel" data-act="cancel" data-id="' + bk.id + '">Annuler le RDV</button></div>';
-    h += '<button class="linkline" style="color:var(--rouge)" data-act="bk-erase" data-id="' + bk.id + '">🗑 Supprimer définitivement (aucune trace)</button>';
+    h += '<button class="linkline" style="color:var(--rouge)" data-act="bk-erase" data-id="' + bk.id + '">🗑 Supprimer (récupérable 30 jours)</button>';
     h += "</div></div>";
   }
 
@@ -5388,12 +5457,30 @@ document.addEventListener("click", function (e) {
     case "mark-open": { var b2 = findBk(el.getAttribute("data-id")); if (b2) { b2.statut = "confirme"; save(); renderAll(); } break; }
     case "cancel": cancelBooking(el.getAttribute("data-id")); break;
     case "restore": restoreBooking(el.getAttribute("data-id")); break;
-    case "hard-delete": deleteBooking(el.getAttribute("data-id")); break;
+    case "hard-delete": {
+      /* Ce petit "×" est resté sans confirmation par le passé — c'est très
+         probablement lui qui a fait disparaître un RDV par erreur, sans trace
+         ni rattrapage possible. Il passe maintenant par la corbeille (30 jours)
+         comme toute autre suppression, et se confirme avant d'agir. */
+      var bkH = findBk(el.getAttribute("data-id")); if (!bkH) break;
+      if (!confirm("Supprimer le RDV de " + (bkH.client || "ce client") + " (" + humanDate(bkH.date) + ") ?\n\nIl part dans la corbeille (Réglages), récupérable pendant 30 jours.")) break;
+      deleteBooking(bkH.id);
+      toast("ok", ["RDV déplacé dans la corbeille.", "Récupérable 30 jours depuis Réglages si c'est une erreur."]);
+      break;
+    }
     case "bk-erase": {
       var bkE = findBk(el.getAttribute("data-id")); if (!bkE) break;
-      if (!confirm("Supprimer définitivement le RDV de " + (bkE.client || "ce client") + " ?\n\nIl disparaîtra complètement : aucune trace dans tes archives ni dans tes revenus. Le créneau se rouvre sur ton site.")) break;
+      if (!confirm("Supprimer le RDV de " + (bkE.client || "ce client") + " ?\n\nIl part dans la corbeille (Réglages), récupérable pendant 30 jours, puis effacé pour de bon. Le créneau se rouvre sur ton site dès maintenant.")) break;
       deleteBooking(bkE.id);
-      toast("ok", ["RDV supprimé — aucune trace conservée.", "Le créneau redevient réservable sur ton site."]);
+      toast("ok", ["RDV déplacé dans la corbeille — récupérable 30 jours.", "Le créneau redevient réservable sur ton site."]);
+      break;
+    }
+    case "corb-restaurer": restaurerDepuisCorbeille(el.getAttribute("data-id")); break;
+    case "corb-effacer": {
+      var idCe = el.getAttribute("data-id");
+      if (!confirm("Effacer définitivement ce RDV de la corbeille ? Cette fois, ce sera sans retour possible.")) break;
+      viderCorbeilleDefinitivement(idCe);
+      toast("ok", ["Effacé définitivement."]);
       break;
     }
     case "dem-vider": {
@@ -5665,7 +5752,7 @@ document.addEventListener("change", function (e) {
         if (!d || !Array.isArray(d.bookings)) throw new Error("bad");
         if (!confirm("Remplacer toutes les données actuelles par cette sauvegarde ?")) return;
         var keepSync = DB.settings.sync;
-        DB = { bookings: d.bookings, todos: d.todos || [], factures: d.factures || [], docs: d.docs || [], cpt: d.cpt || { dep: [], ven: [], set: null }, dem: d.dem || [], conges: d.conges || [], settings: mergeSettings(d.settings), updatedAt: Date.now() };
+        DB = { bookings: d.bookings, todos: d.todos || [], factures: d.factures || [], docs: d.docs || [], cpt: d.cpt || { dep: [], ven: [], set: null }, dem: d.dem || [], conges: d.conges || [], corbeille: d.corbeille || [], settings: mergeSettings(d.settings), updatedAt: Date.now() };
         DB.settings.sync = keepSync;
         save(); renderAll();
         toast("ok", ["Sauvegarde importée — " + DB.bookings.length + " RDV chargés."]);
@@ -5968,6 +6055,11 @@ document.addEventListener("visibilitychange", function () {
   } catch (e) {}
 })();
 
+(function () {
+  var avant = (DB.corbeille || []).length;
+  purgerCorbeille();
+  if ((DB.corbeille || []).length !== avant) saveLocal();
+})();
 renderAll();
 if (sbConfigured()) initSync(); else setCloud("off");
 /* v3 : les demandes du site et de l'assistant IA arrivent toutes seules,
