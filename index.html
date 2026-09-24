@@ -2566,7 +2566,7 @@ function findDep(id) { return cptData().dep.find(function (d) { return d.id === 
 function findVen(id) { return cptData().ven.find(function (v) { return v.id === id; }); }
 
 function venNextNumero() {
-  if (window.SCF) return SCF.nextNumero(false);
+  if (window.SCF && SCF.nextNumero) return SCF.nextNumero(false);
   var y = new Date().getFullYear();
   var n = cptData().ven.filter(function (v) { return (v.numero || "").indexOf(y + "-") === 0; }).length + 1;
   return y + "-" + String(n).padStart(3, "0");
@@ -3830,7 +3830,7 @@ function renderPlanning() {
       '<button class="warn" data-act="cg-open">🚫 Bloquer</button>' +
       '<button data-act="sync-all">🔄 Actualiser</button>' +
       '<button data-act="go-today">📅 Aujourd’hui</button></div>';
-    if (window.SCB) h += SCB.stripHtml();
+    if (window.SCB && SCB.stripHtml) h += SCB.stripHtml();
     /* blocages : pastilles discrètes — la gestion complète est dans « Bloquer » */
     var cgsP = congesActifs();
     if (cgsP.length) {
@@ -3897,7 +3897,7 @@ function renderPlanningJour(st) {
     if (b.source === "site") tags += '<span class="tag site">🌐 R\u00e9serv\u00e9 sur le site</span>';
     if (b.statut === "termine") tags += '<span class="tag done">✓ Termin\u00e9</span>';
     if (b.incomplet && b.incomplet.length) tags += '<span class="tag todo">\u00c0 compl\u00e9ter</span>';
-    if (window.SCB) tags += SCB.bkTags(b);
+    if (window.SCB && SCB.bkTags) tags += SCB.bkTags(b);
     else if (b.facture) tags += '<span class="tag fac">Facture</span>';
     if (tags) h += '<span class="tags">' + tags + "</span>";
     h += "</button>";
@@ -4251,7 +4251,7 @@ function renderRevenus() {
   }
   h += '<section class="card hero"><p class="k">Chiffre d\u2019affaires</p><p class="v grad tnum">' + euro(p.ca) + '</p>' +
     '<p class="s">' + p.nb + " intervention" + (p.nb > 1 ? "s" : "") + (p.nb ? " \u00b7 panier " + euro(p.panier) : "") + (p.aVenir > 0 ? " \u00b7 dont " + euro(p.aVenir) + " \u00e0 venir" : "") + deltaHtml + "</p></section>";
-  if (window.SCB) h += SCB.beneficeHtml(r.s, r.e, r.label);
+  if (window.SCB && SCB.beneficeHtml) h += SCB.beneficeHtml(r.s, r.e, r.label);
 
   /* records de tous les temps */
   var rec = revRecords();
@@ -4458,10 +4458,10 @@ function renderMain() {
     if (ui.tab === "depenses") main.innerHTML = renderDepenses();
     else if (ui.tab === "ventes") main.innerHTML = renderVentes();
     else if (ui.tab === "tva") main.innerHTML = renderTVA();
-    else if (ui.tab === "apayer" && window.SCB) main.innerHTML = SCB.renderAPayer();
+    else if (ui.tab === "apayer" && window.SCB && SCB.renderAPayer) main.innerHTML = SCB.renderAPayer();
     else if (ui.tab === "caisse" || ui.tab === "revenus" || ui.tab === "profil")
-      main.innerHTML = window.SCF ? SCF.render(ui.tab) : '<p class="emptyline">Module finance en cours de chargement… recharge l’app.</p>';
-    else main.innerHTML = (window.SCB ? SCB.caProHtml() : "") + renderSituation();
+      main.innerHTML = (window.SCF && SCF.render) ? SCF.render(ui.tab) : '<p class="emptyline">Module finance en cours de chargement… recharge l’app.</p>';
+    else main.innerHTML = ((window.SCB && SCB.caProHtml) ? SCB.caProHtml() : "") + renderSituation();
     return;
   }
   if (s === "perso") {
@@ -4473,7 +4473,7 @@ function renderMain() {
   }
   /* espace pro */
   if (ui.tab === "planning") main.innerHTML = renderPlanning();
-  else if (ui.tab === "clients") main.innerHTML = window.SCB ? SCB.renderClients() : "";
+  else if (ui.tab === "clients") main.innerHTML = (window.SCB && SCB.renderClients) ? SCB.renderClients() : "";
   else if (ui.tab === "demandes") main.innerHTML = renderDemandes();
   else if (ui.tab === "devis") main.innerHTML = renderDevisTab();
   else if (ui.tab === "factures") main.innerHTML = renderFactures();
@@ -4562,7 +4562,7 @@ function renderModals() {
       h += '<button class="btn-main" style="margin:0 0 10px;padding:12px;background:#25D366" data-act="ask-review" data-id="' + bk.id + '">\u2b50 Demander un avis (WhatsApp)</button>';
       if (bk.avisDemande) h += '<p class="note" style="margin:-4px 0 10px;text-align:center">Avis d\u00e9j\u00e0 demand\u00e9 le ' + humanDate(bk.avisDemande) + '</p>';
     }
-    if (window.SCB) h += SCB.bkPanel(bk);
+    if (window.SCB && SCB.bkPanel) h += SCB.bkPanel(bk);
     h += '<div class="acts2">';
     if (bk.statut !== "termine") h += '<button class="b-done" data-act="mark-done" data-id="' + bk.id + '">✓ Marquer terminé</button>';
     else h += '<button class="b-open" data-act="mark-open" data-id="' + bk.id + '">Rouvrir</button>';
@@ -5363,14 +5363,14 @@ document.addEventListener("click", function (e) {
       renderAll();
       break;
     }
-    case "ven-open": { var vo = findVen(el.getAttribute("data-id")); if (vo && vo.statut === "brouillon" && window.SCB) { SCB.ouvrirEditeur(vo.id); break; } ui.venId = el.getAttribute("data-id"); renderModals(); break; }
+    case "ven-open": { var vo = findVen(el.getAttribute("data-id")); if (vo && vo.statut === "brouillon" && window.SCB && SCB.ouvrirEditeur) { SCB.ouvrirEditeur(vo.id); break; } ui.venId = el.getAttribute("data-id"); renderModals(); break; }
     case "ven-close": ui.venId = null; renderAll(); break;
     case "ven-pay": { var vnp = findVen(el.getAttribute("data-id")); if (vnp) { vnp.statut = "payee"; vnp.paye = vnp.ttc || 0; save(); ui.venId = null; renderAll(); } break; }
     case "ven-unpay": { var vnu = findVen(el.getAttribute("data-id")); if (vnu) { vnu.statut = "envoyee"; save(); renderAll(); } break; }
     case "ven-del": {
       var vnx = findVen(el.getAttribute("data-id"));
       /* 24/09 : une facture validée ne disparaît jamais — annulation par note de crédit */
-      if (vnx && window.SCF) { SCF.annulerParNC(vnx.id); break; }
+      if (vnx && window.SCF && SCF.annulerParNC) { SCF.annulerParNC(vnx.id); break; }
       if (vnx && confirm("Supprimer la facture #" + vnx.numero + " ?")) {
         DB.cpt.ven = cptData().ven.filter(function (v) { return v.id !== vnx.id; });
         save(); ui.venId = null; renderAll();
@@ -5498,7 +5498,7 @@ document.addEventListener("click", function (e) {
     case "detail": ui.detailId = el.getAttribute("data-id"); ui.dImgs = []; renderModals(); break;
     case "close-detail": ui.detailId = null; ui.dImgs = []; renderAll(); break;
     case "d-complete": handleCompleteDetail(); break;
-    case "mark-done": { var b1 = findBk(el.getAttribute("data-id")); if (b1) { b1.statut = "termine"; if (window.SCB) SCB.onTermine(b1); save(); siteSync(); renderAll(); } break; }
+    case "mark-done": { var b1 = findBk(el.getAttribute("data-id")); if (b1) { b1.statut = "termine"; if (window.SCB && SCB.onTermine) SCB.onTermine(b1); save(); siteSync(); renderAll(); } break; }
     case "mark-open": { var b2 = findBk(el.getAttribute("data-id")); if (b2) { b2.statut = "confirme"; save(); renderAll(); } break; }
     case "cancel": cancelBooking(el.getAttribute("data-id")); break;
     case "restore": restoreBooking(el.getAttribute("data-id")); break;
@@ -6129,8 +6129,8 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(function () {});
 }
 </script>
-<script src="finance.js"></script>
-<script src="business.js"></script>
+<script src="finance.js?v=612e299b"></script>
+<script src="business.js?v=612e299b"></script>
 <script src="origine-google-ads.js"></script>
 </body>
 </html>
