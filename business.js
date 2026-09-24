@@ -688,6 +688,7 @@
         S.log("Obligation ajoutée", TYPES_OB[ty] + " · " + eur2(mt) + (off ? " (officiel)" : " (estimé)") + (ob.periode ? " · " + ob.periode : ""));
         save(); M = null; draw(); renderMain(); toast("ok", ["Enregistré" + (off ? " comme montant OFFICIEL." : " comme ESTIMATION.")]); break;
       }
+      case "go-revenus": ui.space = "pro"; ui.tab = "revenus"; ui.revPeriod = "mois"; ui.revMonth = null; renderAll(); window.scrollTo(0, 0); break;
       case "chg-save": {
         var ch = CH();
         ["essenceMin", "essenceMax", "pubJourMin", "pubJourMax", "produits"].forEach(function (k) { var i = document.getElementById("scb-ch-" + k); if (i && i.value !== "") ch[k] = Math.max(0, Number(i.value.replace(",", ".")) || 0); });
@@ -716,6 +717,40 @@
     }
   });
 
+  /* Lien Compta ↔ StayClean : le CA de la Compta est celui de l'agenda pro (mêmes RDV, même calcul) */
+  function caProHtml() {
+    var td = todayStr(), mk = td.slice(0, 7);
+    var fm = mk + "-" + pad(new Date(+mk.slice(0, 4), +mk.slice(5, 7), 0).getDate());
+    var Mo = bilan(mk + "-01", fm);
+    return '<section class="card sec" style="margin-bottom:12px"><p class="k">🧼 Chiffre d\'affaires StayClean — ' + MOIS_FULL[+mk.slice(5, 7) - 1] + '</p>' +
+      '<div class="tvaline"><span>Revenus réalisés (TVAC) · ' + Mo.nbR + ' RDV</span><b class="tnum">' + eur2(Mo.caTTC) + "</b></div>" +
+      '<div class="tvaline"><span>Chiffre d\'affaires HTVA</span><b class="tnum">' + eur2(Mo.caHT) + "</b></div>" +
+      '<div class="tvaline"><span>Charges (essence, produits, pub, autres)</span><b class="tnum">−' + eur2(Mo.charges) + "</b></div>" +
+      '<div class="tvaline"><span><b>Bénéfice estimé</b></span><b class="tnum" style="color:' + (Mo.benef >= 0 ? "#047857" : "var(--rouge)") + '">' + eur2(Mo.benef) + "</b></div>" +
+      '<button class="linkline" data-scb="go-revenus">Même calcul que StayClean → Revenus · voir le détail →</button></section>';
+  }
+
+  /* Garde-fou : si un écran plante, on affiche l'erreur au lieu de rester bloqué,
+     et on la note (synchronisée) pour pouvoir la corriger. */
+  function noteErreur(e, ou) {
+    try {
+      var c = cptData(); if (!c.erreurs) c.erreurs = [];
+      c.erreurs.push({ ts: new Date().toISOString(), ou: ou, espace: ui.space, onglet: ui.tab, msg: String(e && e.message || e), pile: String(e && e.stack || "").slice(0, 600), nav: navigator.userAgent.slice(0, 120) });
+      if (c.erreurs.length > 30) c.erreurs = c.erreurs.slice(-30);
+      save();
+    } catch (x) {}
+  }
+  ["renderMain", "renderChrome", "renderModals"].forEach(function (nom) {
+    var f = window[nom]; if (typeof f !== "function") return;
+    window[nom] = function () {
+      try { return f.apply(this, arguments); }
+      catch (e) {
+        noteErreur(e, nom);
+        if (nom === "renderMain") { var m = document.getElementById("main"); if (m) m.innerHTML = '<div class="anomalie" style="margin-top:14px">Oups, cet écran a rencontré une erreur (' + esc(String(e && e.message || e)) + '). Elle est enregistrée pour être corrigée.</div><button class="btn-main" data-act="go-home">← Revenir à l\'accueil</button>'; }
+      }
+    };
+  });
+
   setTimeout(function () { try { if (autoTerminer()) renderAll(); } catch (e) {} }, 1500);
   setInterval(function () { try { if (autoTerminer()) renderAll(); } catch (e) {} }, 300000);
 
@@ -723,6 +758,6 @@
     renderClients: renderClients, renderAPayer: renderAPayer, bkPanel: bkPanel, bkTags: bkTags,
     onTermine: onTermine, factureExpress: factureExpress, ouvrirEditeur: ouvrirEditeur, payer: payer,
     clients: clients, obligations: obligations, recalc: recalc,
-    bilan: bilan, beneficeHtml: beneficeHtml, stripHtml: stripHtml, autoTerminer: autoTerminer
+    bilan: bilan, beneficeHtml: beneficeHtml, stripHtml: stripHtml, autoTerminer: autoTerminer, caProHtml: caProHtml
   };
 })();
