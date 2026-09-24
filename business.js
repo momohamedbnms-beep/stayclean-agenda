@@ -1,0 +1,621 @@
+/* =====================================================================
+   StayClean Business OS — module 2 (24/09/2026)
+   Clients 360° · Interventions (statut opérationnel ≠ statut financier) ·
+   Paiement en 1 geste (cash / carte / virement / Payconiq) ·
+   Facture Express (brouillon modifiable → validation → PDF) ·
+   Centre « À payer » (moteur d'obligations OFFICIEL vs ESTIMÉ).
+
+   Une seule source de vérité : les clients ne sont PAS une copie. Ils sont
+   reconstruits à chaque affichage depuis les RDV, les demandes du site et
+   les factures (regroupés par téléphone, sinon par nom). Seules les infos
+   qui n'existent nulle part ailleurs (société, n° TVA, email, notes) sont
+   stockées dans DB.cpt.clients.
+   Dépend de finance.js (window.SCF), chargé avant.
+   ===================================================================== */
+(function () {
+  "use strict";
+  if (!window.SCF) return;
+  var S = window.SCF;
+  var eur2 = S.eur2, dfr = S.dfr, r2 = S.r2, uid = S.uid;
+
+  function C() {
+    var c = cptData();
+    if (!c.clients) c.clients = {};
+    if (!c.oblig) c.oblig = [];
+    if (c.set && c.set.autoBrouillon == null) c.set.autoBrouillon = true;
+    return c;
+  }
+  function jours(d) { return Math.round((parseDateStr(d) - parseDateStr(todayStr())) / 864e5); }
+  function telIntl(t) { return (t || "").replace(/[^0-9+]/g, "").replace(/^\+/, "").replace(/^00/, "").replace(/^0/, "32"); }
+  function prenom(n) { return (n || "").split(" ")[0]; }
+
+  /* ============================ CLIENTS =============================== */
+  function cleTel(t) { var d = (t || "").replace(/\D/g, ""); return d.length >= 8 ? "t" + d.slice(-9) : null; }
+  function cleNom(n) { var k = norm(n || "").replace(/[^a-z]/g, ""); return k.length >= 3 && k !== "acompleter" ? "n" + k : null; }
+
+  function clients() {
+    var alias = {}, map = {};
+    function note(nom, tel) { var kn = cleNom(nom), kt = cleTel(tel); if (kn && kt && !alias[kn]) alias[kn] = kt; }
+    DB.bookings.forEach(function (b) { note(b.client, b.telephone); });
+    (DB.dem || []).forEach(function (d) { note(d.nom, d.tel); });
+    function cle(nom, tel) { var kt = cleTel(tel); if (kt) return kt; var kn = cleNom(nom); return kn ? (alias[kn] || kn) : null; }
+    function get(k) { return map[k] || (map[k] = { key: k, nom: "", tel: "", email: "", adresse: "", bks: [], dems: [], vens: [] }); }
+    DB.bookings.forEach(function (b) {
+      var k = cle(b.client, b.telephone); if (!k) return;
+      var c = get(k); c.bks.push(b);
+      if (b.client && b.client !== "À COMPLÉTER" && (!c._d || b.date > c._d)) { c.nom = b.client; c._d = b.date; }
+      if (b.telephone && !c.tel) c.tel = b.telephone;
+      if (b.adresse && (!c._da || b.date > c._da)) { c.adresse = b.adresse; c._da = b.date; }
+    });
+    (DB.dem || []).forEach(function (d) {
+      var k = cle(d.nom, d.tel); if (!k) return;
+      var c = get(k); c.dems.push(d);
+      if (!c.nom && d.nom) c.nom = d.nom; if (!c.tel && d.tel) c.tel = d.tel;
+      if (d.email && !c.email) c.email = d.email; if (!c.adresse && d.adresse) c.adresse = d.adresse;
+    });
+    cptData().ven.forEach(function (v) {
+      if (v.type === "nc") return;
+      var bk = null, i = (v.source || "").indexOf("bk_");
+      var k = null;
+      if (i !== -1) { bk = findBk(v.source.slice(i)); if (bk) k = cle(bk.client, bk.telephone); }
+      if (!k) k = cle(v.client, v.clientTel);
+      if (!k) return;
+      var c = get(k); c.vens.push(v); if (!c.nom) c.nom = v.client;
+    });
+    var ov = C().clients, td = todayStr();
+    return Object.keys(map).map(function (k) {
+      var c = map[k], o = ov[k] || {};
+      c.o = o;
+      if (o.adresse) c.adresse = o.adresse; if (o.email) c.email = o.email;
+      var faits = c.bks.filter(function (b) { return b.statut === "termine"; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+      var futurs = c.bks.filter(function (b) { return b.statut !== "termine" && b.statut !== "annule" && b.date >= td; }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+      c.faits = faits; c.prochain = futurs[0] || null;
+      c.caTTC = r2(faits.reduce(function (s, b) { return s + (b.total || 0); }, 0));
+      c.caHT = r2(c.caTTC / (1 + S.tauxPresta() / 100));
+      c.panier = faits.length ? r2(c.caTTC / faits.length) : 0;
+      c.dernier = faits[0] || null;
+      var imp = 0, impN = 0;
+      faits.forEach(function (b) { if (b.pay && b.pay.statut === "non_paye") { imp += b.total || 0; impN++; } });
+      c.vens.forEach(function (v) { if (v.statut !== "brouillon" && !v.creditee && (v.ttc || 0) - (v.paye || 0) > 0.009) { imp += (v.ttc || 0) - (v.paye || 0); impN++; } });
+      c.impaye = r2(imp); c.impayeN = impN;
+      c.sansFacture = faits.filter(function (b) { return !factureDe(b.id); }).length;
+      c.devisOuvert = c.dems.filter(function (d) { return d.statut === "nouvelle"; }).length;
+      var srv = {};
+      faits.forEach(function (b) { (b.prestations || []).forEach(function (p) { if (p.nom) srv[p.nom] = (srv[p.nom] || 0) + 1; }); });
+      c.services = srv;
+      c.derniereActivite = [c.prochain && c.prochain.date, c.dernier && c.dernier.date, c.dems.length && (c.dems[0].cree_le || "").slice(0, 10)].filter(Boolean).sort().pop() || "";
+      if (!c.nom) c.nom = c.tel || "Client";
+      return c;
+    });
+  }
+  function clientDeBk(b) {
+    var all = clients();
+    return all.filter(function (c) { return c.bks.indexOf(b) !== -1; })[0] || null;
+  }
+
+  /* ======================= INTERVENTIONS ============================== */
+  var MOYENS = { cash: "Cash", carte: "Carte", virement: "Virement", payconiq: "Payconiq" };
+  function factureDe(bkId) {
+    var vs = cptData().ven.filter(function (v) { return v.type !== "nc" && !v.creditee && v.statut !== "annulee" && (v.source || "").indexOf(bkId) !== -1; });
+    return vs.filter(function (v) { return v.statut !== "brouillon"; })[0] || vs[0] || null;
+  }
+  function statutOp(b) {
+    if (b.statut === "annule") return { l: "Annulé", c: "#64748b" };
+    if (b.statut === "termine") return { l: "Terminé", c: "#047857" };
+    if (b.date < todayStr()) return { l: "À clôturer", c: "#b45309" };
+    return { l: "Confirmé", c: "#1d4ed8" };
+  }
+  function statutFin(b) {
+    if (b.statut !== "termine") return null;
+    var p = b.pay;
+    var pay = !p ? { l: "Paiement ?", c: "#b45309" } : p.statut === "non_paye" ? { l: "Non payé", c: "#dc2626" } : { l: "Payé " + (MOYENS[p.moyen] || "").toLowerCase(), c: "#047857" };
+    var f = factureDe(b.id);
+    var fac = !f ? null : f.statut === "brouillon" ? { l: "Brouillon facture", c: "#b45309" } : { l: "Facturé " + f.numero, c: "#047857" };
+    return { pay: pay, fac: fac };
+  }
+  function tag(t) { return '<span class="tag" style="background:#fff;border:1px solid ' + t.c + ";color:" + t.c + '">' + esc(t.l) + "</span>"; }
+  function bkTags(b) {
+    var f = statutFin(b); if (!f) return "";
+    return tag(f.pay) + (f.fac ? tag(f.fac) : "");
+  }
+
+  /* bloc « intervention » de la fiche RDV : statuts séparés + actions */
+  function bkPanel(b) {
+    var op = statutOp(b), fin = statutFin(b);
+    var h = '<div class="mini-analyse" style="margin:0 0 12px"><p class="t">Intervention</p><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">' +
+      tag(op) + (fin ? tag(fin.pay) + (fin.fac ? tag(fin.fac) : "") : "") + "</div>";
+    if (b.statut === "termine") {
+      var cur = b.pay ? (b.pay.statut === "non_paye" ? "non_paye" : b.pay.moyen) : null;
+      h += '<p class="note" style="margin:0 0 6px">Le client a payé comment ?</p><div class="sitgrid" style="margin:0 0 8px;grid-template-columns:repeat(5,1fr);gap:6px">';
+      ["cash", "carte", "virement", "payconiq", "non_paye"].forEach(function (m) {
+        var on = cur === m;
+        h += '<button data-scb="payer" data-id="' + b.id + '" data-m="' + m + '" style="padding:9px 2px;border-radius:12px;font-size:12px;font-weight:700;border:1.5px solid ' + (on ? (m === "non_paye" ? "#dc2626" : "#059669") : "var(--bordure)") + ";background:" + (on ? (m === "non_paye" ? "#fef2f2" : "#ecfdf5") : "#fff") + '">' + (m === "non_paye" ? "Pas payé" : MOYENS[m]) + "</button>";
+      });
+      h += "</div>";
+      var f = factureDe(b.id);
+      h += '<button class="btn-main" style="margin:0;padding:12px;background:#059669" data-scb="fac-express" data-id="' + b.id + '">' +
+        (!f ? "🧾 Préparer la facture" : f.statut === "brouillon" ? "🧾 Finaliser la facture (brouillon prêt)" : "📄 Voir la facture " + esc(f.numero)) + "</button>";
+    } else {
+      h += '<p class="note" style="margin:0">Après l\'intervention, touche « ✓ Marquer terminé » : tu pourras enregistrer le paiement et la facture en un geste.</p>';
+    }
+    h += '<button class="linkline" data-scb="client-bk" data-id="' + b.id + '">Voir la fiche client 360° →</button></div>';
+    return h;
+  }
+
+  function payer(bkId, m) {
+    var b = findBk(bkId); if (!b) return;
+    var avant = b.pay ? (b.pay.statut === "non_paye" ? "non payé" : b.pay.moyen) : "inconnu";
+    var mvCash = S.F().caisse.mv.filter(function (x) { return x.bkId === b.id && x.type === "encaissement"; });
+    if (m === "non_paye") {
+      if (mvCash.length && !confirm("Un encaissement cash de " + eur2(mvCash[0].montant) + " est lié à ce RDV dans ta caisse. Le retirer ?")) return;
+      S.F().caisse.mv = S.F().caisse.mv.filter(function (x) { return mvCash.indexOf(x) === -1; });
+      b.pay = { statut: "non_paye", date: todayStr() };
+    } else {
+      b.pay = { statut: "paye", moyen: m, montant: b.total || 0, date: todayStr() };
+      if (m === "cash" && !mvCash.length) S.F().caisse.mv.push({ id: uid("mv"), type: "encaissement", montant: r2(b.total || 0), date: b.date <= todayStr() ? todayStr() : b.date, motif: "Paiement du RDV", bkId: b.id, cree: new Date().toISOString(), auto: true });
+      if (m !== "cash" && mvCash.length) S.F().caisse.mv = S.F().caisse.mv.filter(function (x) { return mvCash.indexOf(x) === -1; });
+    }
+    var f = factureDe(b.id);
+    if (f) {
+      if (m === "non_paye") { if (f.statut === "brouillon") f.paye = 0; }
+      else { f.paye = f.ttc || 0; f.moyen = MOYENS[m]; if (f.statut !== "brouillon") f.statut = "payee"; }
+    }
+    S.log("Paiement d'intervention", (b.client || "") + " · " + eur2(b.total || 0) + " · " + avant + " → " + (m === "non_paye" ? "non payé" : m));
+    save(); renderAll();
+    toast("ok", [m === "non_paye" ? "Noté : pas encore payé. Il apparaît dans les impayés du client." : "Payé " + MOYENS[m].toLowerCase() + " : " + eur2(b.total || 0) + (m === "cash" ? " — ajouté à ta caisse (pas du CA en plus)." : ".")]);
+  }
+
+  /* appelé quand un RDV passe « terminé » */
+  function onTermine(b) {
+    if (!C().set.autoBrouillon || factureDe(b.id) || !(b.total > 0)) return;
+    cptData().ven.push(brouillonDepuis(b));
+  }
+
+  /* ========================= FACTURE EXPRESS ========================== */
+  function recalc(v) {
+    var tx = v.tvaTaux != null ? v.tvaTaux : S.tauxPresta();
+    var ht = 0;
+    (v.lignes || []).forEach(function (l) { ht += r2((Number(l.qte) || 0) * (Number(l.puHT) || 0)); });
+    v.ht = r2(ht); v.tvaMontant = r2(ht * tx / 100); v.ttc = r2(v.ht + v.tvaMontant);
+    if (v.payeTout) v.paye = v.ttc;
+    return v;
+  }
+  function brouillonDepuis(b) {
+    var tx = S.tauxPresta();
+    var pres = (b.prestations || []).filter(function (x) { return x && x.nom; });
+    var somme = pres.reduce(function (s, x) { return s + (x.prix || 0); }, 0);
+    var ok = pres.length && pres.every(function (x) { return x.prix != null; }) && Math.abs(somme - (b.total || 0)) < 0.01;
+    var lignes = ok ? pres.map(function (x) { return { lib: x.nom, qte: 1, puHT: r2(x.prix / (1 + tx / 100)) }; })
+      : [{ lib: pres.map(function (x) { return x.nom; }).join(" + ") || "Nettoyage textile à domicile", qte: 1, puHT: r2((b.total || 0) / (1 + tx / 100)) }];
+    var paye = b.pay && b.pay.statut === "paye";
+    var c = clientDeBk(b), o = c ? c.o : {};
+    return recalc({
+      id: uidVen(), statut: "brouillon", numero: "BROUILLON",
+      client: o.societe || b.client || "", clientType: o.type || "particulier", clientTva: o.tva || "",
+      clientAdresse: b.adresse || (c && c.adresse) || "", clientTel: b.telephone || "", clientEmail: (c && c.email) || "",
+      date: todayStr(), datePrestation: b.date, echeance: paye ? todayStr() : addDaysStr(todayStr(), 14),
+      tvaTaux: tx, lignes: lignes, payeTout: paye, paye: 0, moyen: paye ? MOYENS[b.pay.moyen] : "",
+      note: "", creeLe: todayStr(), source: "StayClean · " + b.id
+    });
+  }
+  var E = null; /* facture en cours d'édition */
+  function factureExpress(bkId) {
+    var b = findBk(bkId); if (!b) return;
+    var f = factureDe(b.id);
+    if (f && f.statut !== "brouillon") { S.ouvrirDoc(S.factureHtml(f)); return; }
+    if (!f) {
+      if (!(b.total > 0)) { toast("err", ["Indique d'abord le montant du RDV."]); return; }
+      f = brouillonDepuis(b); cptData().ven.push(f); S.log("Brouillon de facture préparé", (b.client || "") + " · " + eur2(f.ttc)); save();
+    }
+    ouvrirEditeur(f.id);
+  }
+  function ouvrirEditeur(venId) { E = findVen(venId); if (!E) return; M = { k: "fac" }; draw(); }
+
+  function editeurHtml(v) {
+    var p = S.F().profil;
+    var h = '<p class="note" style="margin:-4px 0 10px">Brouillon : tout est modifiable. Le numéro de facture est attribué à la validation — après, plus de modification (correction = note de crédit).</p>';
+    h += '<div class="two"><div class="fld"><label>Client</label><input data-e="client" value="' + esc(v.client) + '"></div>' +
+      '<div class="fld small"><label>Type</label><select data-e="clientType"><option value="particulier"' + (v.clientType !== "entreprise" ? " selected" : "") + '>Particulier</option><option value="entreprise"' + (v.clientType === "entreprise" ? " selected" : "") + ">Entreprise</option></select></div></div>";
+    h += '<div class="fld"><label>Adresse du client</label><input data-e="clientAdresse" value="' + esc(v.clientAdresse) + '"' + (!v.clientAdresse ? ' class="warn"' : "") + "></div>";
+    if (v.clientType === "entreprise") h += '<div class="fld"><label>N° TVA du client (obligatoire pour une entreprise)</label><input data-e="clientTva" value="' + esc(v.clientTva || "") + '" placeholder="BE0xxx.xxx.xxx"' + (!v.clientTva ? ' class="warn"' : "") + "></div>" +
+      '<div class="anomalie" style="margin:0 0 10px">Client entreprise belge : depuis le 1/1/2026 la facture doit partir via Peppol. Ce PDF ne suffit pas tant qu\'aucun prestataire Peppol n\'est branché.</div>';
+    h += '<div class="two"><div class="fld"><label>Date de facture</label><input type="date" data-e="date" value="' + v.date + '"></div><div class="fld"><label>Date de prestation</label><input type="date" data-e="datePrestation" value="' + (v.datePrestation || "") + '"></div></div>';
+    h += '<p class="k" style="margin:10px 0 6px;font-size:12px;font-weight:800;color:var(--gris)">LIGNES (prix HTVA)</p>';
+    (v.lignes || []).forEach(function (l, i) {
+      h += '<div style="display:grid;grid-template-columns:1fr 52px 84px 30px;gap:6px;margin-bottom:6px;align-items:center">' +
+        '<input data-l="' + i + '" data-lf="lib" value="' + esc(l.lib) + '" style="padding:9px;border:1px solid var(--bordure);border-radius:10px">' +
+        '<input data-l="' + i + '" data-lf="qte" type="number" step="1" value="' + l.qte + '" style="padding:9px 4px;border:1px solid var(--bordure);border-radius:10px;text-align:center">' +
+        '<input data-l="' + i + '" data-lf="puHT" type="number" step="0.01" inputmode="decimal" value="' + l.puHT + '" style="padding:9px 4px;border:1px solid var(--bordure);border-radius:10px;text-align:right">' +
+        '<button data-scb="l-del" data-i="' + i + '" style="color:var(--rouge);font-weight:800">×</button></div>';
+    });
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 10px">' +
+      '<button class="linkline" style="margin:0" data-scb="l-add" data-t="ligne">+ ligne</button>' +
+      '<button class="linkline" style="margin:0" data-scb="l-add" data-t="deplacement">+ déplacement</button>' +
+      '<button class="linkline" style="margin:0" data-scb="l-add" data-t="remise">+ remise</button></div>';
+    h += '<div id="scb-tot"></div>';
+    h += '<div class="two"><div class="fld"><label>Moyen de paiement</label><select data-e="moyen"><option value="">Pas encore payé</option>' +
+      ["Cash", "Carte", "Virement", "Payconiq"].map(function (m) { return "<option" + (v.moyen === m ? " selected" : "") + ">" + m + "</option>"; }).join("") + "</select></div>" +
+      '<div class="fld"><label>Déjà payé (€ TVAC)</label><input type="number" step="0.01" inputmode="decimal" data-e="paye" value="' + (v.paye || 0) + '"></div></div>' +
+      '<div class="fld"><label>Échéance</label><input type="date" data-e="echeance" value="' + (v.echeance || "") + '"></div>';
+    h += '<div class="fld"><label>Note sur la facture (facultatif)</label><input data-e="note" value="' + esc(v.note || "") + '"></div>';
+    var manq = [];
+    if (!p.tva) manq.push("ton n° TVA"); if (!p.adresse) manq.push("ton adresse"); if (!p.nom) manq.push("ton nom"); if (!p.bce) manq.push("ton n° d'entreprise");
+    if (manq.length) h += '<div class="anomalie">Pour valider, complète d\'abord ' + manq.join(", ") + ' dans Compta → Profil (mentions obligatoires). Le brouillon reste enregistré.</div>';
+    h += '<div class="sitgrid" style="grid-template-columns:1fr 1fr">' +
+      '<button class="btn-main" style="margin:6px 0 0;background:#fff;color:var(--nuit);box-shadow:none;border:1.5px solid var(--bordure)" data-scb="fac-apercu">Aperçu</button>' +
+      '<button class="btn-main" style="margin:6px 0 0;background:#fff;color:var(--nuit);box-shadow:none;border:1.5px solid var(--bordure)" data-scb="fac-save">Garder en brouillon</button></div>' +
+      '<button class="btn-main" style="background:#059669" data-scb="fac-valider"' + (manq.length ? ' disabled style="opacity:.5;background:#059669"' : "") + ">✓ Valider et générer le PDF</button>" +
+      '<button class="linkline" style="color:var(--rouge)" data-scb="fac-suppr">Supprimer ce brouillon</button>';
+    return h;
+  }
+  function totHtml(v) {
+    return '<div class="card sec" style="padding:10px 12px;margin-bottom:10px"><div class="tvaline" style="border:0;padding:4px 0"><span>Total HTVA</span><b class="tnum">' + eur2(v.ht) + '</b></div>' +
+      '<div class="tvaline" style="padding:4px 0"><span>TVA ' + v.tvaTaux + ' %</span><b class="tnum">' + eur2(v.tvaMontant) + '</b></div>' +
+      '<div class="tvaline" style="padding:4px 0"><span><b>Total TVAC</b></span><b class="tnum" style="font-size:18px">' + eur2(v.ttc) + "</b></div>" +
+      ((v.paye || 0) > 0 && (v.paye || 0) < v.ttc - 0.009 ? '<div class="tvaline" style="padding:4px 0;color:var(--rouge)"><span>Reste à payer par le client</span><b class="tnum">' + eur2(v.ttc - v.paye) + "</b></div>" : "") + "</div>";
+  }
+  function valider(v) {
+    var p = S.F().profil;
+    if (!p.tva || !p.adresse || !p.nom || !p.bce) { toast("err", ["Complète ton profil (Compta → Profil) avant de valider."]); return; }
+    if (!v.client || !v.clientAdresse) { toast("err", ["Nom et adresse du client obligatoires sur une facture."]); return; }
+    if (v.clientType === "entreprise" && !v.clientTva) { toast("err", ["N° TVA du client entreprise obligatoire."]); return; }
+    if (!(v.lignes || []).length || !v.ttc) { toast("err", ["La facture est vide."]); return; }
+    if (v.clientType === "entreprise" && !confirm("Client entreprise : la loi impose l'envoi via Peppol depuis le 1/1/2026 et ce n'est pas encore branché. Valider quand même le document ?")) return;
+    recalc(v);
+    v.numero = S.nextNumero(false);
+    v.statut = (v.paye || 0) >= v.ttc ? "payee" : "envoyee";
+    v.valideeLe = new Date().toISOString();
+    delete v.payeTout;
+    S.log("Facture validée", v.numero + " · " + v.client + " · " + eur2(v.ttc));
+    save(); M = null; E = null; draw(); renderAll();
+    S.ouvrirDoc(S.factureHtml(v));
+    toast("ok", ["Facture " + v.numero + " validée — PDF prêt (Imprimer / PDF)."]);
+  }
+
+  /* =========================== À PAYER ================================ */
+  var TYPES_OB = {
+    VAT: "TVA", SOCIAL_CONTRIBUTION: "Cotisations sociales", INCOME_TAX: "Impôt", ADVANCE_TAX_PAYMENT: "Versement anticipé",
+    SUPPLIER: "Fournisseur", SUBSCRIPTION: "Abonnement", FINE: "Amende / majoration", INSURANCE: "Assurance", BANK_FEE: "Frais bancaires", OTHER: "Autre"
+  };
+  var ETAT = { VAT: 1, SOCIAL_CONTRIBUTION: 1, INCOME_TAX: 1, ADVANCE_TAX_PAYMENT: 1, FINE: 1 };
+  function trimInfo(dateStr) {
+    var y = +dateStr.slice(0, 4), t = Math.floor((+dateStr.slice(5, 7) - 1) / 3) + 1;
+    var finMois = t * 3, fin = y + "-" + pad(finMois) + "-" + pad(new Date(y, finMois, 0).getDate());
+    var ech = finMois === 12 ? (y + 1) + "-01-25" : y + "-" + pad(finMois + 1) + "-25";
+    return { y: y, t: t, label: "T" + t + " " + y, fin: fin, echTva: ech };
+  }
+  function trimPrec(ti) { return ti.t === 1 ? trimInfo((ti.y - 1) + "-12-01") : trimInfo(ti.y + "-" + pad((ti.t - 2) * 3 + 1) + "-01"); }
+
+  function obligations() {
+    var out = [], p = S.F().profil, td = todayStr();
+    C().oblig.forEach(function (o) { out.push(Object.assign({ src: "manuel" }, o)); });
+    function officielPour(type, periode) { return C().oblig.filter(function (o) { return o.type === type && o.officiel && o.periode === periode; })[0]; }
+    facturesUnpaid().forEach(function (f) {
+      out.push({ id: "fac_" + f.id, src: "fournisseur", ref: f.id, type: "SUPPLIER", creancier: f.fournisseur || "Fournisseur", montant: f.montantTTC, officiel: true, echeance: f.echeance || null, statut: "a_payer", iban: f.iban, communication: f.reference, notes: f.numero ? "Facture n° " + f.numero : "" });
+    });
+    cptData().dep.forEach(function (d) {
+      if (d.statut === "paye") return;
+      out.push({ id: "dep_" + d.id, src: "depense", ref: d.id, type: "SUPPLIER", creancier: d.fournisseur || "Dépense", montant: d.ttc, officiel: true, echeance: d.echeance || null, statut: "a_payer", iban: d.iban, communication: d.ref, notes: "Dépense scannée pas encore marquée payée" });
+    });
+    /* TVA : estimation seulement tant qu'aucun montant officiel n'est saisi */
+    if (p.regimeTva !== "franchise") {
+      var ti = trimInfo(td), tp = trimPrec(ti);
+      [tp, ti].forEach(function (q, idx) {
+        if (idx === 0 && td > q.echTva) return;
+        var off = officielPour("VAT", q.label);
+        if (off) return;
+        var tv = cptTvaTrim(q.y, q.t);
+        out.push({ id: "est_tva_" + q.label, src: "estimation", type: "VAT", creancier: "SPF Finances (TVA)", montant: r2(Math.max(0, tv.solde)), officiel: false, periode: q.label, echeance: q.echTva, statut: "a_payer",
+          explication: "TVA collectée " + eur2(tv.col + tv.colResa) + " − TVA déductible " + eur2(tv.ded) + " = " + eur2(tv.solde) + " (" + q.label + "). Échéance trimestrielle le 25 du mois suivant (source secondaire, à vérifier" + (p.periodiciteTva === "mensuelle" ? " — tu as indiqué des déclarations mensuelles : ce calcul trimestriel est à adapter" : "") + ")." });
+      });
+    }
+    /* Cotisations sociales : le décompte Xerius fait foi */
+    var tq = trimInfo(td);
+    if (!officielPour("SOCIAL_CONTRIBUTION", tq.label)) {
+      var principal = p.statutIndep !== "complementaire";
+      out.push({ id: "est_cot_" + tq.label, src: "estimation", type: "SOCIAL_CONTRIBUTION", creancier: p.caisseSociale || "Caisse d'assurances sociales", montant: principal ? 890.42 : null, officiel: false, periode: tq.label, echeance: tq.fin, statut: "a_payer",
+        explication: principal ? "Hypothèse : cotisation provisoire minimale 2026 d'un indépendant à titre principal (890,42 € hors frais de gestion de la caisse, source secondaire UCM/Partena). Ton vrai montant est sur ton décompte Xerius : saisis-le pour remplacer cette estimation. Échéance supposée : fin du trimestre (à vérifier sur le décompte)." : "Je n'ai pas cette information : le minimum dépend de ta situation en complémentaire. Saisis ton décompte Xerius." });
+    }
+    return out;
+  }
+  function groupe(o) {
+    if (o.statut === "paye") return "paye";
+    if (!o.echeance) return "sans";
+    var j = jours(o.echeance), td = todayStr();
+    if (j < 0) return "retard"; if (j === 0) return "auj"; if (j <= 7) return "semaine";
+    if (o.echeance.slice(0, 7) === td.slice(0, 7)) return "mois";
+    if (o.echeance <= trimInfo(td).fin) return "trimestre";
+    return "plustard";
+  }
+  var GROUPES = [["retard", "⚫ En retard"], ["auj", "Aujourd'hui"], ["semaine", "Cette semaine"], ["mois", "Ce mois"], ["trimestre", "Ce trimestre"], ["plustard", "Plus tard"], ["sans", "Sans échéance"]];
+  function badge(off) { return off ? '<span class="estbadge" style="background:#ecfdf5;color:#047857">OFFICIEL</span>' : '<span class="estbadge">ESTIMÉ</span>'; }
+
+  function obRow(o) {
+    var j = o.echeance ? jours(o.echeance) : null;
+    var alerte = j != null && o.statut !== "paye" && [30, 14, 7, 3, 0].some(function (x) { return j <= x; }) ? (j < 0 ? "dépassée de " + (-j) + " j" : j === 0 ? "aujourd'hui" : "dans " + j + " j") : (o.echeance ? "le " + dfr(o.echeance) : "");
+    var h = '<div class="tvaline" style="align-items:flex-start;gap:8px"><span style="flex:1"><b>' + esc(TYPES_OB[o.type] || o.type) + "</b> " + badge(o.officiel) + "<br><small style=\"color:var(--gris)\">" + esc(o.creancier || "") + (o.periode ? " · " + esc(o.periode) : "") + (alerte ? " · échéance " + alerte : "") + (o.notes ? " · " + esc(o.notes) : "") + "</small>";
+    if (o.explication) h += '<details class="scf-regle" style="margin-top:4px"><summary>Comment ce montant est calculé ?</summary><p>' + esc(o.explication) + "</p></details>";
+    if (o.estimAvant != null) h += '<br><small style="color:var(--gris)">Estimation avant document : ' + eur2(o.estimAvant) + "</small>";
+    h += '<br><span style="display:inline-flex;gap:10px;margin-top:4px;flex-wrap:wrap">';
+    if (o.statut !== "paye") {
+      if (o.src === "manuel") h += '<button class="scf-ops" data-scb="ob-payer" data-id="' + o.id + '">Marquer payé</button>';
+      if (o.src === "fournisseur") h += '<button class="scf-ops" data-act="fac-open" data-id="' + o.ref + '">Ouvrir / payer</button>';
+      if (o.src === "depense") h += '<button class="scf-ops" data-act="dep-pay" data-id="' + o.ref + '">Marquer payée</button>';
+      if (o.src === "estimation") h += '<button class="scf-ops" data-scb="ob-new" data-t="' + o.type + '" data-p="' + esc(o.periode || "") + '" data-est="' + (o.montant != null ? o.montant : "") + '">Saisir le montant officiel</button>';
+      if (o.iban || o.communication) h += '<button class="scf-ops" data-scb="ob-copier" data-id="' + o.id + '">Copier les infos de paiement</button>';
+    } else if (o.payeLe) h += '<small style="color:#047857">Payé le ' + dfr(o.payeLe) + (o.preuve ? " · " + esc(o.preuve) : "") + "</small>";
+    if (o.src === "manuel") h += '<button class="scf-ops" style="color:var(--gris)" data-scb="ob-suppr" data-id="' + o.id + '">supprimer</button>';
+    h += "</span></span>" + '<b class="tnum" style="white-space:nowrap">' + (o.montant != null ? eur2(o.montant) : "montant ?") + "</b></div>";
+    return h;
+  }
+
+  function renderAPayer() {
+    var st = cptData().set, td = todayStr(), mk = td.slice(0, 7);
+    var obs = obligations();
+    var h = '<div class="tdy-head"><h2>À payer & à faire</h2><span class="n">' + dfr(td) + "</span></div>";
+
+    /* --- aujourd'hui --- */
+    var faitsJ = DB.bookings.filter(function (b) { return b.date === td && b.statut === "termine"; });
+    var venduHT = r2(faitsJ.reduce(function (s, b) { return s + (b.total || 0); }, 0) / (1 + S.tauxPresta() / 100));
+    var encJ = r2(DB.bookings.reduce(function (s, b) { return s + (b.pay && b.pay.statut === "paye" && b.pay.date === td ? (b.pay.montant || 0) : 0); }, 0));
+    var cashJ = r2(S.F().caisse.mv.reduce(function (s, m) { return s + (m.type === "encaissement" && m.date === td ? m.montant : 0); }, 0));
+    var depJ = r2(cptData().dep.reduce(function (s, d) { return s + (d.date === td ? d.ttc || 0 : 0); }, 0));
+    h += '<div class="sitgrid">' +
+      '<div class="card sit"><p class="k">Aujourd\'hui</p><p class="v tnum">' + faitsJ.length + ' <small style="font-size:12px">prestation' + (faitsJ.length > 1 ? "s" : "") + "</small></p></div>" +
+      '<div class="card sit"><p class="k">Vendu HTVA</p><p class="v tnum">' + eur2(venduHT) + "</p></div>" +
+      '<div class="card sit pos"><p class="k">Encaissé TVAC</p><p class="v tnum">' + eur2(encJ) + '</p></div>' +
+      '<div class="card sit"><p class="k">Cash · dépenses</p><p class="v tnum" style="font-size:15px">' + eur2(cashJ) + " · " + eur2(depJ) + "</p></div></div>";
+
+    /* --- dettes publiques : officiel vs estimé --- */
+    var ouverts = obs.filter(function (o) { return o.statut !== "paye"; });
+    function somme(f) { return r2(ouverts.filter(f).reduce(function (s, o) { return s + (o.montant || 0); }, 0)); }
+    var offEtat = somme(function (o) { return o.officiel && ETAT[o.type]; });
+    var estEtat = somme(function (o) { return !o.officiel && ETAT[o.type]; });
+    var res = cptReserves();
+    var impotEst = r2(res.impot);
+    h += '<section class="card sec" style="margin-top:12px"><p class="k">Ce que je dois à l\'État</p><div class="sitgrid" style="margin-top:6px">' +
+      '<div style="border:1.5px solid #059669;border-radius:14px;padding:10px"><p class="k" style="color:#047857;margin:0">OFFICIEL À PAYER</p><p class="tnum" style="font-size:20px;font-weight:800;margin:4px 0">' + eur2(offEtat) + '</p><small style="color:var(--gris)">montants de documents reçus et saisis</small></div>' +
+      '<div style="border:1.5px dashed #d97706;border-radius:14px;padding:10px"><p class="k" style="color:#b45309;margin:0">ESTIMÉ À RÉSERVER</p><p class="tnum" style="font-size:20px;font-weight:800;margin:4px 0">' + eur2(estEtat + impotEst) + '</p><small style="color:var(--gris)">TVA + cotisations estimées + impôt ' + eur2(impotEst) + "</small></div></div>" +
+      '<details class="scf-regle"><summary>Comment c\'est calculé ?</summary><p>Officiel = obligations TVA, cotisations, impôt, versements anticipés et amendes que tu as saisies depuis un document réel. Estimé = TVA du trimestre calculée depuis tes ventes et dépenses, cotisation minimale 2026 tant que ton décompte Xerius n\'est pas saisi, et provision impôt du mois selon ton paramètre (' + (st.impot || 0) + " % du bénéfice, dans Situation) — ce n'est pas un calcul de l'impôt belge. Les deux totaux ne sont jamais additionnés.</p></details></section>";
+
+    /* --- disponible estimatif --- */
+    var caisse = S.soldeCaisse();
+    var offTous = somme(function (o) { return o.officiel; });
+    if (st.solde == null) {
+      h += '<div class="anomalie" style="margin-top:12px">Je n\'ai pas encore ton solde bancaire : je ne peux pas calculer ce que tu peux prendre pour toi. Saisis-le dans <button class="linkline" style="display:inline;margin:0" data-act="tab" data-tab="situation">Situation</button> (en attendant la connexion Revolut).</div>';
+    } else {
+      var dispo = r2(st.solde + caisse - offTous - estEtat - impotEst - (st.marge || 0));
+      var etat = st.solde + caisse >= offTous + estEtat + impotEst + (st.marge || 0) ? ["PROVISIONS SUFFISANTES", "#047857"] : st.solde + caisse >= offTous ? ["À SURVEILLER", "#b45309"] : ["PROVISIONS POTENTIELLEMENT INSUFFISANTES", "#dc2626"];
+      h += '<section class="card sec" style="margin-top:12px;border:2px solid ' + etat[1] + '"><p class="k">Disponible estimatif après provisions <span class="estbadge">estimation</span></p>' +
+        '<div class="tvaline"><span>Banque (saisi le ' + dfr(st.soldeDate) + ")</span><b class=\"tnum\">" + eur2(st.solde) + "</b></div>" +
+        '<div class="tvaline"><span>+ Caisse espèces</span><b class="tnum">' + eur2(caisse) + "</b></div>" +
+        '<div class="tvaline"><span>− Obligations officielles non payées</span><b class="tnum">−' + eur2(offTous) + "</b></div>" +
+        '<div class="tvaline"><span>− TVA et cotisations estimées</span><b class="tnum">−' + eur2(estEtat) + "</b></div>" +
+        '<div class="tvaline"><span>− Impôt estimé (provision)</span><b class="tnum">−' + eur2(impotEst) + "</b></div>" +
+        '<div class="tvaline"><span>− Réserve minimum</span><b class="tnum">−' + eur2(st.marge || 0) + "</b></div>" +
+        '<div class="tvaline" style="border-top:2px solid var(--bordure)"><span><b>Potentiellement disponible</b></span><b class="tnum" style="font-size:20px;color:' + (dispo >= 0 ? "#047857" : "var(--rouge)") + '">' + eur2(dispo) + "</b></div>" +
+        '<p class="note" style="margin:6px 0 0">Risque de mauvaise surprise fiscale : <b style="color:' + etat[1] + '">' + etat[0] + "</b>. Ce n'est pas un salaire : c'est ce qui resterait après avoir mis de côté ce que tu dois et devras probablement payer.</p></section>";
+    }
+
+    /* --- à faire --- */
+    var todo = [];
+    var nonPayes = DB.bookings.filter(function (b) { return b.statut === "termine" && b.pay && b.pay.statut === "non_paye"; });
+    var sansPay = DB.bookings.filter(function (b) { return b.statut === "termine" && !b.pay && b.date >= addDaysStr(td, -30); });
+    var brouillons = cptData().ven.filter(function (v) { return v.statut === "brouillon"; });
+    var sansJustif = cptData().dep.filter(function (d) { return (d.date || "").slice(0, 7) === mk && (d.nature === "pro" || d.nature === "mixte") && !d.img; });
+    var cashLibre = S.F().caisse.mv.filter(function (m) { return m.type === "encaissement" && !m.bkId && !m.venId; });
+    var bientot = ouverts.filter(function (o) { return o.echeance && jours(o.echeance) <= 7; });
+    if (bientot.length) todo.push(bientot.length + " paiement" + (bientot.length > 1 ? "s" : "") + " à faire dans les 7 jours (voir ci-dessous)");
+    if (nonPayes.length) todo.push(nonPayes.length + " intervention" + (nonPayes.length > 1 ? "s" : "") + " terminée" + (nonPayes.length > 1 ? "s" : "") + " non payée" + (nonPayes.length > 1 ? "s" : "") + " : " + nonPayes.map(function (b) { return esc(b.client) + " " + eur2(b.total); }).join(", "));
+    if (sansPay.length) todo.push(sansPay.length + " intervention" + (sansPay.length > 1 ? "s" : "") + " terminée" + (sansPay.length > 1 ? "s" : "") + " sans moyen de paiement indiqué (ouvre le RDV → Cash / Carte / …)");
+    if (brouillons.length) todo.push(brouillons.length + " facture" + (brouillons.length > 1 ? "s" : "") + " en brouillon à valider ou supprimer (Ventes)");
+    if (sansJustif.length) todo.push(sansJustif.length + " dépense" + (sansJustif.length > 1 ? "s" : "") + " pro de ce mois sans justificatif");
+    if (cashLibre.length) todo.push(cashLibre.length + " encaissement" + (cashLibre.length > 1 ? "s" : "") + " cash sans vente associée (Caisse)");
+    var manqP = ["nom", "bce", "tva", "adresse"].filter(function (k) { return !S.F().profil[k]; });
+    if (manqP.length) todo.push("Profil fiscal incomplet : factures et attestations bloquées (Profil)");
+    h += '<section class="card tsec" style="margin-top:12px"><p class="k">À faire <span class="cnt">' + todo.length + "</span></p>" + (todo.length ? todo.map(function (t, i) { return '<div class="tvaline"><span>' + (i + 1) + ". " + t + "</span></div>"; }).join("") : '<p class="emptyline">Rien d\'urgent 👌</p>') + "</section>";
+
+    /* --- échéancier --- */
+    h += '<div style="display:flex;gap:8px;margin-top:14px"><button class="cptscan" style="margin:0;flex:1" data-scb="ob-new">+ Obligation</button><button class="cptscan" style="margin:0;flex:1;background:linear-gradient(135deg,#1d4ed8,#60a5fa)" data-scb="ob-new" data-t="SOCIAL_CONTRIBUTION" data-off="1">Décompte Xerius</button></div>';
+    GROUPES.forEach(function (g) {
+      var lst = obs.filter(function (o) { return groupe(o) === g[0]; }).sort(function (a, b) { return (a.echeance || "9") < (b.echeance || "9") ? -1 : 1; });
+      if (!lst.length) return;
+      var tOff = r2(lst.filter(function (o) { return o.officiel; }).reduce(function (s, o) { return s + (o.montant || 0); }, 0));
+      var tEst = r2(lst.filter(function (o) { return !o.officiel; }).reduce(function (s, o) { return s + (o.montant || 0); }, 0));
+      h += '<section class="card tsec' + (g[0] === "retard" ? " late" : "") + '" style="margin-top:12px"><p class="k">' + g[1] + ' <span class="cnt">' + lst.length + '</span><span style="float:right;font-size:11px;font-weight:700">' + (tOff ? "officiel " + eur2(tOff) : "") + (tOff && tEst ? " · " : "") + (tEst ? "estimé " + eur2(tEst) : "") + "</span></p>";
+      lst.forEach(function (o) { h += obRow(o); });
+      h += "</section>";
+    });
+    var payes = obs.filter(function (o) { return o.statut === "paye"; }).slice(-5).reverse();
+    if (payes.length) { h += '<section class="card tsec" style="margin-top:12px;opacity:.8"><p class="k">Payé récemment</p>'; payes.forEach(function (o) { h += obRow(o); }); h += "</section>"; }
+    h += '<div class="disclaim">Les rappels apparaissent 30, 14, 7, 3 jours avant et le jour même. Rien n\'est payé automatiquement : l\'app ne touche pas à ton compte. « Payé » ne s\'affiche que quand tu le confirmes (et plus tard, avec la transaction Revolut rapprochée).</div>';
+    return h;
+  }
+
+  /* ========================= CLIENTS : RENDU ========================== */
+  var Q = "", M = null;
+  function renderClients() {
+    var all = clients().sort(function (a, b) { return a.derniereActivite < b.derniereActivite ? 1 : -1; });
+    var ca = r2(all.reduce(function (s, c) { return s + c.caTTC; }, 0)), imp = r2(all.reduce(function (s, c) { return s + c.impaye; }, 0));
+    var h = '<div class="tdy-head"><h2>Clients</h2><span class="n">' + all.length + " clients</span></div>";
+    h += '<div class="sitgrid" style="margin-top:0"><div class="card sit"><p class="k">CA total (TVAC)</p><p class="v tnum">' + eur2(ca) + '</p></div><div class="card sit ' + (imp ? "neg" : "") + '"><p class="k">Impayés</p><p class="v tnum">' + eur2(imp) + "</p></div></div>";
+    h += '<div class="searchbar"><input id="scb-q" placeholder="Nom, téléphone, adresse…" value="' + esc(Q) + '"></div><div id="scb-liste">' + listeHtml(all) + "</div>";
+    return h;
+  }
+  function listeHtml(all) {
+    var q = norm(Q);
+    var l = q ? all.filter(function (c) { return norm(c.nom + " " + c.tel + " " + c.adresse + " " + (c.o.societe || "")).indexOf(q) !== -1 || (c.tel || "").replace(/\D/g, "").indexOf(q.replace(/\D/g, "") || "§") !== -1; }) : all;
+    if (!l.length) return '<p class="emptyline">Aucun client.</p>';
+    return '<section class="card tsec">' + l.slice(0, 150).map(function (c) {
+      return '<button class="facrow" data-scb="client" data-k="' + c.key + '"><span class="bd"><span class="fo">' + esc(c.o.societe || c.nom) + '</span><span class="me">' +
+        c.faits.length + " prestation" + (c.faits.length > 1 ? "s" : "") + (c.dernier ? " · dernière " + dfr(c.dernier.date) : "") + (c.prochain ? " · prochaine " + dfr(c.prochain.date) : "") + "</span></span>" +
+        '<span class="mo tnum">' + eur2(c.caTTC) + "</span>" + (c.impaye ? '<span class="fbulle b-retard">Impayé</span>' : c.prochain ? '<span class="fbulle b-ok">RDV</span>' : "") + "</button>";
+    }).join("") + "</section>";
+  }
+  function fiche(c) {
+    var o = c.o, h = "";
+    h += '<p class="hint" style="margin-top:-6px">' + [c.tel, c.email, c.adresse].filter(Boolean).map(esc).join(" · ") + (o.type === "entreprise" ? " · Entreprise" + (o.tva ? " " + esc(o.tva) : "") : "") + "</p>";
+    var acts = "";
+    if (c.tel) acts += '<a href="tel:' + esc(c.tel.replace(/\s/g, "")) + '">Appeler</a><a href="https://wa.me/' + telIntl(c.tel) + '" target="_blank" rel="noreferrer">WhatsApp</a>';
+    if (c.email) acts += '<a href="mailto:' + esc(c.email) + '">Email</a>';
+    if (acts) h += '<div class="acts">' + acts + "</div>";
+    h += '<div class="sitgrid">' +
+      '<div class="card sit"><p class="k">Prestations</p><p class="v tnum">' + c.faits.length + "</p></div>" +
+      '<div class="card sit"><p class="k">CA généré (TVAC)</p><p class="v tnum">' + eur2(c.caTTC) + "</p></div>" +
+      '<div class="card sit"><p class="k">Panier moyen</p><p class="v tnum">' + eur2(c.panier) + "</p></div>" +
+      '<div class="card sit ' + (c.impaye ? "neg" : "pos") + '"><p class="k">Reste à payer</p><p class="v tnum">' + eur2(c.impaye) + "</p></div></div>";
+    var al = [];
+    if (c.prochain) al.push("📅 Prochain RDV : " + humanDate(c.prochain.date) + " à " + esc(c.prochain.heure) + " — " + euro(c.prochain.total));
+    if (c.impaye) al.push("💶 " + c.impayeN + " paiement" + (c.impayeN > 1 ? "s" : "") + " en attente : " + eur2(c.impaye));
+    if (c.sansFacture) al.push("🧾 " + c.sansFacture + " prestation" + (c.sansFacture > 1 ? "s" : "") + " sans facture (seulement si le client en demande une)");
+    if (c.devisOuvert) al.push("📝 Demande du site en attente de réponse");
+    if (al.length) h += '<section class="card sec" style="margin-top:10px">' + al.map(function (x) { return '<p style="margin:4px 0;font-size:13.5px">' + x + "</p>"; }).join("") + "</section>";
+    h += '<div class="sitgrid" style="margin-top:10px">' +
+      '<button class="cptscan" style="margin:0" data-scb="c-rdv" data-k="' + c.key + '">+ Nouveau RDV</button>' +
+      '<button class="cptscan" style="margin:0;background:linear-gradient(135deg,#1d4ed8,#60a5fa)" data-act="open-devis">+ Nouveau devis</button></div>';
+    var srv = Object.keys(c.services).sort(function (a, b) { return c.services[b] - c.services[a]; });
+    if (srv.length) h += '<p class="note" style="margin:10px 0 0">Services : ' + srv.map(function (s) { return esc(s) + (c.services[s] > 1 ? " ×" + c.services[s] : ""); }).join(" · ") + "</p>";
+    h += '<section class="card tsec" style="margin-top:10px"><p class="k">Historique <span class="cnt">' + c.bks.length + "</span></p>";
+    c.bks.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; }).forEach(function (b) {
+      var op = statutOp(b), fin = statutFin(b);
+      h += '<div class="tvaline" style="align-items:flex-start"><span style="flex:1">' + dfr(b.date) + " · " + esc((b.prestations || []).map(function (p) { return p.nom; }).join(" + ") || "Prestation") +
+        '<br><span style="display:inline-flex;gap:4px;flex-wrap:wrap;margin-top:3px">' + tag(op) + (fin ? tag(fin.pay) + (fin.fac ? tag(fin.fac) : "") : "") + "</span>" +
+        (b.statut === "termine" ? '<br><span style="display:inline-flex;gap:10px;margin-top:4px">' + (!b.pay || b.pay.statut === "non_paye" ? '<button class="scf-ops" data-scb="payer" data-id="' + b.id + '" data-m="cash">Payé cash</button><button class="scf-ops" data-scb="payer" data-id="' + b.id + '" data-m="virement">Payé virement</button>' : "") +
+          '<button class="scf-ops" data-scb="fac-express" data-id="' + b.id + '">' + (factureDe(b.id) && factureDe(b.id).statut !== "brouillon" ? "Voir facture" : "Facture") + "</button></span>" : "") +
+        '</span><b class="tnum">' + euro(b.total) + "</b></div>";
+    });
+    h += "</section>";
+    var fs = c.vens.filter(function (v) { return v.statut !== "brouillon"; });
+    if (fs.length) {
+      h += '<section class="card tsec" style="margin-top:10px"><p class="k">Factures <span class="cnt">' + fs.length + "</span></p>";
+      fs.forEach(function (v) { h += '<button class="facrow" data-scf="fac-voir" data-id="' + v.id + '"><span class="bd"><span class="fo">' + esc(v.numero) + '</span><span class="me">' + dfr(v.date) + (v.creditee ? " · annulée (" + esc(v.creditee) + ")" : "") + '</span></span><span class="mo tnum">' + eur2(v.ttc) + "</span></button>"; });
+      h += "</section>";
+    }
+    h += '<section class="card sec" style="margin-top:10px"><p class="k">Infos complémentaires</p>' +
+      '<div class="two"><div class="fld small"><label>Type</label><select id="scb-c-type"><option value="particulier">Particulier</option><option value="entreprise"' + (o.type === "entreprise" ? " selected" : "") + '>Entreprise</option></select></div><div class="fld"><label>Société</label><input id="scb-c-societe" value="' + esc(o.societe || "") + '"></div></div>' +
+      '<div class="two"><div class="fld"><label>N° TVA</label><input id="scb-c-tva" value="' + esc(o.tva || "") + '"></div><div class="fld"><label>Email</label><input id="scb-c-email" value="' + esc(o.email || c.email || "") + '"></div></div>' +
+      '<div class="fld"><label>Adresse de facturation (si différente)</label><input id="scb-c-adresse" value="' + esc(o.adresse || "") + '"></div>' +
+      '<div class="fld"><label>Notes</label><input id="scb-c-notes" value="' + esc(o.notes || "") + '" placeholder="Ex : chat à la maison, code porte 1234…"></div>' +
+      '<button class="btn-main" style="margin-top:6px" data-scb="c-save" data-k="' + c.key + '">Enregistrer</button></section>';
+    return h;
+  }
+
+  /* ======================== MODALE PROPRE ============================= */
+  function obForm(t, per, off, est) {
+    var h = '<div class="fld"><label>Type</label><select id="scb-o-type">' + Object.keys(TYPES_OB).map(function (k) { return '<option value="' + k + '"' + (k === t ? " selected" : "") + ">" + TYPES_OB[k] + "</option>"; }).join("") + "</select></div>" +
+      '<div class="two"><div class="fld"><label>Créancier</label><input id="scb-o-cre" value="' + (t === "SOCIAL_CONTRIBUTION" ? esc(S.F().profil.caisseSociale || "Xerius") : t === "VAT" ? "SPF Finances" : "") + '"></div><div class="fld"><label>Montant (€)</label><input id="scb-o-mt" type="number" step="0.01" inputmode="decimal"></div></div>' +
+      '<div class="two"><div class="fld"><label>Période</label><input id="scb-o-per" value="' + esc(per || "") + '" placeholder="Ex : T3 2026"></div><div class="fld"><label>Échéance</label><input id="scb-o-ech" type="date"></div></div>' +
+      '<div class="fld"><label>IBAN du créancier</label><input id="scb-o-iban"></div>' +
+      '<div class="fld"><label>Communication structurée / référence</label><input id="scb-o-com" placeholder="+++xxx/xxxx/xxxxx+++"></div>' +
+      '<label style="display:flex;gap:8px;font-size:13px;margin:6px 0"><input type="checkbox" id="scb-o-off" style="width:auto"' + (off ? " checked" : "") + "> Ce montant vient d'un document officiel reçu (décompte, avertissement-extrait de rôle, facture, courrier)</label>" +
+      '<div class="fld"><label>Note</label><input id="scb-o-note"></div>' +
+      (est ? '<input type="hidden" id="scb-o-est" value="' + est + '">' : "") +
+      '<p class="note">Une amende ou majoration ne s\'enregistre que sur base d\'un document réellement reçu. Rien n\'est jamais inventé.</p>' +
+      '<button class="btn-main" data-scb="ob-save">Enregistrer</button>';
+    return h;
+  }
+  function draw() {
+    var box = document.getElementById("scb-modal");
+    if (!box) { box = document.createElement("div"); box.id = "scb-modal"; document.body.appendChild(box); }
+    if (!M) { box.innerHTML = ""; return; }
+    var titre = "", body = "";
+    if (M.k === "client") { var c = clients().filter(function (x) { return x.key === M.key; })[0]; if (!c) { M = null; box.innerHTML = ""; return; } titre = c.o.societe || c.nom; body = fiche(c); }
+    if (M.k === "fac") { if (!E) { M = null; box.innerHTML = ""; return; } recalc(E); titre = "Facture — brouillon"; body = editeurHtml(E); }
+    if (M.k === "ob") { titre = M.off ? "Décompte officiel" : "Nouvelle obligation"; body = obForm(M.t, M.p, M.off, M.est); }
+    if (M.k === "obpaye") { titre = "Marquer comme payé"; body = '<div class="fld"><label>Date du paiement</label><input id="scb-p-date" type="date" value="' + todayStr() + '"></div><div class="fld"><label>Preuve (référence de la transaction Revolut, facultatif)</label><input id="scb-p-preuve"></div><button class="btn-main" data-scb="ob-payer-ok" data-id="' + M.id + '">Confirmer le paiement</button><p class="note">Confirme seulement si le paiement est réellement parti de ton compte.</p>'; }
+    box.innerHTML = '<div class="overlay" id="scb-ov"><div class="sheet"><div class="sheet-head"><h2>' + esc(titre) + '</h2><button class="x" data-scb="close">×</button></div>' + body + "</div></div>";
+    var t = document.getElementById("scb-tot"); if (t && E) t.innerHTML = totHtml(E);
+  }
+
+  /* ============================ ÉVÉNEMENTS ============================ */
+  document.addEventListener("input", function (e) {
+    var t = e.target;
+    if (t.id === "scb-q") { Q = t.value; var l = document.getElementById("scb-liste"); if (l) l.innerHTML = listeHtml(clients().sort(function (a, b) { return a.derniereActivite < b.derniereActivite ? 1 : -1; })); return; }
+    if (!E) return;
+    var f = t.getAttribute("data-e"), li = t.getAttribute("data-l");
+    if (f) {
+      if (f === "moyen") { E.moyen = t.value; if (!t.value) { E.paye = 0; E.payeTout = false; } else if (!(E.paye > 0)) E.payeTout = true; recalc(E); draw(); return; }
+      else if (f === "paye") { E.paye = t.value === "" ? 0 : Number(t.value.replace(",", ".")) || 0; E.payeTout = false; }
+      else E[f] = t.value;
+      if (f === "clientType") { draw(); return; }
+    } else if (li != null) {
+      var lf = t.getAttribute("data-lf"), L = E.lignes[+li]; if (!L) return;
+      L[lf] = lf === "lib" ? t.value : (t.value === "" ? 0 : Number(t.value.replace(",", ".")) || 0);
+    } else return;
+    recalc(E);
+    var box = document.getElementById("scb-tot"); if (box) box.innerHTML = totHtml(E);
+  });
+
+  document.addEventListener("click", function (e) {
+    if (e.target && e.target.id === "scb-ov") { if (M && M.k === "fac" && E) save(); M = null; E = null; draw(); renderAll(); return; }
+    var el = e.target.closest && e.target.closest("[data-scb]"); if (!el) return;
+    var a = el.getAttribute("data-scb"), id = el.getAttribute("data-id");
+    switch (a) {
+      case "close": if (M && M.k === "fac" && E) save(); M = null; E = null; draw(); renderAll(); break;
+      case "payer": payer(id, el.getAttribute("data-m")); if (M && M.k === "client") draw(); break;
+      case "fac-express": factureExpress(id); break;
+      case "client": M = { k: "client", key: el.getAttribute("data-k") }; draw(); break;
+      case "client-bk": { var b = findBk(id), c = b && clientDeBk(b); if (c) { ui.detailId = null; renderAll(); M = { k: "client", key: c.key }; draw(); } else toast("err", ["Pas assez d'infos (nom ou téléphone) pour retrouver ce client."]); break; }
+      case "c-save": {
+        var k = el.getAttribute("data-k"), ov = C().clients[k] || (C().clients[k] = {});
+        ["type", "societe", "tva", "email", "adresse", "notes"].forEach(function (f) { var i = document.getElementById("scb-c-" + f); if (i) ov[f] = i.value.trim(); });
+        S.log("Fiche client modifiée", k); save(); draw(); toast("ok", ["Fiche client enregistrée."]); break;
+      }
+      case "c-rdv": {
+        var cc = clients().filter(function (x) { return x.key === el.getAttribute("data-k"); })[0];
+        M = null; draw();
+        ui.manuelDate = todayStr(); ui.showDevis = false; ui.showManuel = true; renderModals();
+        if (cc) { [["m-client", cc.nom], ["m-tel", cc.tel], ["m-adr", cc.adresse]].forEach(function (x) { var i = document.getElementById(x[0]); if (i && x[1]) i.value = x[1]; }); }
+        break;
+      }
+      case "l-add": {
+        var tt = el.getAttribute("data-t");
+        E.lignes.push(tt === "deplacement" ? { lib: "Déplacement", qte: 1, puHT: 0 } : tt === "remise" ? { lib: "Remise", qte: 1, puHT: 0 } : { lib: "", qte: 1, puHT: 0 });
+        draw(); break;
+      }
+      case "l-del": E.lignes.splice(+el.getAttribute("data-i"), 1); recalc(E); draw(); break;
+      case "fac-apercu": recalc(E); save(); S.ouvrirDoc(S.factureHtml(E)); break;
+      case "fac-save": recalc(E); S.log("Brouillon de facture modifié", (E.client || "") + " · " + eur2(E.ttc)); save(); M = null; E = null; draw(); renderAll(); toast("ok", ["Brouillon enregistré — tu peux le finaliser plus tard (Ventes ou fiche RDV)."]); break;
+      case "fac-valider": valider(E); break;
+      case "fac-suppr": if (confirm("Supprimer ce brouillon ? (il n'a jamais été émis)")) { DB.cpt.ven = cptData().ven.filter(function (v) { return v !== E; }); S.log("Brouillon supprimé", E.client || ""); save(); M = null; E = null; draw(); renderAll(); } break;
+      case "ob-new": M = { k: "ob", t: el.getAttribute("data-t") || "OTHER", p: el.getAttribute("data-p") || "", off: el.getAttribute("data-off") === "1" || el.getAttribute("data-t") === "VAT" || el.getAttribute("data-t") === "SOCIAL_CONTRIBUTION", est: el.getAttribute("data-est") || "" }; draw(); break;
+      case "ob-save": {
+        var mt = Number((document.getElementById("scb-o-mt").value || "").replace(",", "."));
+        var off = document.getElementById("scb-o-off").checked, ty = document.getElementById("scb-o-type").value;
+        if (!mt || mt <= 0) { toast("err", ["Indique le montant."]); break; }
+        if (ty === "FINE" && !off) { toast("err", ["Une amende ne s'enregistre que depuis un document réellement reçu : coche la case."]); break; }
+        var est = document.getElementById("scb-o-est");
+        var ob = { id: uid("ob"), type: ty, creancier: document.getElementById("scb-o-cre").value.trim(), montant: r2(mt), officiel: off,
+          periode: document.getElementById("scb-o-per").value.trim(), echeance: document.getElementById("scb-o-ech").value || null, statut: "a_payer",
+          iban: document.getElementById("scb-o-iban").value.trim(), communication: document.getElementById("scb-o-com").value.trim(),
+          notes: document.getElementById("scb-o-note").value.trim(), estimAvant: est && est.value ? Number(est.value) : null, cree: new Date().toISOString() };
+        C().oblig.push(ob);
+        S.log("Obligation ajoutée", TYPES_OB[ty] + " · " + eur2(mt) + (off ? " (officiel)" : " (estimé)") + (ob.periode ? " · " + ob.periode : ""));
+        save(); M = null; draw(); renderMain(); toast("ok", ["Enregistré" + (off ? " comme montant OFFICIEL." : " comme ESTIMATION.")]); break;
+      }
+      case "ob-payer": M = { k: "obpaye", id: id }; draw(); break;
+      case "ob-payer-ok": {
+        var o = C().oblig.filter(function (x) { return x.id === id; })[0]; if (!o) break;
+        o.statut = "paye"; o.payeLe = document.getElementById("scb-p-date").value || todayStr(); o.preuve = document.getElementById("scb-p-preuve").value.trim();
+        S.log("Obligation payée", TYPES_OB[o.type] + " · " + eur2(o.montant) + " le " + dfr(o.payeLe)); save(); M = null; draw(); renderMain(); break;
+      }
+      case "ob-suppr": {
+        var o2 = C().oblig.filter(function (x) { return x.id === id; })[0];
+        if (o2 && confirm("Supprimer cette obligation saisie à la main ?")) { C().oblig = C().oblig.filter(function (x) { return x !== o2; }); S.log("Obligation supprimée", TYPES_OB[o2.type] + " · " + eur2(o2.montant)); save(); renderMain(); }
+        break;
+      }
+      case "ob-copier": {
+        var o3 = obligations().filter(function (x) { return x.id === id; })[0]; if (!o3) break;
+        copyText([o3.creancier, o3.iban ? "IBAN : " + o3.iban : "", "Montant : " + (o3.montant != null ? eur2(o3.montant) : "?"), o3.communication ? "Communication : " + o3.communication : "", o3.echeance ? "Échéance : " + dfr(o3.echeance) : ""].filter(Boolean).join("\n"))
+          .then(function () { toast("ok", ["Infos de paiement copiées — colle-les dans Revolut."]); });
+        break;
+      }
+    }
+  });
+
+  window.SCB = {
+    renderClients: renderClients, renderAPayer: renderAPayer, bkPanel: bkPanel, bkTags: bkTags,
+    onTermine: onTermine, factureExpress: factureExpress, ouvrirEditeur: ouvrirEditeur, payer: payer,
+    clients: clients, obligations: obligations, recalc: recalc
+  };
+})();

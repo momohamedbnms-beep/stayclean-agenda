@@ -151,7 +151,8 @@
     DB.bookings.forEach(function (b) {
       if (b.statut !== "termine" || !inP(b.date) || linked[b.id]) return;
       var ttc = b.total || 0, ht = ttc / (1 + tx / 100);
-      R.caFactureHT += ht; R.caEncaisseHT += ht; R.tvaCollectee += ttc - ht;
+      R.caFactureHT += ht; R.tvaCollectee += ttc - ht;
+      if (!(b.pay && b.pay.statut === "non_paye")) R.caEncaisseHT += ht;
       R.ops.ventes.push({ date: b.date, lib: "Prestation terminée (sans facture)", ht: ht, ttc: ttc, id: b.id });
     });
     cptData().ven.forEach(function (v) {
@@ -427,16 +428,18 @@
     if (!v.clientAdresse) manq.push("l'adresse du client");
     var b2b = v.clientType === "entreprise";
     var nc = v.type === "nc";
-    var h = '<div id="scf-doc"><div class="hd"><div><div class="brand">' + esc((p.nomCommercial || "StayClean").toUpperCase()) + "<small>" + esc([p.prenom, p.nom].filter(Boolean).join(" ")) + "</small></div>" +
+    var brouillon = v.statut === "brouillon";
+    var h = (brouillon ? '<div class="warn" style="max-width:794px;margin:0 auto 8px;font-size:13px"><b>BROUILLON</b> — pas encore une facture : le numéro est attribué à la validation. Ne l\'envoie pas au client avant de valider.</div>' : "") + '<div id="scf-doc"><div class="hd"><div><div class="brand">' + esc((p.nomCommercial || "StayClean").toUpperCase()) + "<small>" + esc([p.prenom, p.nom].filter(Boolean).join(" ")) + "</small></div>" +
       '<div class="small" style="margin-top:6px">' + esc(p.adresse || "Adresse à compléter") + "<br>N° entreprise : " + esc(p.bce || "à compléter") + " · TVA : " + esc(p.tva || "à compléter") + (p.iban ? "<br>IBAN : " + esc(p.iban) : "") + (p.email ? "<br>" + esc(p.email) : "") + (p.tel ? " · " + esc(p.tel) : "") + "</div></div>" +
-      '<div class="meta"><h1>' + (nc ? "NOTE DE CRÉDIT" : "FACTURE") + "</h1>N° <b>" + esc(v.numero) + "</b><br>Date : <b>" + dfr(v.date) + "</b>" + (v.datePrestation && v.datePrestation !== v.date ? "<br>Date de la prestation : <b>" + dfr(v.datePrestation) + "</b>" : "") + (v.echeance && !nc ? "<br>Échéance : <b>" + dfr(v.echeance) + "</b>" : "") + (nc && v.refFacture ? "<br>Annule la facture n° <b>" + esc(v.refFacture) + "</b>" : "") + "</div></div>";
+      '<div class="meta"><h1>' + (nc ? "NOTE DE CRÉDIT" : brouillon ? "FACTURE — BROUILLON" : "FACTURE") + "</h1>N° <b>" + (brouillon ? "attribué à la validation" : esc(v.numero)) + "</b><br>Date : <b>" + dfr(v.date) + "</b>" + (v.datePrestation && v.datePrestation !== v.date ? "<br>Date de la prestation : <b>" + dfr(v.datePrestation) + "</b>" : "") + (v.echeance && !nc ? "<br>Échéance : <b>" + dfr(v.echeance) + "</b>" : "") + (nc && v.refFacture ? "<br>Annule la facture n° <b>" + esc(v.refFacture) + "</b>" : "") + "</div></div>";
     h += '<div class="blk"><p>Client</p><div style="padding:8px 10px"><b>' + esc(v.client || "") + "</b>" + (v.clientAdresse ? "<br>" + esc(v.clientAdresse) : "") + (b2b && v.clientTva ? "<br>N° TVA : " + esc(v.clientTva) : "") + "</div></div>";
     h += '<div class="blk"><p>Détail</p><table><tr><th>Description</th><th class="n">Qté</th><th class="n">HTVA</th></tr>';
     var totHT = 0;
+    var parPU = lignes.every(function (l) { return l.puHT != null; });
     lignes.forEach(function (l, i) {
-      var ht = i === lignes.length - 1 ? r2((v.ht || 0) - totHT) : r2((l.ttc || 0) / (1 + tx / 100));
+      var ht = parPU ? r2((l.qte || 1) * l.puHT) : (i === lignes.length - 1 ? r2((v.ht || 0) - totHT) : r2((l.ttc || 0) / (1 + tx / 100)));
       totHT = r2(totHT + ht);
-      h += "<tr><td>" + esc(l.lib) + '</td><td class="n">' + (l.qte || 1) + '</td><td class="n">' + eur2(ht) + "</td></tr>";
+      h += "<tr><td>" + esc(l.lib) + '</td><td class="n">' + (l.qte || 1) + (parPU ? " × " + eur2(l.puHT) : "") + '</td><td class="n">' + eur2(ht) + "</td></tr>";
     });
     h += '<tr class="t"><td colspan="2">Total HTVA</td><td class="n">' + eur2(v.ht) + "</td></tr>" +
       '<tr><td colspan="2">TVA ' + tx + " %</td><td class=\"n\">" + eur2(v.tvaMontant) + "</td></tr>" +
@@ -444,7 +447,8 @@
     if (!nc) h += '<tr><td colspan="2">Payé</td><td class="n">' + eur2(v.paye || 0) + '</td></tr><tr class="t"><td colspan="2">Reste dû</td><td class="n">' + eur2(Math.max(0, (v.ttc || 0) - (v.paye || 0))) + "</td></tr>";
     h += "</table></div>";
     if (!nc && (v.paye || 0) >= (v.ttc || 0) && v.ttc > 0) h += '<p style="font-weight:700;color:#047857">Facture acquittée' + (v.moyen ? " — payée par " + esc(v.moyen) : "") + ".</p>";
-    else if (!nc && p.iban) h += "<p>Paiement par virement sur " + esc(p.iban) + " en mentionnant la communication <b>" + esc(v.numero) + "</b>.</p>";
+    else if (!nc && (v.paye || 0) > 0) h += "<p>Acompte reçu" + (v.moyen ? " (" + esc(v.moyen) + ")" : "") + " : " + eur2(v.paye) + ".</p>";
+    if (!nc && (v.paye || 0) < (v.ttc || 0) && p.iban) h += "<p>Paiement par virement sur " + esc(p.iban) + " en mentionnant la communication <b>" + esc(v.numero) + "</b>.</p>";
     if (manq.length) h += '<div class="warn scf-noprint-hint"><b>Mentions obligatoires manquantes :</b> ' + esc(manq.join(", ")) + ". Complète le Profil (et la fiche client) avant d'envoyer cette facture.</div>";
     if (b2b) h += '<div class="warn"><b>Client entreprise :</b> depuis le 1/1/2026, une facture à une entreprise belge assujettie doit être envoyée en format électronique structuré via Peppol. Ce PDF seul ne suffit pas — un prestataire Peppol doit encore être configuré.</div>';
     h += '<div class="foot">' + esc(p.nomCommercial || "StayClean") + " · " + esc(p.bce || "") + " · Document généré par StayClean Finance le " + dfr(todayStr()) + "</div></div>";
@@ -698,7 +702,7 @@
       }
       case "doc-close": fermerDoc(); break;
       case "doc-print": window.print(); break;
-      case "fac-rdv": e.stopPropagation(); factureDepuisRdv(el.getAttribute("data-id")); break;
+      case "fac-rdv": e.stopPropagation(); if (window.SCB) SCB.factureExpress(el.getAttribute("data-id")); else factureDepuisRdv(el.getAttribute("data-id")); break;
       case "fac-voir": { var vv = findVen(el.getAttribute("data-id")); if (vv) ouvrirDoc(factureHtml(vv)); break; }
       case "fac-annuler": annulerParNC(el.getAttribute("data-id")); break;
     }
@@ -715,6 +719,8 @@
     },
     periode: periode, soldeCaisse: soldeCaisse, nextNumero: nextNumero,
     factureDepuisRdv: factureDepuisRdv, annulerParNC: annulerParNC,
-    factureHtml: factureHtml, attestationHtml: attestationHtml, regles: REGLES, log: log
+    factureHtml: factureHtml, attestationHtml: attestationHtml, regles: REGLES, log: log,
+    ouvrirDoc: ouvrirDoc, fermerDoc: fermerDoc, F: F, eur2: eur2, dfr: dfr, r2: r2, uid: uid, regleHtml: regleHtml,
+    tauxPresta: tauxPresta, TYPES_MV: TYPES_MV
   };
 })();
