@@ -101,7 +101,7 @@
   }
   function statutOp(b) {
     if (b.statut === "annule") return { l: "Annulé", c: "#64748b" };
-    if (b.statut === "termine") return { l: "Terminé", c: "#047857" };
+    if (b.statut === "termine") return { l: b.autoTermine ? "Terminé (auto)" : "Terminé", c: "#047857" };
     if (b.date < todayStr()) return { l: "À clôturer", c: "#b45309" };
     return { l: "Confirmé", c: "#1d4ed8" };
   }
@@ -270,6 +270,101 @@
     save(); M = null; E = null; draw(); renderAll();
     S.ouvrirDoc(S.factureHtml(v));
     toast("ok", ["Facture " + v.numero + " validée — PDF prêt (Imprimer / PDF)."]);
+  }
+
+
+  /* =================== REVENUS & CHARGES AUTOMATIQUES ==================== */
+  /* Charges habituelles de Mohamed (modifiables) : estimations, remplacées par
+     le réel dès que les dépenses saisies dépassent l'estimation. */
+  function CH() {
+    var s = cptData().set;
+    if (!s.chargesAuto) s.chargesAuto = { essenceMin: 200, essenceMax: 320, produits: 100, pubJourMin: 20, pubJourMax: 25, autoTerminer: true };
+    return s.chargesAuto;
+  }
+  /* Un RDV dont l'heure de fin est passée et qui n'a été ni annulé ni terminé
+     est considéré comme réalisé (option). Il reste modifiable : « Rouvrir »
+     ou « Annuler le RDV » s'il n'a pas eu lieu. */
+  function autoTerminer() {
+    if (!CH().autoTerminer) return 0;
+    var td = todayStr(), now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes(), n = 0;
+    DB.bookings.forEach(function (b) {
+      if (b.statut === "termine" || b.statut === "annule" || !(b.total > 0) || !b.date) return;
+      var fin = toMin(b.heure || "09:00") + (b.durationMin || 120);
+      if (b.date < td || (b.date === td && fin <= nowMin)) { b.statut = "termine"; b.autoTermine = true; n++; }
+    });
+    if (n) { S.log("RDV passés comptés automatiquement comme réalisés", n + " RDV"); save(); }
+    return n;
+  }
+  function joursEntre(a, b) { return Math.round((parseDateStr(b) - parseDateStr(a)) / 864e5) + 1; }
+  function bilan(deb, fin) {
+    autoTerminer();
+    var ch = CH(), td = todayStr(), tx = S.tauxPresta();
+    var finEcoule = fin < td ? fin : td;
+    var nbJ = finEcoule >= deb ? joursEntre(deb, finEcoule) : 0, nbTot = joursEntre(deb, fin);
+    var parJourMois = 12 / 365;
+    var real = 0, aVenir = 0, nbR = 0, nbV = 0;
+    DB.bookings.forEach(function (b) {
+      if (b.statut === "annule" || !b.date || b.date < deb || b.date > fin) return;
+      if (b.statut === "termine") { real += b.total || 0; nbR++; } else { aVenir += b.total || 0; nbV++; }
+    });
+    var reel = { essence: 0, produits: 0, pub: 0, autres: 0 }, nbDep = 0;
+    cptData().dep.forEach(function (d) {
+      if (!d.date || d.date < deb || d.date > fin || d.nature === "perso" || d.categorie === "cotisations") return;
+      var m = (d.ttc || 0) * (d.nature === "mixte" && d.pctPro != null ? d.pctPro / 100 : 1);
+      var k = d.categorie === "carburant" ? "essence" : d.categorie === "produits" ? "produits" : d.categorie === "publicite" ? "pub" : "autres";
+      reel[k] += m; nbDep++;
+    });
+    function est(min, max, parJour) { return { min: r2(min * parJour * nbJ), max: r2(max * parJour * nbJ), minT: r2(min * parJour * nbTot), maxT: r2(max * parJour * nbTot) }; }
+    var E = { essence: est(ch.essenceMin, ch.essenceMax, parJourMois), produits: est(ch.produits, ch.produits, parJourMois), pub: est(ch.pubJourMin, ch.pubJourMax, 1) };
+    var lignes = ["essence", "produits", "pub"].map(function (k) {
+      var e = E[k], mid = r2((e.min + e.max) / 2), rr = r2(reel[k]);
+      return { k: k, reel: rr, estMin: e.min, estMax: e.max, retenu: Math.max(rr, mid), retMin: Math.max(rr, e.min), retMax: Math.max(rr, e.max), midT: r2((e.minT + e.maxT) / 2), source: rr >= mid && rr > 0 ? "réel" : "estimé" };
+    });
+    var autres = r2(reel.autres);
+    var charges = r2(lignes.reduce(function (s2, l) { return s2 + l.retenu; }, 0) + autres);
+    var chargesMin = r2(lignes.reduce(function (s2, l) { return s2 + l.retMin; }, 0) + autres);
+    var chargesMax = r2(lignes.reduce(function (s2, l) { return s2 + l.retMax; }, 0) + autres);
+    var caHT = r2(real / (1 + tx / 100));
+    var projCaHT = r2((real + aVenir) / (1 + tx / 100));
+    var chargesTot = r2(lignes.reduce(function (s2, l) { return s2 + Math.max(l.reel, l.midT); }, 0) + autres);
+    return { deb: deb, fin: fin, nbJ: nbJ, nbTot: nbTot, caTTC: r2(real), tva: r2(real - caHT), caHT: caHT, nbR: nbR, aVenir: r2(aVenir), nbV: nbV,
+      lignes: lignes, autres: autres, charges: charges, benef: r2(caHT - charges), benefMin: r2(caHT - chargesMax), benefMax: r2(caHT - chargesMin),
+      projBenef: r2(projCaHT - chargesTot), projCaTTC: r2(real + aVenir), enCours: fin >= td && deb <= td, nbDep: nbDep };
+  }
+  var LIB = { essence: "⛽ Essence", produits: "🧴 Produits", pub: "📣 Publicité (Google, Meta…)" };
+  function beneficeHtml(deb, fin, label) {
+    var B = bilan(deb, fin), ch = CH();
+    if (B.nbJ === 0) return "";
+    var h = '<section class="card sec" style="border:2px solid ' + (B.benef >= 0 ? "#059669" : "var(--rouge)") + '"><p class="k">💶 Mon bénéfice — ' + esc(label) + ' <span class="estbadge">calcul auto</span></p>' +
+      '<div class="tvaline"><span>Revenus réalisés (TVAC)<br><small style="color:var(--gris)">' + B.nbR + " intervention" + (B.nbR > 1 ? "s" : "") + " réalisée" + (B.nbR > 1 ? "s" : "") + "</small></span><b class=\"tnum\">" + eur2(B.caTTC) + "</b></div>" +
+      '<div class="tvaline"><span>− TVA incluse (à reverser à l\'État)</span><b class="tnum">−' + eur2(B.tva) + "</b></div>" +
+      '<div class="tvaline"><span><b>Chiffre d\'affaires HTVA</b></span><b class="tnum">' + eur2(B.caHT) + "</b></div>";
+    B.lignes.forEach(function (l) {
+      h += '<div class="tvaline"><span>− ' + LIB[l.k] + '<br><small style="color:var(--gris)">' + (l.source === "réel" ? "réel saisi : " + eur2(l.reel) : "estimé sur " + B.nbJ + " j (" + (l.estMin === l.estMax ? eur2(l.estMin) : eur2(l.estMin) + " à " + eur2(l.estMax)) + ")" + (l.reel ? " · réel saisi " + eur2(l.reel) : "")) + '</small></span><b class="tnum">−' + eur2(l.retenu) + "</b></div>";
+    });
+    if (B.autres) h += '<div class="tvaline"><span>− Autres dépenses pro saisies</span><b class="tnum">−' + eur2(B.autres) + "</b></div>";
+    h += '<div class="tvaline" style="border-top:2px solid var(--bordure)"><span><b>Bénéfice estimé</b><br><small style="color:var(--gris)">fourchette ' + eur2(B.benefMin) + " à " + eur2(B.benefMax) + '</small></span><b class="tnum" style="font-size:21px;color:' + (B.benef >= 0 ? "#047857" : "var(--rouge)") + '">' + eur2(B.benef) + "</b></div>";
+    if (B.enCours && B.nbV) h += '<p class="note" style="margin:8px 0 0">📈 Avec les ' + B.nbV + " RDV encore prévus (" + eur2(B.aVenir) + "), fin de période estimée : CA " + eur2(B.projCaTTC) + " TVAC · bénéfice ≈ <b>" + eur2(B.projBenef) + "</b>.</p>";
+    h += '<p class="note" style="margin:6px 0 0">Avant cotisations sociales et impôt (voir Compta → À payer). Ce n\'est pas un salaire.</p>';
+    h += '<details class="scf-regle"><summary>Comment c\'est calculé ? · mes charges habituelles</summary>' +
+      "<p>Revenus = RDV de la période marqués terminés" + (ch.autoTerminer ? " (un RDV passé et non annulé est compté automatiquement — si le client n'est pas venu, annule le RDV)" : "") + ". Charges : pour chaque poste, l'app prend le plus élevé entre ce que tu as réellement saisi dans Compta → Dépenses et ton estimation habituelle au prorata des jours écoulés. Les montants de charges sont ceux payés (TVAC) : c'est prudent, une partie de la TVA pourra être récupérée.</p>" +
+      '<div class="two"><div class="fld"><label>Essence / mois min (€)</label><input id="scb-ch-essenceMin" type="number" value="' + ch.essenceMin + '"></div><div class="fld"><label>Essence / mois max (€)</label><input id="scb-ch-essenceMax" type="number" value="' + ch.essenceMax + '"></div></div>' +
+      '<div class="two"><div class="fld"><label>Publicité / jour min (€)</label><input id="scb-ch-pubJourMin" type="number" value="' + ch.pubJourMin + '"></div><div class="fld"><label>Publicité / jour max (€)</label><input id="scb-ch-pubJourMax" type="number" value="' + ch.pubJourMax + '"></div></div>' +
+      '<div class="fld"><label>Produits / mois (€)</label><input id="scb-ch-produits" type="number" value="' + ch.produits + '"></div>' +
+      '<label style="display:flex;gap:8px;font-size:13px;margin:6px 0"><input type="checkbox" id="scb-ch-auto" style="width:auto"' + (ch.autoTerminer ? " checked" : "") + "> Compter automatiquement les RDV passés comme réalisés</label>" +
+      '<button class="btn-main" style="margin-top:6px" data-scb="chg-save">Enregistrer mes charges</button></details></section>';
+    return h;
+  }
+  /* bandeau du Planning : revenus du jour, du mois, bénéfice estimé */
+  function stripHtml() {
+    var td = todayStr(), mk = td.slice(0, 7);
+    var fm = mk + "-" + pad(new Date(+mk.slice(0, 4), +mk.slice(5, 7), 0).getDate());
+    var J = bilan(td, td), Mo = bilan(mk + "-01", fm);
+    return '<button data-act="tab" data-tab="revenus" style="display:flex;width:100%;justify-content:space-between;gap:8px;align-items:center;margin:0 0 10px;padding:11px 14px;border-radius:16px;background:#fff;border:1px solid var(--bordure);font-size:12.5px;text-align:left">' +
+      '<span>Aujourd\'hui<br><b class="tnum" style="font-size:16px">' + euro(J.caTTC) + "</b></span>" +
+      "<span>" + MOIS_FULL[+mk.slice(5, 7) - 1] + '<br><b class="tnum" style="font-size:16px">' + euro(Mo.caTTC) + "</b></span>" +
+      '<span>Bénéfice estimé<br><b class="tnum" style="font-size:16px;color:' + (Mo.benef >= 0 ? "#047857" : "var(--rouge)") + '">' + euro(Mo.benef) + "</b></span>" +
+      '<span style="color:var(--bleu);font-weight:800">›</span></button>';
   }
 
   /* =========================== À PAYER ================================ */
@@ -593,6 +688,14 @@
         S.log("Obligation ajoutée", TYPES_OB[ty] + " · " + eur2(mt) + (off ? " (officiel)" : " (estimé)") + (ob.periode ? " · " + ob.periode : ""));
         save(); M = null; draw(); renderMain(); toast("ok", ["Enregistré" + (off ? " comme montant OFFICIEL." : " comme ESTIMATION.")]); break;
       }
+      case "chg-save": {
+        var ch = CH();
+        ["essenceMin", "essenceMax", "pubJourMin", "pubJourMax", "produits"].forEach(function (k) { var i = document.getElementById("scb-ch-" + k); if (i && i.value !== "") ch[k] = Math.max(0, Number(i.value.replace(",", ".")) || 0); });
+        if (ch.essenceMax < ch.essenceMin) ch.essenceMax = ch.essenceMin; if (ch.pubJourMax < ch.pubJourMin) ch.pubJourMax = ch.pubJourMin;
+        var au = document.getElementById("scb-ch-auto"); if (au) ch.autoTerminer = au.checked;
+        S.log("Charges habituelles modifiées", "essence " + ch.essenceMin + "-" + ch.essenceMax + " €/mois · produits " + ch.produits + " €/mois · pub " + ch.pubJourMin + "-" + ch.pubJourMax + " €/jour");
+        save(); renderMain(); toast("ok", ["Charges enregistrées — le bénéfice est recalculé."]); break;
+      }
       case "ob-payer": M = { k: "obpaye", id: id }; draw(); break;
       case "ob-payer-ok": {
         var o = C().oblig.filter(function (x) { return x.id === id; })[0]; if (!o) break;
@@ -613,9 +716,13 @@
     }
   });
 
+  setTimeout(function () { try { if (autoTerminer()) renderAll(); } catch (e) {} }, 1500);
+  setInterval(function () { try { if (autoTerminer()) renderAll(); } catch (e) {} }, 300000);
+
   window.SCB = {
     renderClients: renderClients, renderAPayer: renderAPayer, bkPanel: bkPanel, bkTags: bkTags,
     onTermine: onTermine, factureExpress: factureExpress, ouvrirEditeur: ouvrirEditeur, payer: payer,
-    clients: clients, obligations: obligations, recalc: recalc
+    clients: clients, obligations: obligations, recalc: recalc,
+    bilan: bilan, beneficeHtml: beneficeHtml, stripHtml: stripHtml, autoTerminer: autoTerminer
   };
 })();

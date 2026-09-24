@@ -679,7 +679,7 @@ function save() {
 
 var ui = {
   space: "portal", tab: "planning", weekOffset: 0,
-  revPeriod: "semaine", revWeekOff: 0, revMonth: null, revYear: null,
+  revPeriod: "mois", revWeekOff: 0, revMonth: null, revYear: null,
   imgs: [], busy: false,
   detailId: null, showDevis: false, showManuel: false,
   fileTarget: "resa",
@@ -3830,6 +3830,7 @@ function renderPlanning() {
       '<button class="warn" data-act="cg-open">🚫 Bloquer</button>' +
       '<button data-act="sync-all">🔄 Actualiser</button>' +
       '<button data-act="go-today">📅 Aujourd’hui</button></div>';
+    if (window.SCB) h += SCB.stripHtml();
     /* blocages : pastilles discrètes — la gestion complète est dans « Bloquer » */
     var cgsP = congesActifs();
     if (cgsP.length) {
@@ -4250,6 +4251,7 @@ function renderRevenus() {
   }
   h += '<section class="card hero"><p class="k">Chiffre d\u2019affaires</p><p class="v grad tnum">' + euro(p.ca) + '</p>' +
     '<p class="s">' + p.nb + " intervention" + (p.nb > 1 ? "s" : "") + (p.nb ? " \u00b7 panier " + euro(p.panier) : "") + (p.aVenir > 0 ? " \u00b7 dont " + euro(p.aVenir) + " \u00e0 venir" : "") + deltaHtml + "</p></section>";
+  if (window.SCB) h += SCB.beneficeHtml(r.s, r.e, r.label);
 
   /* records de tous les temps */
   var rec = revRecords();
