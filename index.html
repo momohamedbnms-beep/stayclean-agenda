@@ -1877,8 +1877,10 @@ var PRO_TABS_2 = [["factures", "Factures"], ["revenus", "Revenus"]];
 var PERSO_TABS = [["tableau", "Tableau"], ["agenda", "Agenda"], ["taches", "Tâches"], ["docs", "Docs"]];
 var PRO_TAB_LABEL = { tableau: "Accueil", demandes: "Demandes du site", planning: "Planning", devis: "Devis", factures: "Factures", revenus: "Revenus", reglages: "Réglages" };
 var PERSO_TAB_LABEL = { tableau: "Tableau", agenda: "Agenda", taches: "Tâches", docs: "Docs & dossiers" };
-var CPT_TABS = [["situation", "Situation"], ["depenses", "Dépenses"], ["ventes", "Ventes"], ["tva", "TVA"]];
-var CPT_TAB_LABEL = { situation: "Situation", depenses: "Dépenses", ventes: "Ventes", tva: "TVA" };
+var CPT_TABS = [["situation", "Situation"], ["depenses", "Dépenses"], ["ventes", "Ventes"], ["tva", "TVA"], ["caisse", "Caisse"], ["revenus", "Mes revenus"], ["profil", "Profil"]];
+var CPT_TABS_1 = [["situation", "Situation"], ["ventes", "Ventes"], ["depenses", "Dépenses"], ["caisse", "💶 Caisse"]];
+var CPT_TABS_2 = [["tva", "TVA"], ["revenus", "📄 Mes revenus"], ["profil", "Profil"]];
+var CPT_TAB_LABEL = { situation: "Situation", depenses: "Dépenses", ventes: "Ventes", tva: "TVA", caisse: "Caisse", revenus: "Mes revenus", profil: "Profil fiscal" };
 
 function renderChrome() {
   if (ui.space === "pro" && ui.tab === "tableau") ui.tab = "planning"; /* 24/09 : plus d'accueil pro */
@@ -1925,6 +1927,9 @@ function renderChrome() {
       /* l'essentiel en haut, la gestion en dessous — deux rangées aérées */
       nav.className = "deux";
       nav.innerHTML = '<div class="r1">' + btns(PRO_TABS_1) + '</div><div class="r2">' + btns(PRO_TABS_2) + "</div>";
+    } else if (s === "cpt") {
+      nav.className = "deux";
+      nav.innerHTML = '<div class="r1">' + btns(CPT_TABS_1) + '</div><div class="r2">' + btns(CPT_TABS_2) + "</div>";
     } else nav.innerHTML = btns(tabs);
   }
   if (fab) fab.style.display = "flex";
@@ -2544,8 +2549,8 @@ function downloadICS(titre, dateStr, heure, note) {
 
 /* ==================== COMPTA : moteur ==================== */
 
-var CAT_DEP = ["carburant", "voiture", "materiel", "produits", "telephone", "internet", "logiciel", "assurance", "publicite", "comptable", "bureau", "domicile", "deplacement", "repas", "formation", "banque", "autre"];
-var CAT_LABEL = { carburant: "Carburant", voiture: "Voiture", materiel: "Matériel", produits: "Produits", telephone: "Téléphone", internet: "Internet", logiciel: "Logiciel", assurance: "Assurance", publicite: "Publicité", comptable: "Comptable", bureau: "Bureau", domicile: "Domicile", deplacement: "Déplacement", repas: "Repas", formation: "Formation", banque: "Frais bancaires", autre: "Autre" };
+var CAT_DEP = ["cotisations", "carburant", "voiture", "materiel", "produits", "telephone", "internet", "logiciel", "assurance", "publicite", "comptable", "bureau", "domicile", "deplacement", "repas", "formation", "banque", "autre"];
+var CAT_LABEL = { cotisations: "Cotisations sociales (Xerius)", carburant: "Carburant", voiture: "Voiture", materiel: "Matériel", produits: "Produits", telephone: "Téléphone", internet: "Internet", logiciel: "Logiciel", assurance: "Assurance", publicite: "Publicité", comptable: "Comptable", bureau: "Bureau", domicile: "Domicile", deplacement: "Déplacement", repas: "Repas", formation: "Formation", banque: "Frais bancaires", autre: "Autre" };
 var NAT_LABEL = { pro: "Pro", perso: "Perso", mixte: "Mixte", averifier: "À vérifier" };
 
 function cptData() {
@@ -2561,6 +2566,7 @@ function findDep(id) { return cptData().dep.find(function (d) { return d.id === 
 function findVen(id) { return cptData().ven.find(function (v) { return v.id === id; }); }
 
 function venNextNumero() {
+  if (window.SCF) return SCF.nextNumero(false);
   var y = new Date().getFullYear();
   var n = cptData().ven.filter(function (v) { return (v.numero || "").indexOf(y + "-") === 0; }).length + 1;
   return y + "-" + String(n).padStart(3, "0");
@@ -2793,6 +2799,8 @@ function renderDepenses() {
 
 function venStatutInfo(v) {
   var td = todayStr();
+  if (v.type === "nc") return { cls: "b-payee", label: "Note de crédit" };
+  if (v.creditee) return { cls: "b-payee", label: "Annulée (" + v.creditee + ")" };
   if (v.statut === "payee") return { cls: "b-payee", label: "✓ Payée" };
   if (v.statut === "annulee") return { cls: "b-payee", label: "Annulée" };
   if (v.statut === "brouillon") return { cls: "b-ok", label: "Brouillon" };
@@ -4447,6 +4455,8 @@ function renderMain() {
     if (ui.tab === "depenses") main.innerHTML = renderDepenses();
     else if (ui.tab === "ventes") main.innerHTML = renderVentes();
     else if (ui.tab === "tva") main.innerHTML = renderTVA();
+    else if (ui.tab === "caisse" || ui.tab === "revenus" || ui.tab === "profil")
+      main.innerHTML = window.SCF ? SCF.render(ui.tab) : '<p class="emptyline">Module finance en cours de chargement… recharge l’app.</p>';
     else main.innerHTML = renderSituation();
     return;
   }
@@ -4546,6 +4556,10 @@ function renderModals() {
     if (bk.statut === "termine" && DB.settings.reviewLink) {
       h += '<button class="btn-main" style="margin:0 0 10px;padding:12px;background:#25D366" data-act="ask-review" data-id="' + bk.id + '">\u2b50 Demander un avis (WhatsApp)</button>';
       if (bk.avisDemande) h += '<p class="note" style="margin:-4px 0 10px;text-align:center">Avis d\u00e9j\u00e0 demand\u00e9 le ' + humanDate(bk.avisDemande) + '</p>';
+    }
+    if (bk.statut === "termine") {
+      var venBk = cptData().ven.filter(function (v) { return v.type !== "nc" && !v.creditee && v.statut !== "annulee" && (v.source || "").indexOf(bk.id) !== -1; })[0];
+      h += '<button class="btn-main" style="margin:0 0 10px;padding:12px;background:#059669" data-scf="fac-rdv" data-id="' + bk.id + '">' + (venBk ? "📄 Voir la facture " + esc(venBk.numero) : "🧾 Créer la facture (1 clic)") + "</button>";
     }
     h += '<div class="acts2">';
     if (bk.statut !== "termine") h += '<button class="b-done" data-act="mark-done" data-id="' + bk.id + '">✓ Marquer terminé</button>';
@@ -4766,7 +4780,8 @@ function renderModals() {
         (venD.statut === "payee"
           ? '<button class="b-open" data-act="ven-unpay" data-id="' + venD.id + '">Rouvrir</button>'
           : '<button class="b-done" data-act="ven-pay" data-id="' + venD.id + '">✓ Payée intégralement</button>') +
-        '<button class="b-cancel" data-act="ven-del" data-id="' + venD.id + '">Supprimer</button></div>') +
+        '<button class="b-cancel" data-act="ven-del" data-id="' + venD.id + '">' + (venD.type === "nc" || venD.creditee ? "—" : "Annuler (note de crédit)") + "</button></div>" +
+        '<button class="btn-main" style="margin-top:10px" data-scf="fac-voir" data-id="' + venD.id + '">📄 Voir / imprimer ' + (venD.type === "nc" ? "la note de crédit" : "la facture") + "</button>") +
       "</div></div>";
   }
 
@@ -5352,6 +5367,8 @@ document.addEventListener("click", function (e) {
     case "ven-unpay": { var vnu = findVen(el.getAttribute("data-id")); if (vnu) { vnu.statut = "envoyee"; save(); renderAll(); } break; }
     case "ven-del": {
       var vnx = findVen(el.getAttribute("data-id"));
+      /* 24/09 : une facture validée ne disparaît jamais — annulation par note de crédit */
+      if (vnx && window.SCF) { SCF.annulerParNC(vnx.id); break; }
       if (vnx && confirm("Supprimer la facture #" + vnx.numero + " ?")) {
         DB.cpt.ven = cptData().ven.filter(function (v) { return v.id !== vnx.id; });
         save(); ui.venId = null; renderAll();
@@ -6105,6 +6122,7 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(function () {});
 }
 </script>
+<script src="finance.js"></script>
 <script src="origine-google-ads.js"></script>
 </body>
 </html>
