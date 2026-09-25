@@ -14,7 +14,8 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- version figée + empreinte (SRI) : un fichier modifié sur le CDN est refusé par le navigateur -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.js" integrity="sha384-K1nraABOP/zFehpLIUksXebbs7jMpB8gYMlb+uhVKZcWT/9Vkq1+qhv6ndC+1Yuz" crossorigin="anonymous"></script>
 <style>
 :root{
   --bleu:#4AA3E3; --bleu-dark:#3D96D6; --nuit:#0F2233; --ciel:#7EC4EF;
@@ -267,7 +268,17 @@ nav button{font-size:12px;padding:10px 2px}
 .trow .chk{width:24px;height:24px;border-radius:999px;border:2px solid #C9DFF0;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff}
 .trow.done .chk{background:var(--vert);border-color:var(--vert)}
 .trow .bd{flex:1;min-width:0}
-.trow .ti{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.presume{background:#fff;border:1px solid var(--bordure);border-radius:18px;padding:14px;margin:0 0 16px}
+.presume .pnext{display:block;width:100%;text-align:left;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer}
+.presume .pl{display:block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gris)}
+.presume .pnext b{display:block;font-size:16px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.presume .pm{display:block;font-size:13px;color:var(--gris);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.presume .padr{display:block;margin-top:6px;font-size:13px;color:var(--bleu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-decoration:none}
+.presume .pstats{display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--bordure)}
+.presume .pstats span{flex:1;min-width:0;font-size:11.5px;color:var(--gris)}
+.presume .pstats b{display:block;font-size:14px;color:var(--nuit);margin-top:2px}
+.presume .pstats small{font-weight:500;color:var(--gris);font-size:11px}
+.trow .ti{display:block;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .trow.done .ti{text-decoration:line-through;color:var(--gris);font-weight:500}
 .trow .mt{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--gris);margin-top:1px;white-space:nowrap;overflow:hidden}
 .pdot{width:8px;height:8px;border-radius:999px;flex-shrink:0}
@@ -597,17 +608,21 @@ var DEFAULT_SETTINGS = {
   reviewLink: "",
   site: { actif: false, ouverture: "10:00", fermeture: "19:00", conseilles: ["10:00", "13:00", "16:00"], pas: 30, jours: [1, 2, 3, 4, 5, 6, 7], delaiJours: 1, horizonJours: 180, tampon: 30 },
   pricing: null,
+  /* SOURCE UNIQUE des durées (minutes) : cette grille. L'agenda l'utilise
+     pour placer les RDV et elle est publiée telle quelle vers le site
+     (sc_reglages.durees) qui calcule la durée des réservations en ligne.
+     Valeurs validées par Mohamed le 25/09/2026. Moquette = par tranche de 30 m². */
   durations: [
     { label: "Canapé 2/3 places", kw: "canape 2", min: 90 },
-    { label: "Canapé 4/5 places", kw: "canape 4", min: 120 },
-    { label: "Canapé 6/7 places", kw: "canape 6", min: 150 },
-    { label: "Canapé 8/9 places", kw: "canape 8", min: 180 },
+    { label: "Canapé 4/5 places", kw: "canape 4", min: 90 },
+    { label: "Canapé 6/7 places", kw: "canape 6", min: 100 },
+    { label: "Canapé 8/9 places", kw: "canape 8", min: 100 },
     { label: "Fauteuil", kw: "fauteuil", min: 45 },
     { label: "Matelas", kw: "matelas", min: 60 },
-    { label: "Tapis / moquette", kw: "tapis", min: 60 },
-    { label: "Moquette", kw: "moquette", min: 90 },
-    { label: "Chaises", kw: "chaise", min: 60 },
-    { label: "Pouf", kw: "pouf", min: 30 },
+    { label: "Tapis", kw: "tapis", min: 60 },
+    { label: "Moquette (par 30 m²)", kw: "moquette", min: 60 },
+    { label: "Chaise", kw: "chaise", min: 10 },
+    { label: "Pouf", kw: "pouf", min: 15 },
     { label: "Voiture / sièges auto", kw: "voiture", min: 120 },
     { label: "Sièges auto", kw: "siege", min: 120 }
   ]
@@ -642,6 +657,23 @@ function mergeSettings(s) {
     }
     delete m.site.heures;
   }
+  /* durées v2 (26/09/2026) : alignement agenda = site sur les durées
+     validées par Mohamed. Une seule fois ; ses réglages ultérieurs sont respectés. */
+  if ((m._durV || 0) < 2) {
+    m.durations = (m.durations || []).map(function (r) { return Object.assign({}, r); });
+    var CIBLE = { "canape 4": 90, "canape 6": 100, "canape 8": 100, "chaise": 10, "pouf": 15, "moquette": 60 };
+    Object.keys(CIBLE).forEach(function (kw) {
+      var r = m.durations.find(function (x) { return norm(x.kw) === kw; });
+      if (r) r.min = CIBLE[kw];
+      else {
+        var d = DEFAULT_SETTINGS.durations.find(function (x) { return x.kw === kw; });
+        /* inséré avant les lignes plus générales (ex. « canape » seul) */
+        m.durations.unshift(Object.assign({}, d));
+      }
+    });
+    m.durations.forEach(function (r) { if (norm(r.kw) === "moquette") r.label = "Moquette (par 30 m²)"; });
+    m._durV = 2;
+  }
   if (!m.pricing) m.pricing = JSON.parse(JSON.stringify(DEFAULT_PRICING));
   else {
     m.pricing = Object.assign(JSON.parse(JSON.stringify(DEFAULT_PRICING)), m.pricing);
@@ -672,8 +704,10 @@ function saveLocal() {
   }
 }
 function save() {
-  DB.updatedAt = Date.now();
+  /* jamais en arrière, même si l'horloge de l'appareil recule */
+  DB.updatedAt = Math.max(Date.now(), (DB.updatedAt || 0) + 1);
   saveLocal();
+  if (typeof marquerModifie === "function") marquerModifie();
   schedulePush();
 }
 
@@ -740,12 +774,29 @@ function findItem(id) { return P().items.find(function (x) { return x.id === id;
 
 /* ------------------------- durée & placement ----------------------- */
 
+/* la ligne de durée qui correspond à une prestation : le mot-clé le plus
+   précis gagne (« canape 8 » avant « canape »), quel que soit l'ordre */
+function dureeLigne(nomNorm, settings) {
+  var best = null;
+  (settings.durations || []).forEach(function (r) {
+    var k = norm(r.kw);
+    if (k && nomNorm.indexOf(k) !== -1 && (!best || k.length > norm(best.kw).length)) best = r;
+  });
+  return best;
+}
 function computeDuration(prestations, settings) {
   var total = 0;
   (prestations || []).forEach(function (p) {
     var n = norm(p.nom);
-    var hit = settings.durations.find(function (r) { return r.kw && n.indexOf(norm(r.kw)) !== -1; });
-    if (hit) total += hit.min * (p.qte || 1);
+    var hit = dureeLigne(n, settings);
+    if (!hit) return;
+    var unites = p.qte || 1;
+    /* moquette : la durée suit la surface (par tranche de 30 m², comme sur le site) */
+    if (norm(hit.kw) === "moquette") {
+      var mm = /(\d+(?:[.,]\d+)?)\s*m(?:²|2)/.exec(p.nom || "");
+      if (mm) unites = Math.max(1, Math.ceil(parseFloat(mm[1].replace(",", ".")) / 30)) * (p.qte || 1);
+    }
+    total += hit.min * unites;
   });
   return total > 0 ? total : settings.defaultDuration;
 }
@@ -768,25 +819,39 @@ function placeBooking(parsed, bookings, settings) {
     return parsed.heure || (parsed.creneau === "matin" ? settings.morningStart : settings.afternoonStart);
   }
 
-  var heure = slotStart();
-  var shiftedTime = false;
-  var guard = 0;
-  while (guard < 20) {
-    var s = toMin(heure), e = s + dur;
-    var clash = activeOn(date).find(function (b) {
-      var bs = toMin(b.heure), be = bs + (b.durationMin || 120);
-      return s < be + 30 && bs < e + 30;
+  /* 26/09 : mêmes règles que le site — tampon de déplacement et heure de
+     fermeture de Réglages (avant : 30 min et 19h écrits en dur). Une
+     prestation plus longue que la journée démarre à l'ouverture. */
+  var cfgP = (settings.site || {}), tamp = cfgP.tampon != null ? cfgP.tampon : 30;
+  var ouvP = toMin(cfgP.ouverture || "10:00"), ferP = toMin(cfgP.fermeture || "19:00");
+  var journeeEntiere = dur > ferP - ouvP;
+  /* heure de départ la plus tardive qui laisse finir avant la fermeture */
+  var dernierDepart = journeeEntiere ? ouvP : ferP - dur;
+  function clashA(date, h) {
+    var s0 = toMin(h), e0 = s0 + dur;
+    return activeOn(date).find(function (b) {
+      var bs = toMin(b.heure), be = bs + (b.durationMin || settings.defaultDuration || 120);
+      return s0 < be + tamp && bs < e0 + tamp;
     });
-    if (!clash) break;
-    heure = fromMin(toMin(clash.heure) + (clash.durationMin || 120) + 30);
-    shiftedTime = true;
-    if (toMin(heure) + dur > 19 * 60) {
-      date = addDaysStr(date, 1); shiftedDay = true;
-      var g2 = 0;
-      while (activeOn(date).length >= settings.maxPerDay && g2 < 90) { date = addDaysStr(date, 1); g2++; }
-      heure = slotStart(); shiftedTime = false;
-    }
+  }
+  function tient(h) { return toMin(h) <= dernierDepart; }
+  function premiereHeure() { return fromMin(Math.min(toMin(slotStart()), Math.max(ouvP, dernierDepart))); }
+  var heure = slotStart(), shiftedTime = false;
+  if (!tient(heure)) { heure = premiereHeure(); shiftedTime = true; }  /* même jour, plus tôt, avant de changer de jour */
+  var guard = 0;
+  while (guard < 60) {
     guard++;
+    var clash = clashA(date, heure);
+    if (!clash && tient(heure)) break;
+    if (clash) {
+      heure = fromMin(toMin(clash.heure) + (clash.durationMin || settings.defaultDuration || 120) + tamp); shiftedTime = true;
+      if (tient(heure)) continue;
+    }
+    /* plus de place ce jour-là : jour suivant */
+    date = addDaysStr(date, 1); shiftedDay = true;
+    var g2 = 0;
+    while (activeOn(date).length >= settings.maxPerDay && g2 < 90) { date = addDaysStr(date, 1); g2++; }
+    heure = premiereHeure(); shiftedTime = false;
   }
   return { date: date, heure: heure, dur: dur, shiftedDay: shiftedDay, shiftedTime: shiftedTime, dateOrigine: parsed.date };
 }
@@ -1849,8 +1914,32 @@ function postponeTodo(id, mode) {
 
 /* ==================== portail & univers ==================== */
 
+/* 26/09 : en ouvrant l'app, l'essentiel d'un coup d'œil — prochain client,
+   journée, chiffre du mois. Lecture seule, aucune donnée modifiée. */
+function portalResume() {
+  try {
+    var td = todayStr(), now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes();
+    var act = DB.bookings.filter(function (b) { return b.statut !== "annule" && b.date; });
+    var jour = act.filter(function (b) { return b.date === td; }).sort(function (a, b) { return toMin(a.heure) - toMin(b.heure); });
+    var prochain = act.filter(function (b) { return b.statut !== "termine" && (b.date > td || (b.date === td && toMin(b.heure) + (b.durationMin || 0) > nowMin)); })
+      .sort(function (a, b) { return a.date === b.date ? toMin(a.heure) - toMin(b.heure) : (a.date < b.date ? -1 : 1); })[0];
+    var mk = td.slice(0, 7), fm = mk + "-" + pad(new Date(+mk.slice(0, 4), +mk.slice(5, 7), 0).getDate());
+    var mo = (window.SCB && SCB.bilan) ? SCB.bilan(mk + "-01", fm) : null;
+    var h = '<div class="presume">';
+    if (prochain) {
+      var adr = prochain.adresse ? '<a class="padr" href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(prochain.adresse) + '" target="_blank" rel="noopener">📍 ' + esc(prochain.adresse) + "</a>" : "";
+      h += '<button class="pnext" data-act="detail" data-id="' + esc(prochain.id) + '"><span class="pl">Prochain client</span>' +
+        '<b>' + (prochain.date === td ? "Aujourd’hui" : humanDate(prochain.date)) + " · " + esc(prochain.heure || "") + " — " + esc(prochain.client || "Client") + "</b>" +
+        '<span class="pm">' + esc((prochain.prestations || []).map(function (p) { return p.nom; }).join(" + ") || "Intervention") + " · " + euro(prochain.total) + "</span></button>" + adr;
+    } else h += '<div class="pnext"><span class="pl">Prochain client</span><b>Aucun RDV à venir</b></div>';
+    h += '<div class="pstats"><span>Aujourd’hui<b>' + jour.length + " RDV · " + euro(jour.reduce(function (s, b) { return s + (b.total || 0); }, 0)) + "</b></span>" +
+      (mo ? "<span>" + MOIS_FULL[now.getMonth()] + "<b>" + euro(mo.caTTC) + (mo.aVenir > 0 ? ' <small>+ ' + euro(mo.aVenir) + " prévus</small>" : "") + "</b></span>" +
+        "<span>Panier moyen<b>" + (mo.nbR ? euro(mo.caTTC / mo.nbR) : "—") + "</b></span>" : "") + "</div></div>";
+    return h;
+  } catch (e) { return ""; }
+}
 function renderPortal() {
-  return '<div class="portal">' +
+  return '<div class="portal">' + portalResume() +
     '<p class="pt">Où veux-tu aller ?</p>' +
     '<button class="pcard pro" data-act="go-pro">' +
     '<span class="em">🧼</span><span class="go">›</span>' +
@@ -2574,6 +2663,12 @@ function venNextNumero() {
 
 /* ids des interventions déjà transformées en facture client
    (leur montant est alors compté via la facture, JAMAIS deux fois) */
+/* taux de TVA des prestations : 0 accepté (franchise), 21 par défaut */
+function tvaPresta() {
+  if (window.SCF && SCF.tauxPresta) return SCF.tauxPresta();
+  var t = cptData().set.tvaDefault;
+  return (t == null || t === "" || isNaN(t)) ? 21 : Number(t);
+}
 function venLinkedBkIds() {
   var m = {};
   cptData().ven.forEach(function (v) {
@@ -2587,15 +2682,16 @@ function venLinkedBkIds() {
 
 /* --- agrégats : le CA encaissé vient des interventions StayClean terminées --- */
 function cptCA(monthKey) {
-  var enc = 0, futur = 0, encTva = 0;
+  var enc = 0, futur = 0, encTva = 0, impayeResa = 0;
   var td = todayStr();
   var linked = venLinkedBkIds();
-  var tx = cptData().set.tvaDefault || 21;
+  var tx = tvaPresta();
   DB.bookings.forEach(function (b) {
     if (b.statut === "annule") return;
     if (monthKey && (b.date || "").slice(0, 7) !== monthKey) return;
     if (b.statut === "termine") {
       if (linked[b.id]) return; /* déjà comptée via sa facture */
+      if (b.pay && b.pay.statut === "non_paye") { impayeResa += b.total || 0; return; } /* pas encaissé */
       enc += b.total || 0;
       encTva += (b.total || 0) * tx / (100 + tx);
     }
@@ -2610,7 +2706,7 @@ function cptCA(monthKey) {
     aRecevoir += Math.max(0, (v.ttc || 0) - (v.paye || 0));
     tvaCollectee += v.tvaMontant || 0;
   });
-  return { encaisse: enc, encaisseTVA: encTva, aVenirResa: futur, facture: fact, factureEncaisse: factEnc, aRecevoir: aRecevoir, tvaCollectee: tvaCollectee };
+  return { encaisse: enc, encaisseTVA: encTva, aVenirResa: futur, facture: fact, factureEncaisse: factEnc, aRecevoir: aRecevoir, impayeResa: impayeResa, tvaCollectee: tvaCollectee };
 }
 
 /* Chaîne fiscale estimée d'un mois : encaissé TTC → TVA → HT → − frais pro
@@ -2618,7 +2714,7 @@ function cptCA(monthKey) {
    L'impôt et les cotisations se calculent sur le BÉNÉFICE, jamais sur le CA. */
 function cptFisc(monthKey) {
   var st = cptData().set;
-  var tx = st.tvaDefault || 21;
+  var tx = tvaPresta();
   var ca = cptCA(monthKey), dep = cptDepenses(monthKey);
   var encTTC = ca.encaisse + ca.factureEncaisse;
   var baseHT = encTTC / (1 + tx / 100);
@@ -2634,7 +2730,7 @@ function cptFisc(monthKey) {
    non facturées, TVA extraite au taux paramétré) − déductible (achats pro) */
 function cptTvaTrim(y, tq) {
   var r = trimRange(y, tq);
-  var tx = cptData().set.tvaDefault || 21;
+  var tx = tvaPresta();
   var col = 0, colN = 0, ded = 0, dedN = 0, colResa = 0, resaN = 0;
   cptData().ven.forEach(function (v) {
     if (v.statut === "annulee" || v.statut === "brouillon") return;
@@ -2674,15 +2770,15 @@ function cptAnomalies() {
   var seen = {};
   cptData().dep.forEach(function (d) {
     var k = norm(d.fournisseur) + "|" + d.ttc + "|" + d.date;
-    if (seen[k]) out.push("Doublon possible : « " + (d.fournisseur || "?") + " " + euro(d.ttc || 0) + " » enregistrée deux fois le " + (d.date ? humanDate(d.date) : "?") + ".");
+    if (seen[k]) out.push("Doublon possible : « " + esc(d.fournisseur || "?") + " " + euro(d.ttc || 0) + " » enregistrée deux fois le " + (d.date ? humanDate(d.date) : "?") + ".");
     seen[k] = true;
-    if (d.nature === "pro" && !d.img) out.push("« " + (d.fournisseur || d.categorie) + " " + euro(d.ttc || 0) + " » est classée pro sans justificatif photo.");
-    if (d.nature === "mixte" && d.pctPro != null && !d.justif) out.push("« " + (d.fournisseur || "?") + " » a un % pro (" + d.pctPro + "%) sans justification écrite.");
+    if (d.nature === "pro" && !d.img) out.push("« " + esc(d.fournisseur || d.categorie) + " " + euro(d.ttc || 0) + " » est classée pro sans justificatif photo.");
+    if (d.nature === "mixte" && d.pctPro != null && !d.justif) out.push("« " + esc(d.fournisseur || "?") + " » a un % pro (" + d.pctPro + "%) sans justification écrite.");
   });
   var td = todayStr();
   cptData().ven.forEach(function (v) {
     if (v.statut !== "payee" && v.statut !== "annulee" && v.statut !== "brouillon" && v.echeance && v.echeance < td) {
-      out.push("Facture " + v.numero + " (" + esc(v.client || "?") + ", " + euro((v.ttc || 0) - (v.paye || 0)) + " restants) : échéance dépassée de " + Math.round((parseDateStr(td) - parseDateStr(v.echeance)) / 864e5) + " j.");
+      out.push("Facture " + esc(v.numero) + " (" + esc(v.client || "?") + ", " + euro((v.ttc || 0) - (v.paye || 0)) + " restants) : échéance dépassée de " + Math.round((parseDateStr(td) - parseDateStr(v.echeance)) / 864e5) + " j.");
     }
     if (v.paye > v.ttc) out.push("Facture " + v.numero + " : encaissé (" + euro(v.paye) + ") supérieur au montant facturé (" + euro(v.ttc) + ").");
     /* facture créée à la main qui ressemble à une intervention déjà comptée */
@@ -2854,7 +2950,7 @@ function renderTVA() {
     '<button class="card arrow" data-act="tva-nav" data-d="1">›</button></div>';
   h += '<section class="card sec"><p class="k">TVA du trimestre <span class="estbadge">estimation</span></p>' +
     '<div class="tvaline"><span>TVA collectée — factures émises (' + tv.colN + ')</span><b class="tnum">' + euro(tv.col) + "</b></div>" +
-    '<div class="tvaline"><span>TVA collectée — interventions encaissées non facturées (' + tv.resaN + ', extraite à ' + (cptData().set.tvaDefault || 21) + '%)</span><b class="tnum">' + euro(tv.colResa) + "</b></div>" +
+    '<div class="tvaline"><span>TVA collectée — interventions encaissées non facturées (' + tv.resaN + ', extraite à ' + (tvaPresta()) + '%)</span><b class="tnum">' + euro(tv.colResa) + "</b></div>" +
     '<div class="tvaline"><span>TVA déductible potentielle (achats pro, ' + tv.dedN + ')</span><b class="tnum">−' + euro(tv.ded) + "</b></div>" +
     '<div class="tvaline" style="border-top:2px solid var(--bordure)"><span><b>Solde estimé à reverser</b></span><b class="tnum" style="color:' + (solde >= 0 ? "#047857" : "var(--rouge)") + '">' + euro(Math.abs(solde)) + (solde < 0 ? " en ta faveur" : "") + "</b></div>" +
     '<p class="note" style="margin-top:8px">Une intervention payée sans facture reste soumise à la TVA (journal des recettes) : elle est comptée ici au taux paramétré. Si tu l’importes en facture, elle n’est comptée qu’une seule fois.</p></section>';
@@ -2867,7 +2963,7 @@ function renderTVA() {
 function cptAPayer30() {
   var td = todayStr(), lim = addDaysStr(td, 30), tot = 0;
   cptData().dep.forEach(function (d) {
-    if (d.statut !== "paye" && (!d.echeance || d.echeance <= lim)) tot += d.ttc || 0;
+    if (d.statut !== "paye" && d.nature !== "perso" && (!d.echeance || d.echeance <= lim)) tot += d.ttc || 0;
   });
   facturesUnpaid().forEach(function (f) {
     if (!f.echeance || f.echeance <= lim) tot += f.montantTTC || 0;
@@ -2920,7 +3016,7 @@ function renderSituation() {
   h += '<div class="sitgrid">' +
     '<div class="card sit pos"><p class="k">Encaissé ce mois</p><p class="v tnum">' + euro(ca.encaisse + ca.factureEncaisse) + '</p><p class="s2">interventions terminées + factures</p></div>' +
     '<div class="card sit neg"><p class="k">Dépenses ce mois</p><p class="v tnum">' + euro(dep.total) + '</p><p class="s2">dont pro : ' + euro(dep.pro) + '</p></div>' +
-    '<div class="card sit"><p class="k">À recevoir</p><p class="v tnum">' + euro(caAll.aRecevoir) + '</p><p class="s2">factures clients impayées</p></div>' +
+    '<div class="card sit"><p class="k">À recevoir</p><p class="v tnum">' + euro(caAll.aRecevoir) + '</p><p class="s2">factures clients impayées' + (caAll.impayeResa > 0 ? " · + " + euro(caAll.impayeResa) + " d’interventions non payées" : "") + '</p></div>' +
     '<div class="card sit"><p class="k">RDV à venir</p><p class="v tnum">' + euro(caAll.aVenirResa) + '</p><p class="s2">réservations confirmées</p></div></div>';
 
   /* cohérence facturé vs encaissé */
@@ -2935,7 +3031,7 @@ function renderSituation() {
   h += '<section class="card sec"><p class="k">💰 À mettre de côté <span class="estbadge">estimation</span></p>' +
     '<p class="k" style="margin-top:6px;font-size:12px">1 · Ton bénéfice estimé du mois</p>' +
     '<div class="tvaline"><span>Encaissé TTC ce mois</span><b class="tnum">' + euro(f.encTTC) + "</b></div>" +
-    '<div class="tvaline"><span>− TVA incluse (' + (st2.tvaDefault || 21) + '%, elle ne t’appartient pas)</span><b class="tnum">−' + euro(f.tvaIncluse) + "</b></div>" +
+    '<div class="tvaline"><span>− TVA incluse (' + tvaPresta() + '%, elle ne t’appartient pas)</span><b class="tnum">−' + euro(f.tvaIncluse) + "</b></div>" +
     '<div class="tvaline"><span>− Frais pro du mois (hors TVA)</span><b class="tnum">−' + euro(f.fraisProHT) + "</b></div>" +
     '<div class="tvaline" style="border-top:2px solid var(--bordure)"><span><b>Bénéfice estimé du mois</b></span><b class="tnum">' + euro(f.benef) + "</b></div>" +
     '<p class="k" style="margin-top:10px;font-size:12px">2 · À réserver sur ce bénéfice</p>' +
@@ -2945,14 +3041,14 @@ function renderSituation() {
     '<div class="tvaline" style="border-top:2px solid var(--bordure)"><span><b>Total suggéré</b></span><b class="tnum" style="color:#047857">' + euro(f.cotis + f.impot + resTVA) + "</b></div>" +
     '<div class="two" style="margin-top:10px"><div class="fld"><label>% cotisations (à vérifier INASTI)</label><input type="number" step="0.5" value="' + st2.cotis + '" data-cpt="cotis"></div>' +
     '<div class="fld"><label>% impôts (ton hypothèse)</label><input type="number" step="0.5" value="' + st2.impot + '" data-cpt="impot"></div></div>' +
-    '<div class="fld" style="margin-top:8px"><label>% TVA appliqué à tes prestations</label><input type="number" step="1" value="' + (st2.tvaDefault || 21) + '" data-cpt="tvaDefault"></div>' +
+    '<div class="fld" style="margin-top:8px"><label>% TVA appliqué à tes prestations</label><input type="number" step="1" value="' + tvaPresta() + '" data-cpt="tvaDefault"></div>' +
     '<p class="note">Pourquoi c’est calculé ainsi : cotisations et impôts se paient sur le <b>bénéfice</b> (ce qui reste après TVA et frais), jamais sur tout ce que tu encaisses. Les % sont TES paramètres, pas des taux officiels — l’impôt réel est progressif et annuel. À valider avec ta caisse d’assurances sociales / un comptable.</p></section>';
 
   /* projection annuelle (sans compter deux fois une intervention facturée) */
   var caYtd = 0;
   var linkedY = venLinkedBkIds();
   DB.bookings.forEach(function (b) { if (b.statut === "termine" && !linkedY[b.id] && (b.date || "").slice(0, 4) === String(now.getFullYear())) caYtd += b.total || 0; });
-  cptData().ven.forEach(function (v) { if (v.statut !== "annulee" && (v.date || "").slice(0, 4) === String(now.getFullYear())) caYtd += v.paye || 0; });
+  cptData().ven.forEach(function (v) { if (v.statut !== "annulee" && v.statut !== "brouillon" && (v.date || "").slice(0, 4) === String(now.getFullYear())) caYtd += v.paye || 0; });
   var dayOfYear = Math.round((now - new Date(now.getFullYear(), 0, 1)) / 864e5) + 1;
   if (caYtd > 0 && dayOfYear > 14) {
     var proj = caYtd / dayOfYear * 365;
@@ -3054,7 +3150,7 @@ function assistantContextCpt() {
     facs.forEach(function (f) { L.push("- " + (f.fournisseur || "?") + " · " + (f.montantTTC || 0) + "€" + (f.echeance ? " avant " + f.echeance : "")); });
   }
   var s2 = cptData().set;
-  L.push("PARAMÈTRES DE RÉSERVE (définis par l'utilisateur, non officiels) : cotisations " + s2.cotis + "% · impôts " + s2.impot + "% · TVA prestations " + (s2.tvaDefault || 21) + "%.");
+  L.push("PARAMÈTRES DE RÉSERVE (définis par l'utilisateur, non officiels) : cotisations " + s2.cotis + "% · impôts " + s2.impot + "% · TVA prestations " + tvaPresta() + "%.");
   var fx = cptFisc(mk);
   L.push("CALCUL FISCAL ESTIMÉ DU MOIS (chaîne exacte de l'app — reprends CES chiffres) : encaissé TTC " + Math.round(fx.encTTC) + "€ − TVA incluse " + Math.round(fx.tvaIncluse) + "€ − frais pro HT " + Math.round(fx.fraisProHT) + "€ = bénéfice estimé " + Math.round(fx.benef) + "€ → cotisations sociales (" + s2.cotis + "% du bénéfice) " + Math.round(fx.cotis) + "€ → base imposable " + Math.round(fx.baseImp) + "€ → impôt estimé (" + s2.impot + "%) " + Math.round(fx.impot) + "€. Rappelle toujours que cotisations et impôt se calculent sur le BÉNÉFICE (pas sur le CA), que l'impôt réel est progressif et annuel, et que ceci est une réserve prudente, pas une déclaration.");
   var res2 = cptReserves();
@@ -3384,7 +3480,7 @@ function siteDurees() {
   var d = {};
   Object.keys(SITE_ITEMS).forEach(function (k) {
     var kw = norm(SITE_ITEMS[k]);
-    var hit = DB.settings.durations.find(function (r) { return r.kw && kw.indexOf(norm(r.kw)) !== -1; });
+    var hit = dureeLigne(kw, DB.settings);
     d[k] = hit ? hit.min : (DB.settings.defaultDuration || 120);
   });
   return d;
@@ -3398,16 +3494,29 @@ function siteMinutesLibres() {
 /* Publie vers Supabase les plages libres + tes réglages.
    L'app est la seule source de vérité : on remplace tout à chaque fois,
    après avoir récupéré les demandes en attente (elles gardent leur place). */
-var sitePubEnCours = null;
+/* Une seule publication à la fois, et les demandes arrivées pendant une
+   publication sont regroupées en UNE publication suivante.
+   Cause des disponibilités en double (corrigée le 26/09/2026) : l'ancien
+   verrou faisait attendre les appels suivants sur la même promesse, puis
+   les lançait TOUS en même temps à la fin de la première publication.
+   Chacun effaçait puis réinsérait les plages en parallèle → doublons. */
+var sitePubEnCours = null, sitePubEncore = false, sitePubAttente = [];
 function sitePublier() {
   var c = getSb();
   if (!c || !session || !siteCfg().actif) return Promise.resolve({ fenetres: 0 });
-  /* une seule publication à la fois : deux publications simultanées
-     créaient des plages en double (« 42 horaires » au lieu de « 3 créneaux ») */
-  if (sitePubEnCours) return sitePubEnCours.then(function () { return sitePublierMaintenant(); });
-  sitePubEnCours = sitePublierMaintenant().then(function (r) { sitePubEnCours = null; return r; },
-    function (e) { sitePubEnCours = null; throw e; });
-  return sitePubEnCours;
+  if (sitePubEnCours) {
+    sitePubEncore = true;
+    return new Promise(function (ok, ko) { sitePubAttente.push([ok, ko]); });
+  }
+  sitePubEnCours = sitePublierMaintenant();
+  return sitePubEnCours.then(function (r) { sitePubFin(); return r; }, function (e) { sitePubFin(); throw e; });
+}
+function sitePubFin() {
+  sitePubEnCours = null;
+  if (!sitePubEncore) return;
+  sitePubEncore = false;
+  var att = sitePubAttente; sitePubAttente = [];
+  sitePublier().then(function (r) { att.forEach(function (x) { x[0](r); }); }, function (e) { att.forEach(function (x) { x[1](e); }); });
 }
 
 function sitePublierMaintenant() {
@@ -3444,18 +3553,46 @@ function sitePublierEtat() {
     },
     maj: new Date().toISOString()
   };
-  return c.from("sc_fenetres").delete().gte("jour", todayStr()).then(function () {
-    return fen.length ? c.from("sc_fenetres").insert(fen) : Promise.resolve({});
-  }).then(function (res) {
-    if (res && res.error) throw res.error;
-    return c.from("sc_bloques").delete().gte("jour", todayStr());
+  /* Publication par différence (26/09/2026) : on lit ce qui est en ligne,
+     on retire seulement les plages périmées (et les doublons) et on ajoute
+     seulement les nouvelles. Plus de « tout effacer puis tout réinsérer » :
+     une coupure réseau au milieu ne laisse plus le site sans plages
+     (ce qui l'aurait fait paraître entièrement libre). */
+  var td0 = todayStr();
+  function hm(x) { return String(x || "").slice(0, 5); }
+  function kF(w) { return w.jour + "|" + hm(w.debut) + "|" + hm(w.fin); }
+  function chk(res) { if (res && res.error) throw res.error; return res; }
+  function diff(table, voulu, cle, del) {
+    return c.from(table).select("*").gte("jour", td0).then(chk).then(function (res) {
+      var enLigne = {}, veut = {};
+      (res.data || []).forEach(function (r) { var k = cle(r); enLigne[k] = (enLigne[k] || 0) + 1; });
+      voulu.forEach(function (r) { veut[cle(r)] = r; });
+      var perimes = Object.keys(enLigne).filter(function (k) { return !veut[k]; });
+      var doublons = Object.keys(enLigne).filter(function (k) { return veut[k] && enLigne[k] > 1; });
+      var nouveaux = voulu.filter(function (r) { return !enLigne[cle(r)]; });
+      /* 1) ajouter  2) retirer le périmé  3) ramener chaque doublon à un exemplaire.
+         Si le réseau coupe entre deux étapes, il reste au pire une plage de trop,
+         jamais un jour vide (qui paraîtrait « entièrement libre » aux clients). */
+      return (nouveaux.length ? c.from(table).insert(nouveaux).then(chk) : Promise.resolve()).then(function () {
+        return Promise.all(perimes.map(function (k) { return del(k).then(chk); }));
+      }).then(function () {
+        return Promise.all(doublons.map(function (k) {
+          return del(k).then(chk).then(function () { return c.from(table).insert([veut[k]]).then(chk); });
+        }));
+      }).then(function () { return { ajout: nouveaux.length, retrait: perimes.length, doublons: doublons.length }; });
+    });
+  }
+  return diff("sc_fenetres", fen, kF, function (k) {
+    var p = k.split("|");
+    return c.from("sc_fenetres").delete().eq("jour", p[0]).eq("debut", p[1]).eq("fin", p[2]);
   }).then(function () {
-    return blq.length ? c.from("sc_bloques").insert(blq) : Promise.resolve({});
-  }).then(function (res) {
-    if (res && res.error) throw res.error;
+    return diff("sc_bloques", blq, function (r) { return r.jour; }, function (k) {
+      return c.from("sc_bloques").delete().eq("jour", k);
+    });
+  }).then(function () {
     return Promise.all([
-      c.from("sc_fenetres").delete().lt("jour", todayStr()),
-      c.from("sc_bloques").delete().lt("jour", todayStr())
+      c.from("sc_fenetres").delete().lt("jour", td0),
+      c.from("sc_bloques").delete().lt("jour", td0)
     ]);
   }).then(function () {
     return c.from("sc_config").upsert(conf, { onConflict: "id" });
@@ -3501,7 +3638,7 @@ function demConfirmer(dem, total, note) {
     durationMin: dem.duree_min || computeDuration(presta, DB.settings),
     statut: "confirme",
     facture: !!dem.facture,
-    remarques: [dem.message || "", note || "", "Réservé sur stayclean.be le " + (dem.cree_le || "").slice(0, 10)].filter(Boolean).join(" · "),
+    remarques: [dem.message || "", note || "", "Réservé sur stayclean.be le " + (dem.cree_le ? humanDate(fmtDate(new Date(dem.cree_le))) : "?")].filter(Boolean).join(" · "),
     source: "site",
     demId: dem.id,
     incomplet: [],
@@ -3590,55 +3727,243 @@ function schedulePush() {
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(pushCloud, 1500);
 }
-function pushCloud() {
-  var c = getSb(); if (!c || !session) return Promise.resolve();
-  return c.from("agenda_state").upsert({
-    user_id: session.user.id,
-    data: { bookings: DB.bookings, todos: DB.todos || [], factures: DB.factures || [], docs: DB.docs || [], cpt: DB.cpt || { dep: [], ven: [], set: null }, dem: DB.dem || [], conges: DB.conges || [], settings: sanitizedSettings(), updatedAt: DB.updatedAt },
-    updated_at: new Date().toISOString()
-  }).then(function (res) {
-    setCloud(res.error ? "err" : "on");
-  });
+/* ------------------------------------------------------------------
+   SYNCHRONISATION CLOUD (v2, 26/09/2026)
+   Avant : « le plus récent écrase tout ». Un téléphone resté hors ligne
+   pouvait, en s'ouvrant, renvoyer son ancienne copie et effacer une
+   facture ou un RDV créé ailleurs. Désormais :
+   - on retient la version du cloud sur laquelle on est basé (syncBase) ;
+   - avant d'envoyer, on relit le cloud : si quelqu'un a écrit entre-temps,
+     on FUSIONNE élément par élément (par id) au lieu d'écraser ;
+   - rien de ce qui existe d'un côté ne disparaît pendant une fusion
+     (sauf un RDV mis à la corbeille, qui reste dans la corbeille).
+   Les clés d'IA restent sur l'appareil (jamais envoyées dans le cloud).
+   ------------------------------------------------------------------ */
+var SYNC_META = "stayclean-agenda-sync";
+/* Seul serveur de synchronisation accepté via un lien/code de configuration :
+   un lien piégé ne peut plus rediriger tes données vers un autre serveur. */
+var SUPABASE_OFFICIEL = "https://rgfanwbyzsfjlhwwhudg.supabase.co";
+function syncUrlAutorisee(u) {
+  try { var x = new URL(u); return x.protocol === "https:" && x.host === new URL(SUPABASE_OFFICIEL).host; } catch (e) { return false; }
 }
+/* État de synchronisation propre à l'appareil (jamais envoyé) :
+   - seq / pushedSeq : compteur de modifications locales (indépendant des horloges)
+   - baseAt / baseRev : version du cloud sur laquelle on s'est aligné
+   - base : empreinte de chaque élément à ce moment-là (fusion à trois voies) */
+var SYNC_BASE = "stayclean-agenda-sync-base";
+function syncMeta() { try { return JSON.parse(localStorage.getItem(SYNC_META) || "{}"); } catch (e) { return {}; } }
+function setSyncMeta(patch) { var m = syncMeta(); Object.keys(patch).forEach(function (k) { m[k] = patch[k]; }); try { localStorage.setItem(SYNC_META, JSON.stringify(m)); } catch (e) {} return m; }
+function syncDirty() { var m = syncMeta(); return (m.seq || 0) > (m.pushedSeq || 0); }
+function marquerModifie() { var m = syncMeta(); setSyncMeta({ seq: (m.seq || 0) + 1 }); }
+
 function sanitizedSettings() {
   var s = JSON.parse(JSON.stringify(DB.settings));
+  delete s.apiKey; delete s.geminiKey; delete s.sync; /* secrets et connexion : propres à chaque appareil */
   return s;
 }
-function pullCloud() {
-  var c = getSb(); if (!c || !session) return Promise.resolve();
-  return c.from("agenda_state").select("data").eq("user_id", session.user.id).maybeSingle().then(function (res) {
-    if (res.error) { setCloud("err"); return; }
-    if (res.data && res.data.data) {
-      var remote = res.data.data;
-      if ((remote.updatedAt || 0) > (DB.updatedAt || 0)) {
-        var localSync = DB.settings.sync;
-        DB = { bookings: remote.bookings || [], todos: remote.todos || [], factures: remote.factures || [], docs: remote.docs || [], cpt: remote.cpt || { dep: [], ven: [], set: null }, dem: remote.dem || [], conges: remote.conges || [], corbeille: remote.corbeille || [], settings: mergeSettings(remote.settings), updatedAt: remote.updatedAt || Date.now() };
-        DB.settings.sync = localSync;
-        saveLocal();
-        renderAll();
-      } else if ((DB.updatedAt || 0) > (remote.updatedAt || 0)) {
-        pushCloud();
-      }
-      setCloud("on");
+function syncPayload() {
+  return { bookings: DB.bookings, todos: DB.todos || [], factures: DB.factures || [], docs: DB.docs || [], cpt: DB.cpt || { dep: [], ven: [], set: null }, dem: DB.dem || [], conges: DB.conges || [], corbeille: DB.corbeille || [], settings: sanitizedSettings(), updatedAt: DB.updatedAt };
+}
+
+/* ---- fusion à trois voies, élément par élément ---- */
+function hashStr(str) { var h = 5381, i = str.length; while (i) h = (h * 33) ^ str.charCodeAt(--i); return (h >>> 0).toString(36) + ":" + str.length; }
+function cleElt(x) { return (x && x.id != null) ? "id:" + x.id : "h:" + hashStr(JSON.stringify(x)); }
+var LISTES_SYNC = ["bookings", "todos", "factures", "docs", "dem", "conges", "corbeille"];
+function listesDe(st) {
+  var out = {}, c = st.cpt || {};
+  LISTES_SYNC.forEach(function (k) { out[k] = Array.isArray(st[k]) ? st[k] : []; });
+  Object.keys(c).forEach(function (k) { if (Array.isArray(c[k])) out["cpt." + k] = c[k]; });
+  if (c.caisse) { out["cpt.caisse.mv"] = c.caisse.mv || []; out["cpt.caisse.comptages"] = c.caisse.comptages || []; }
+  return out;
+}
+function empreintes(st) {
+  var L = listesDe(st), out = {};
+  Object.keys(L).forEach(function (k) { var m = {}; L[k].forEach(function (x) { m[cleElt(x)] = hashStr(JSON.stringify(x)); }); out[k] = m; });
+  return out;
+}
+function lireBase() { try { return JSON.parse(localStorage.getItem(SYNC_BASE) || "null"); } catch (e) { return null; } }
+function ecrireBase(st) { try { localStorage.setItem(SYNC_BASE, JSON.stringify(empreintes(st))); } catch (e) {} }
+function fusionListe(loc, rem, base, locPlusRecent) {
+  loc = loc || []; rem = rem || [];
+  var L = {}, R = {}, ordre = [], vu = {};
+  loc.forEach(function (x) { var k = cleElt(x); L[k] = x; if (!vu[k]) { vu[k] = 1; ordre.push(k); } });
+  rem.forEach(function (x) { var k = cleElt(x); R[k] = x; if (!vu[k]) { vu[k] = 1; ordre.push(k); } });
+  var out = [];
+  ordre.forEach(function (k) {
+    var l = L[k], r = R[k], b = base ? base[k] : undefined;
+    var hl = l && hashStr(JSON.stringify(l)), hr = r && hashStr(JSON.stringify(r));
+    if (l && r) {
+      if (hl === hr || hr === b) out.push(l);          /* identiques, ou seul le local a changé */
+      else if (hl === b) out.push(r);                  /* seul le distant a changé */
+      else out.push(locPlusRecent ? l : r);            /* modifié des deux côtés : le plus récent */
+    } else if (l) {
+      if (b !== undefined && hl === b) return;          /* supprimé ailleurs, inchangé ici → supprimé */
+      out.push(l);
     } else {
-      pushCloud();
+      if (b !== undefined && hr === b) return;          /* supprimé ici, inchangé ailleurs → supprimé */
+      out.push(r);
     }
   });
+  return out;
+}
+function mergeStates(local, remote, base) {
+  var lNew = (local.updatedAt || 0) >= (remote.updatedAt || 0);
+  base = base || {};
+  var Ll = listesDe(local), Lr = listesDe(remote), m = {};
+  LISTES_SYNC.forEach(function (k) { m[k] = fusionListe(Ll[k], Lr[k], base[k], lNew); });
+  var lc = local.cpt || {}, rc = remote.cpt || {};
+  m.cpt = Object.assign({}, lNew ? rc : lc, lNew ? lc : rc);
+  Object.keys(Object.assign({}, lc, rc)).forEach(function (k) {
+    if (Array.isArray(lc[k]) || Array.isArray(rc[k])) m.cpt[k] = fusionListe(lc[k], rc[k], base["cpt." + k], lNew);
+  });
+  if (lc.caisse || rc.caisse) {
+    var ca = lc.caisse || {}, cb = rc.caisse || {};
+    m.cpt.caisse = Object.assign({}, lNew ? cb : ca, lNew ? ca : cb, {
+      mv: fusionListe(ca.mv, cb.mv, base["cpt.caisse.mv"], lNew),
+      comptages: fusionListe(ca.comptages, cb.comptages, base["cpt.caisse.comptages"], lNew)
+    });
+  }
+  /* un RDV ne peut pas être à la fois actif et à la corbeille */
+  var actifs = {}; m.bookings.forEach(function (b) { actifs[b.id] = true; });
+  var binL = {}; (local.corbeille || []).forEach(function (x) { binL[x.id] = true; });
+  var binR = {}; (remote.corbeille || []).forEach(function (x) { binR[x.id] = true; });
+  var bkL = {}; (local.bookings || []).forEach(function (x) { bkL[x.id] = true; });
+  var bkR = {}; (remote.bookings || []).forEach(function (x) { bkR[x.id] = true; });
+  m.bookings = m.bookings.filter(function (b) {
+    var jete = (binL[b.id] && !bkL[b.id]) || (binR[b.id] && !bkR[b.id]);
+    var restaure = (bkL[b.id] && !binL[b.id] && binR[b.id] && lNew) || (bkR[b.id] && !binR[b.id] && binL[b.id] && !lNew); /* le côté le plus récent décide */
+    return !jete || restaure;
+  });
+  actifs = {}; m.bookings.forEach(function (b) { actifs[b.id] = true; });
+  m.corbeille = m.corbeille.filter(function (x) { return !actifs[x.id]; });
+  m.settings = lNew ? local.settings : remote.settings;
+  m.updatedAt = Math.max(local.updatedAt || 0, remote.updatedAt || 0) + 1;
+  return m;
+}
+function applyRemote(remote, merge) {
+  var localSync = DB.settings.sync, apiKey = DB.settings.apiKey, geminiKey = DB.settings.geminiKey;
+  var src = merge ? mergeStates(DB, remote, lireBase()) : remote;
+  DB = { bookings: src.bookings || [], todos: src.todos || [], factures: src.factures || [], docs: src.docs || [], cpt: src.cpt || { dep: [], ven: [], set: null }, dem: src.dem || [], conges: src.conges || [], corbeille: src.corbeille || [], settings: mergeSettings(src.settings), updatedAt: src.updatedAt || Date.now() };
+  DB.settings.sync = localSync; DB.settings.apiKey = apiKey; DB.settings.geminiKey = geminiKey;
+  saveLocal();
+  if (window.SCB && SCB.relier) SCB.relier(); /* un éditeur ouvert pointe vers les nouvelles données */
+}
+function fetchRemote() {
+  var c = getSb(); if (!c || !session) return Promise.resolve(null);
+  return c.from("agenda_state").select("data,updated_at").eq("user_id", session.user.id).maybeSingle().then(function (res) {
+    if (res.error) throw res.error;
+    return res.data ? { data: res.data.data || null, rev: res.data.updated_at || null } : null;
+  });
+}
+/* première ouverture avec cette version : on part de l'état actuel comme base
+   (l'ancienne synchro gardait l'appareil aligné), sans rien marquer « modifié » */
+function initMetaSiBesoin() {
+  var m = syncMeta();
+  if (m.baseAt == null) setSyncMeta({ baseAt: DB.updatedAt || 0, seq: 0, pushedSeq: 0 });
+}
+var pushEnCours = null, pushEncore = false;
+function pushCloud() {
+  var c = getSb(); if (!c || !session) return Promise.resolve();
+  if (pushEnCours) { pushEncore = true; return pushEnCours; }
+  initMetaSiBesoin();
+  var essais = 0;
+  function tentative() {
+    essais++;
+    var seqEnvoye = syncMeta().seq || 0;
+    return fetchRemote().then(function (rem) {
+      var meta = syncMeta(), remote = rem && rem.data;
+      if (remote && (remote.updatedAt || 0) !== (meta.baseAt || 0) && (remote.updatedAt || 0) !== (DB.updatedAt || 0)) {
+        applyRemote(remote, true);   /* quelqu'un a écrit depuis notre dernière synchro : fusion */
+        renderAll();
+      }
+      var payload = syncPayload(), now = new Date().toISOString();
+      var ecriture = (rem && rem.rev)
+        /* écriture conditionnelle : seulement si personne n'a écrit entre notre lecture et maintenant */
+        ? c.from("agenda_state").update({ data: payload, updated_at: now }).eq("user_id", session.user.id).eq("updated_at", rem.rev).select("user_id")
+        : c.from("agenda_state").upsert({ user_id: session.user.id, data: payload, updated_at: now });
+      return ecriture.then(function (res) {
+        if (res.error) throw res.error;
+        if (rem && rem.rev && (!res.data || !res.data.length)) {
+          if (essais < 4) return tentative();          /* écrit ailleurs entre-temps : on relit et on refusionne */
+          throw new Error("conflit d'écriture répété");
+        }
+        setSyncMeta({ baseAt: payload.updatedAt, pushedSeq: seqEnvoye });
+        ecrireBase(payload);
+        setCloud("on");
+      });
+    });
+  }
+  var echec = false;
+  pushEnCours = tentative().catch(function (e) {
+    echec = true;
+    setCloud("err");
+    console.warn("[StayClean] synchronisation impossible :", e && e.message);
+  }).then(function () {
+    pushEnCours = null;
+    /* modifié pendant l'envoi : on renvoie. En cas d'échec, pas de relance en boucle :
+       la prochaine modification ou le retour sur l'app relancera la synchro. */
+    var encore = pushEncore; pushEncore = false;
+    if (!echec && encore && syncDirty()) return pushCloud();
+  });
+  return pushEnCours;
+}
+/* Renvoie true si l'état local est à jour avec le cloud (lecture réussie). */
+function pullCloud() {
+  var c = getSb(); if (!c || !session) return Promise.resolve(false);
+  var premiere = syncMeta().baseAt == null;
+  initMetaSiBesoin();
+  return fetchRemote().then(function (rem) {
+    var meta = syncMeta(), remote = rem && rem.data;
+    if (!remote) { return pushCloud().then(function () { return true; }); }
+    var rAt = remote.updatedAt || 0;
+    /* première fois avec cette version et copie locale plus récente que le cloud :
+       elle contient des modifications jamais envoyées → on les fusionne (rien n'est jeté) */
+    if (premiere && (DB.updatedAt || 0) > rAt) { setSyncMeta({ baseAt: -1 }); marquerModifie(); meta = syncMeta(); }
+    if (rAt === (DB.updatedAt || 0)) { setSyncMeta({ baseAt: rAt }); if (!lireBase()) ecrireBase(remote); setCloud("on"); return syncDirty() ? pushCloud().then(function () { return true; }) : true; }
+    if (rAt === (meta.baseAt || 0)) {                     /* le cloud n'a pas bougé */
+      setCloud("on");
+      return syncDirty() ? pushCloud().then(function () { return true; }) : true;
+    }
+    if (syncDirty()) {                                     /* les deux côtés ont changé : fusion */
+      applyRemote(remote, true); renderAll();
+      return pushCloud().then(function () { return true; });
+    }
+    applyRemote(remote, false); renderAll();               /* seul le cloud a changé */
+    setSyncMeta({ baseAt: rAt }); ecrireBase(remote);
+    setCloud("on");
+    return true;
+  }).catch(function (e) {
+    setCloud("err");
+    console.warn("[StayClean] lecture du cloud impossible :", e && e.message);
+    return false;
+  });
+}
+var syncDemarre = false;
+function syncPret(ok) {
+  window.scSyncPret = ok !== false;
+  if (window.scSyncPret && window.SCB && SCB.autoTerminer) { try { if (SCB.autoTerminer()) renderAll(); } catch (e) {} }
+}
+function onSession(s) {
+  var avant = session;
+  session = s;
+  if (!session) { setCloud("off"); syncPret(true); renderMain(); return; }
+  setCloud("on");
+  /* getSession() ET onAuthStateChange(INITIAL_SESSION) arrivent tous les deux
+     au démarrage : une seule tournée, sinon publication en double. */
+  if (syncDemarre && avant && avant.user && avant.user.id === session.user.id) { if (window.scSyncPret === false) syncPret(true); return; }
+  syncDemarre = true;
+  pullCloud().then(function (ok) {
+    syncPret(ok);                /* copie non vérifiée : on ne la modifie pas automatiquement */
+    if (ok) return siteTour();   /* on ne publie jamais depuis une copie qu'on n'a pas pu vérifier */
+  });
+  renderMain();
 }
 function initSync() {
   var c = getSb();
-  if (!c) { setCloud("off"); return; }
-  c.auth.getSession().then(function (res) {
-    session = res.data.session;
-    if (session) { setCloud("on"); pullCloud().then(siteTour); }
-    else setCloud("off");
-    renderMain();
-  });
-  c.auth.onAuthStateChange(function (_e, s) {
-    session = s;
-    if (session) { setCloud("on"); pullCloud().then(siteTour); } else setCloud("off");
-    renderMain();
-  });
+  if (!c) { setCloud("off"); syncPret(true); return; }
+  window.scSyncPret = false;
+  c.auth.getSession().then(function (res) { onSession(res.data.session); });
+  c.auth.onAuthStateChange(function (_e, s) { onSession(s); });
 }
 
 /* À chaque ouverture de l'app : on récupère les demandes du site,
@@ -3790,12 +4115,7 @@ function weekDates() {
 function conflitsJour(date) {
   var bs = DB.bookings.filter(function (b) { return b.date === date && b.statut !== "annule"; })
     .sort(function (a, b) { return toMin(a.heure) - toMin(b.heure); });
-  var out = [];
-  for (var i = 1; i < bs.length; i++) {
-    var prev = bs[i - 1];
-    if (toMin(prev.heure) + (prev.durationMin || DB.settings.defaultDuration || 120) > toMin(bs[i].heure)) out.push(bs[i]);
-  }
-  return out;
+  return chevauchementsJour(date).map(function (x) { return x.b; });
 }
 
 /* 24/09 : même règle que conflitsJour, mais renvoie les paires (qui chevauche qui,
@@ -3803,11 +4123,15 @@ function conflitsJour(date) {
 function chevauchementsJour(date) {
   var bs = DB.bookings.filter(function (b) { return b.date === date && b.statut !== "annule"; })
     .sort(function (a, b) { return toMin(a.heure) - toMin(b.heure); });
-  var out = [];
-  for (var i = 1; i < bs.length; i++) {
-    var prev = bs[i - 1];
-    var finP = toMin(prev.heure) + (prev.durationMin || DB.settings.defaultDuration || 120);
-    if (finP > toMin(bs[i].heure)) out.push({ a: prev, b: bs[i], finA: fromMin(Math.min(finP, 1439)) });
+  /* 26/09 : on compare chaque RDV au RDV qui finit le plus tard parmi ceux
+     d'avant (pas seulement au précédent) : un long RDV qui en englobe un
+     court chevauchait aussi le suivant sans être signalé. */
+  var out = [], long = null, finLong = -1;
+  for (var i = 0; i < bs.length; i++) {
+    var deb = toMin(bs[i].heure);
+    if (long && finLong > deb) out.push({ a: long, b: bs[i], finA: fromMin(Math.min(finLong, 1439)) });
+    var fin = deb + (bs[i].durationMin || DB.settings.defaultDuration || 120);
+    if (fin > finLong) { finLong = fin; long = bs[i]; }
   }
   return out;
 }
@@ -4789,7 +5113,8 @@ function renderModals() {
 
   /* ---- import d'une intervention StayClean en facture ---- */
   if (ui.showVenPick) {
-    var cands = DB.bookings.filter(function (b) { return b.statut === "termine"; })
+    var dejaF = venLinkedBkIds();
+    var cands = DB.bookings.filter(function (b) { return b.statut === "termine" && !dejaF[b.id]; })
       .sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 10);
     h += '<div class="overlay" id="ov-venpick"><div class="sheet">' +
       '<div class="sheet-head"><h2>Importer une intervention</h2><button class="x" data-act="venpick-close">×</button></div>';
@@ -5188,7 +5513,7 @@ document.addEventListener("click", function (e) {
       save(); renderAll();
       if (DB.settings.site.actif) {
         sitePublier().then(function (r) {
-          toast("ok", ["✅ Réservations en ligne activées.", r.ajoutes + " créneau(x) publié(s) sur ton site."]);
+          toast("ok", ["✅ Réservations en ligne activées.", (r.fenetres || 0) + " plage(s) publiée(s) sur ton site."]);
         }).catch(function (e) {
           toast("err", ["Publication impossible : " + (e && e.message ? e.message : "erreur"), "As-tu bien lancé le script Supabase ?"]);
         });
@@ -5198,7 +5523,7 @@ document.addEventListener("click", function (e) {
     case "site-publier": {
       sitePublier().then(function (r) {
         renderAll();
-        toast("ok", ["✅ Créneaux publiés — " + r.ajoutes + " ajouté(s), " + r.retires + " retiré(s)."]);
+        toast("ok", ["✅ Disponibilités publiées — " + (r.fenetres || 0) + " plage(s), " + (r.complets || 0) + " jour(s) complet(s)."]);
       }).catch(function (e) {
         toast("err", ["Publication impossible : " + (e && e.message ? e.message : "erreur")]);
       });
@@ -5342,7 +5667,10 @@ document.addEventListener("click", function (e) {
     case "venpick-go": {
       var bkI = findBk(el.getAttribute("data-id"));
       if (!bkI) break;
-      var taux = cptData().set.tvaDefault || 21;
+      if (venLinkedBkIds()[bkI.id]) { toast("err", ["Cette intervention est déjà facturée."]); break; }
+      /* même chemin que partout ailleurs : brouillon au prix convenu, numéro attribué à la validation */
+      if (window.SCB && SCB.factureExpress) { ui.showVenPick = false; renderModals(); SCB.factureExpress(bkI.id); break; }
+      var taux = tvaPresta();
       var ttcI = bkI.total || 0;
       var htI = Math.round(ttcI / (1 + taux / 100) * 100) / 100;
       ui.showVenPick = false;
@@ -5355,6 +5683,7 @@ document.addEventListener("click", function (e) {
     case "vend-save": {
       var vnd = ui.venDraft; if (!vnd) break;
       if (!vnd.client || vnd.ttc == null) { toast("err", ["Client et montant requis."]); break; }
+      if (vnd.ht == null || vnd.tvaMontant == null) { toast("err", ["HTVA et TVA manquants : indique le taux de TVA et le total."]); break; }
       cptData().ven.push(vnd);
       save();
       ui.venDraft = null;
@@ -5366,7 +5695,7 @@ document.addEventListener("click", function (e) {
     case "ven-open": { var vo = findVen(el.getAttribute("data-id")); if (vo && vo.statut === "brouillon" && window.SCB && SCB.ouvrirEditeur) { SCB.ouvrirEditeur(vo.id); break; } ui.venId = el.getAttribute("data-id"); renderModals(); break; }
     case "ven-close": ui.venId = null; renderAll(); break;
     case "ven-pay": { var vnp = findVen(el.getAttribute("data-id")); if (vnp) { vnp.statut = "payee"; vnp.paye = vnp.ttc || 0; save(); ui.venId = null; renderAll(); } break; }
-    case "ven-unpay": { var vnu = findVen(el.getAttribute("data-id")); if (vnu) { vnu.statut = "envoyee"; save(); renderAll(); } break; }
+    case "ven-unpay": { var vnu = findVen(el.getAttribute("data-id")); if (vnu) { vnu.statut = "envoyee"; vnu.paye = 0; save(); renderAll(); } break; }
     case "ven-del": {
       var vnx = findVen(el.getAttribute("data-id"));
       /* 24/09 : une facture validée ne disparaît jamais — annulation par note de crédit */
@@ -5499,7 +5828,7 @@ document.addEventListener("click", function (e) {
     case "close-detail": ui.detailId = null; ui.dImgs = []; renderAll(); break;
     case "d-complete": handleCompleteDetail(); break;
     case "mark-done": { var b1 = findBk(el.getAttribute("data-id")); if (b1) { b1.statut = "termine"; if (window.SCB && SCB.onTermine) SCB.onTermine(b1); save(); siteSync(); renderAll(); } break; }
-    case "mark-open": { var b2 = findBk(el.getAttribute("data-id")); if (b2) { b2.statut = "confirme"; save(); renderAll(); } break; }
+    case "mark-open": { var b2 = findBk(el.getAttribute("data-id")); if (b2) { b2.statut = "confirme"; b2.noAuto = true; delete b2.autoTermine; save(); renderAll(); } break; }
     case "cancel": cancelBooking(el.getAttribute("data-id")); break;
     case "restore": restoreBooking(el.getAttribute("data-id")); break;
     case "hard-delete": {
@@ -5601,7 +5930,7 @@ document.addEventListener("click", function (e) {
       }).filter(Boolean);
       var seulQ = (dq.articles || []).length === 1 && (dq.articles[0].quantite || 1) === 1 ? dq.articles[0].item : "";
       var plQ = plageDuree((tq.base + tq.prem) / 2, seulQ);
-      var tokQ = Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 8);
+      var tokQ = (function () { var a = new Uint8Array(12); crypto.getRandomValues(a); return Array.prototype.map.call(a, function (x) { return "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[x % 62]; }).join(""); })();
       var telQ = (dq.telephone || "").replace(/[^0-9+]/g, "");
       if (telQ && telQ.indexOf("+") !== 0) telQ = "+32" + telQ.replace(/^0/, "");
       c3.from("sc_devis").insert({
@@ -5609,7 +5938,9 @@ document.addEventListener("click", function (e) {
         lignes: lignesQ, resume: lignesQ.map(function (l) { return l.label; }).join(" + ") || "Devis",
         formule: ui.qFormule || null,
         total_basique: tq.base, total_premium: tq.prem,
-        duree_min: plQ[1], duree_texte: plageTxt(plQ[0]) + " à " + plageTxt(plQ[1]),
+        /* au-delà d'une journée de travail, la page de réservation ne trouverait
+           aucun créneau : on réserve la 1re journée entière, la suite se planifie avec toi */
+        duree_min: Math.min(plQ[1], toMin(siteCfg().fermeture || "19:00") - toMin(siteCfg().ouverture || "10:00")), duree_texte: plageTxt(plQ[0]) + " à " + plageTxt(plQ[1]),
         source: "app"
       }).then(function (res) {
         if (res.error) throw res.error;
@@ -5817,7 +6148,7 @@ document.addEventListener("change", function (e) {
     else if (setKey === "setupCode") {
       try {
         var conf = JSON.parse(atob(v.replace(/\s/g, "")));
-        if (conf.u && conf.k) {
+        if (conf.u && conf.k && syncUrlAutorisee(conf.u)) {
           DB.settings.sync.url = conf.u;
           DB.settings.sync.anonKey = conf.k;
           if (conf.e) DB.settings.syncEmail = conf.e;
@@ -5948,8 +6279,16 @@ document.addEventListener("change", function (e) {
       }
       else if (venF === "tvaMontant" || venF === "ttc" || venF === "paye") {
         venT[venF] = t.value === "" ? (venF === "paye" ? 0 : null) : Number(t.value) || 0;
+        if (venF === "ttc" && venT.ttc != null) {
+          var txT = venT.tvaTaux != null ? venT.tvaTaux : ((window.SCF && SCF.tauxPresta) ? SCF.tauxPresta() : 21);
+          venT.tvaTaux = txT;
+          venT.tvaMontant = Math.round(venT.ttc * txT / (100 + txT) * 100) / 100;
+          venT.ht = Math.round((venT.ttc - venT.tvaMontant) * 100) / 100;
+          renderModals();
+        }
         if (venF === "paye" && venT.paye >= (venT.ttc || 0) && venT.ttc) venT.statut = "payee";
         else if (venF === "paye" && venT.paye > 0) venT.statut = "partiel";
+        else if (venF === "paye" && venT.statut === "payee") venT.statut = "envoyee";
       }
       else if (venF === "date" || venF === "echeance") venT[venF] = t.value || null;
       else venT[venF] = t.value;
@@ -5963,6 +6302,11 @@ document.addEventListener("change", function (e) {
     if (cptF === "solde") {
       cptData().set.solde = t.value === "" ? null : Number(t.value) || 0;
       cptData().set.soldeDate = todayStr();
+    } else if (cptF === "tvaDefault") {
+      /* champ vidé = taux par défaut (21 %), jamais 0 % par accident */
+      var tvIn = t.value === "" ? null : Number(t.value);
+      if (tvIn != null && (isNaN(tvIn) || tvIn < 0 || tvIn > 30)) { toast("err", ["Taux de TVA invalide."]); return; }
+      cptData().set.tvaDefault = tvIn;
     } else {
       cptData().set[cptF] = Number(t.value) || 0;
     }
@@ -6059,6 +6403,7 @@ document.addEventListener("change", function (e) {
     if (bk) {
       bk[bkField] = (bkField === "total" || bkField === "durationMin") ? (Number(t.value) || 0) : t.value;
       if (bkField === "durationMin" && !bk.durationMin) bk.durationMin = 30;
+      if (bkField === "date") delete bk.noAuto;
       refreshIncomplet(bk);
       save();
       if (bkField === "date" || bkField === "heure" || bkField === "durationMin") siteSync(); /* déplacement ou durée → dispo du site à jour */
@@ -6085,6 +6430,8 @@ document.addEventListener("paste", function (e) {
 document.addEventListener("visibilitychange", function () {
   if (document.visibilityState === "visible" && session) pullCloud();
 });
+/* retour du réseau : on renvoie ce qui a été fait hors ligne */
+window.addEventListener("online", function () { if (session) pullCloud(); });
 
 /* --------------------------- démarrage ----------------------------- */
 
@@ -6093,7 +6440,7 @@ document.addEventListener("visibilitychange", function () {
     var hh = location.hash;
     if (hh && hh.indexOf("#setup=") === 0) {
       var conf = JSON.parse(atob(decodeURIComponent(hh.slice(7)).replace(/\s/g, "")));
-      if (conf.u && conf.k) {
+      if (conf.u && conf.k && syncUrlAutorisee(conf.u)) {
         DB.settings.sync.url = conf.u;
         DB.settings.sync.anonKey = conf.k;
         if (conf.e) DB.settings.syncEmail = conf.e;
@@ -6129,8 +6476,8 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(function () {});
 }
 </script>
-<script src="finance.js?v=612e299b"></script>
-<script src="business.js?v=612e299b"></script>
-<script src="origine-google-ads.js"></script>
+<script src="finance.js?v=20260926"></script>
+<script src="business.js?v=20260926"></script>
+<script src="origine-google-ads.js?v=20260926"></script>
 </body>
 </html>

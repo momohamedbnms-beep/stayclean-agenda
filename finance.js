@@ -135,7 +135,14 @@
 
   /* ------------------------ moteur : revenus ---------------------------- */
   /* Calcule les chiffres d'une période en listant CHAQUE opération source. */
-  function tauxPresta() { return cptData().set.tvaDefault || 21; }
+  /* horodatage ISO (UTC) → date et heure de Bruxelles (l'appareil) */
+  function dLoc(ts) { var d = new Date(ts); return isNaN(d) ? String(ts || "").slice(0, 10) : fmtDate(d); }
+  function hLoc(ts) { var d = new Date(ts); return isNaN(d) ? "" : pad(d.getHours()) + ":" + pad(d.getMinutes()); }
+  function tauxPresta() {
+    if (F().profil && F().profil.regimeTva === "franchise") return 0;
+    var t = cptData().set.tvaDefault;
+    return (t == null || t === "" || isNaN(t)) ? 21 : Number(t);
+  }
   function periode(debut, fin) {
     var tx = tauxPresta();
     var linked = venLinkedBkIds();
@@ -152,7 +159,7 @@
       if (b.statut !== "termine" || !inP(b.date) || linked[b.id]) return;
       var ttc = b.total || 0, ht = ttc / (1 + tx / 100);
       R.caFactureHT += ht; R.tvaCollectee += ttc - ht;
-      if (!(b.pay && b.pay.statut === "non_paye")) R.caEncaisseHT += ht;
+      if (!(b.pay && b.pay.statut === "non_paye")) R.caEncaisseHT += ht; /* règle conservée : sans mention contraire, une intervention terminée est considérée payée sur place */
       R.ops.ventes.push({ date: b.date, lib: "Prestation terminée (sans facture)", ht: ht, ttc: ttc, id: b.id });
     });
     cptData().ven.forEach(function (v) {
@@ -255,7 +262,7 @@
     var L = F().log.slice(-15).reverse();
     h += '<section class="card sec" style="margin-top:12px"><p class="k">Journal des opérations importantes <span class="cnt">' + F().log.length + "</span></p>";
     if (!L.length) h += '<p class="emptyline">Rien pour l\'instant.</p>';
-    L.forEach(function (x) { h += '<div class="tvaline"><span>' + esc(x.action) + (x.detail ? '<br><small style="color:var(--gris)">' + esc(x.detail) + "</small>" : "") + '</span><small class="tnum" style="color:var(--gris);white-space:nowrap">' + dfr(x.ts.slice(0, 10)) + " " + x.ts.slice(11, 16) + "</small></div>"; });
+    L.forEach(function (x) { h += '<div class="tvaline"><span>' + esc(x.action) + (x.detail ? '<br><small style="color:var(--gris)">' + esc(x.detail) + "</small>" : "") + '</span><small class="tnum" style="color:var(--gris);white-space:nowrap">' + dfr(dLoc(x.ts)) + " " + hLoc(x.ts) + "</small></div>"; });
     h += "</section>";
     return h;
   }
@@ -378,7 +385,7 @@
     var statutTxt = d.niveau >= 2 ? "ÉTABLI ET SIGNÉ PAR L'EXPLOITANT" : "DOCUMENT GÉNÉRÉ — NON SIGNÉ";
     var h = '<div id="scf-doc"><div class="hd"><div><div class="brand">' + esc((p.nomCommercial || "StayClean").toUpperCase()) + "<small>" + esc(p.adresse || "") + "</small></div></div>" +
       '<div class="meta"><h1>' + titre + "</h1><h2>Travailleur indépendant – Personne physique · Situation comptable intermédiaire</h2>" +
-      "<div style=\"margin-top:6px\">Période : <b>" + dfr(d.debut) + " – " + dfr(d.fin) + "</b><br>Référence : <b>" + esc(d.ref) + "</b> · Version <b>" + d.version + "</b><br>Établi le : <b>" + dfr(d.generatedAt.slice(0, 10)) + "</b></div>" +
+      "<div style=\"margin-top:6px\">Période : <b>" + dfr(d.debut) + " – " + dfr(d.fin) + "</b><br>Référence : <b>" + esc(d.ref) + "</b> · Version <b>" + d.version + "</b><br>Établi le : <b>" + dfr(dLoc(d.generatedAt)) + "</b></div>" +
       '<div style="margin-top:6px"><span class="stamp">' + statutTxt + "</span></div></div></div>";
     h += '<div class="blk"><p>Identification</p>' + identiteHtml(p) + "</div>";
     if (d.type === "3mois" && mois && mois.length) {
@@ -413,7 +420,7 @@
     if (R.alertes && R.alertes.length) h += '<div class="warn"><b>Éléments encore à régulariser à la date d\'établissement :</b> ' + esc(R.alertes.join(" · ")) + ".</div>";
     h += '<p class="small">Ce document est une situation comptable intermédiaire établie à partir des opérations enregistrées par l\'exploitant (' + d.nbOps + " opérations). Les montants sont provisoires, avant écritures de clôture, régularisations fiscales et sociales. Ce document n'est ni une fiche de paie, ni un avertissement-extrait de rôle, ni une attestation d'un professionnel ITAA, et il n'a pas été examiné par un professionnel sauf mention expresse ci-dessous. Montants arrondis au centime.</p>";
     h += '<div class="sig"><div><b>EXPLOITANT</b><br>' + esc([p.prenom, p.nom].filter(Boolean).join(" ")) + "<br>" +
-      (d.signe ? "Établi et signé le " + dfr(d.signe.date.slice(0, 10)) + "<br><i>Signature électronique simple : « " + esc(d.signe.nom) + " »</i>" : '<span class="small">Date et signature :</span>') + "</div>" +
+      (d.signe ? "Établi et signé le " + dfr(dLoc(d.signe.date)) + "<br><i>Signature électronique simple : « " + esc(d.signe.nom) + " »</i>" : '<span class="small">Date et signature :</span>') + "</div>" +
       "<div><b>PROFESSIONNEL</b><br><span class=\"small\">Non examiné par un professionnel.</span></div></div>";
     h += '<div class="foot">Réf. ' + esc(d.ref) + " · V" + d.version + " · ID " + esc(d.id) + " · généré le " + esc(d.generatedAt) + "<br>Empreinte SHA-256 des chiffres : " + esc(d.hash) + "</div></div>";
     return h;
@@ -499,7 +506,10 @@
       nbOps: R.ops.ventes.length + R.ops.charges.length + R.ops.cotisations.length,
       empreinte: empr
     };
+    if (U.genBusy) return; /* double clic : une seule version */
+    U.genBusy = true;
     sha256(JSON.stringify([d.ref, d.version, d.debut, d.fin, d.chiffres, d.sources, d.generatedAt])).then(function (hsh) {
+      U.genBusy = false;
       d.hash = hsh;
       F().attest.push(Object.freeze ? JSON.parse(JSON.stringify(d)) : d);
       log("Attestation générée", d.ref + " V" + d.version + " (" + dfr(debut) + " – " + dfr(fin) + ")");
@@ -507,13 +517,13 @@
       refresh();
       ouvrirDoc(attestationHtml(d));
       toast("ok", [d.ref + " V" + d.version + " générée." + (dernier ? " La V" + dernier.version + " reste conservée telle quelle." : "")]);
-    });
+    }, function () { U.genBusy = false; toast("err", ["Empreinte impossible à calculer : attestation non générée."]); });
   }
   function findAtt(id) { return F().attest.filter(function (a) { return a.id === id; })[0]; }
 
   /* ========================= actions : factures ======================== */
-  function nextNumero(nc) {
-    var y = String(new Date().getFullYear());
+  function nextNumero(nc, dateStr) {
+    var y = String(dateStr ? String(dateStr).slice(0, 4) : new Date().getFullYear());
     var pre = nc ? "NC-" + y + "-" : y + "-";
     var max = 0;
     cptData().ven.forEach(function (v) {
@@ -652,9 +662,12 @@
           if (!confirm("Ta caisse ne contient en théorie que " + eur2(soldeCaisse(dt)) + " à cette date. Enregistrer quand même ? (un comptage réel corrigera l'écart)")) break;
         }
         if (tt === "encaissement" && mt >= 3000) toast("err", ["⚠️ Un paiement cash de 3 000 € ou plus pour une même prestation est interdit en Belgique (SPF Économie)."]);
+        if (bkId && F().caisse.mv.some(function (m0) { return m0.bkId === bkId && m0.type === "encaissement"; })) {
+          toast("err", ["Ce RDV a déjà un encaissement cash dans ta caisse — pas de doublon."]); break;
+        }
         var mvx = { id: uid("mv"), type: tt, montant: r2(mt), date: dt, motif: val("scf-mv-motif"), bkId: bkId || null, cree: new Date().toISOString() };
         F().caisse.mv.push(mvx);
-        if (bkId) { var bb = findBk(bkId); if (bb) { bb.paiement = "cash"; if (bb.statut !== "termine") { bb.statut = "termine"; } if (bb.total && Math.abs(bb.total - mt) > 0.01) toast("err", ["Attention : le RDV est à " + eur2(bb.total) + " mais tu as encaissé " + eur2(mt) + ". Corrige le montant du RDV si le prix a changé."]); } }
+        if (bkId) { var bb = findBk(bkId); if (bb) { bb.paiement = "cash"; bb.pay = { statut: "paye", moyen: "cash", montant: r2(mt), date: dt }; if (bb.statut !== "termine") { bb.statut = "termine"; if (window.SCB && SCB.onTermine) SCB.onTermine(bb); } if (bb.total && Math.abs(bb.total - mt) > 0.01) toast("err", ["Attention : le RDV est à " + eur2(bb.total) + " mais tu as encaissé " + eur2(mt) + ". Corrige le montant du RDV si le prix a changé."]); } }
         log("Caisse : " + TYPES_MV[tt].l, eur2(mt) + (mvx.motif ? " · " + mvx.motif : ""));
         save(); U.modal = null; drawModal(); renderAll();
         toast("ok", [TYPES_MV[tt].l + " : " + eur2(mt) + ". Caisse attendue : " + eur2(soldeCaisse()) + "."]);

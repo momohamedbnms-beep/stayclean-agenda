@@ -70,12 +70,17 @@
       var faits = c.bks.filter(function (b) { return b.statut === "termine"; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
       var futurs = c.bks.filter(function (b) { return b.statut !== "termine" && b.statut !== "annule" && b.date >= td; }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
       c.faits = faits; c.prochain = futurs[0] || null;
-      c.caTTC = r2(faits.reduce(function (s, b) { return s + (b.total || 0); }, 0));
+      var credC = bkCreditees();
+      c.caTTC = r2(faits.reduce(function (s, b) { return s + (credC[b.id] ? 0 : (b.total || 0)); }, 0));
       c.caHT = r2(c.caTTC / (1 + S.tauxPresta() / 100));
       c.panier = faits.length ? r2(c.caTTC / faits.length) : 0;
       c.dernier = faits[0] || null;
       var imp = 0, impN = 0;
-      faits.forEach(function (b) { if (b.pay && b.pay.statut === "non_paye") { imp += b.total || 0; impN++; } });
+      faits.forEach(function (b) {
+        var fb = factureDe(b.id);
+        if (fb && fb.statut !== "brouillon") return; /* la facture porte déjà la dette */
+        if (b.pay && b.pay.statut === "non_paye") { imp += b.total || 0; impN++; }
+      });
       c.vens.forEach(function (v) { if (v.statut !== "brouillon" && !v.creditee && (v.ttc || 0) - (v.paye || 0) > 0.009) { imp += (v.ttc || 0) - (v.paye || 0); impN++; } });
       c.impaye = r2(imp); c.impayeN = impN;
       c.sansFacture = faits.filter(function (b) { return !factureDe(b.id); }).length;
@@ -83,7 +88,7 @@
       var srv = {};
       faits.forEach(function (b) { (b.prestations || []).forEach(function (p) { if (p.nom) srv[p.nom] = (srv[p.nom] || 0) + 1; }); });
       c.services = srv;
-      c.derniereActivite = [c.prochain && c.prochain.date, c.dernier && c.dernier.date, c.dems.length && (c.dems[0].cree_le || "").slice(0, 10)].filter(Boolean).sort().pop() || "";
+      c.derniereActivite = [c.prochain && c.prochain.date, c.dernier && c.dernier.date, c.dems.length && (c.dems[0].cree_le ? fmtDate(new Date(c.dems[0].cree_le)) : "")].filter(Boolean).sort().pop() || "";
       if (!c.nom) c.nom = c.tel || "Client";
       return c;
     });
@@ -174,6 +179,18 @@
   /* ========================= FACTURE EXPRESS ========================== */
   function recalc(v) {
     var tx = v.tvaTaux != null ? v.tvaTaux : S.tauxPresta();
+    if (v.ttcCible != null && (v.lignes || []).length) {
+      /* facture issue d'un RDV : le total TVAC est le prix convenu avec le client.
+         On en déduit TVA et HTVA, et la dernière ligne absorbe l'arrondi. */
+      v.ttc = r2(v.ttcCible); v.tvaMontant = r2(v.ttc * tx / (100 + tx)); v.ht = r2(v.ttc - v.tvaMontant);
+      var autres = 0, L = v.lignes;
+      L.forEach(function (l, i) { if (i < L.length - 1) autres += r2((Number(l.qte) || 0) * (Number(l.puHT) || 0)); });
+      var der = L[L.length - 1], q = Number(der.qte) || 1;
+      der.puHT = r2((v.ht - r2(autres)) / q);
+      if (Math.abs(r2(autres + r2(q * der.puHT)) - v.ht) > 0.001) { v.ttcCible = null; return recalc(v); }
+      if (v.payeTout) v.paye = v.ttc;
+      return v;
+    }
     var ht = 0;
     (v.lignes || []).forEach(function (l) { ht += r2((Number(l.qte) || 0) * (Number(l.puHT) || 0)); });
     v.ht = r2(ht); v.tvaMontant = r2(ht * tx / 100); v.ttc = r2(v.ht + v.tvaMontant);
@@ -194,7 +211,7 @@
       client: o.societe || b.client || "", clientType: o.type || "particulier", clientTva: o.tva || "",
       clientAdresse: b.adresse || (c && c.adresse) || "", clientTel: b.telephone || "", clientEmail: (c && c.email) || "",
       date: todayStr(), datePrestation: b.date, echeance: paye ? todayStr() : addDaysStr(todayStr(), 14),
-      tvaTaux: tx, lignes: lignes, payeTout: paye, paye: 0, moyen: paye ? MOYENS[b.pay.moyen] : "",
+      tvaTaux: tx, lignes: lignes, ttcCible: r2(b.total || 0), payeTout: paye, paye: 0, moyen: paye ? MOYENS[b.pay.moyen] : "",
       note: "", creeLe: todayStr(), source: "StayClean · " + b.id
     });
   }
@@ -210,6 +227,14 @@
     ouvrirEditeur(f.id);
   }
   function ouvrirEditeur(venId) { E = findVen(venId); if (!E) return; M = { k: "fac" }; draw(); }
+  /* après une synchronisation, DB est remplacé : l'éditeur ouvert doit pointer
+     vers la facture de la nouvelle copie (sinon la validation ne serait pas enregistrée) */
+  function relier() {
+    if (!E) return;
+    var n = findVen(E.id);
+    if (n) { if (n !== E && n.statut === "brouillon") { n.lignes = E.lignes; n.client = E.client; n.clientAdresse = E.clientAdresse; recalc(n); } E = n; }
+    else if (E.statut === "brouillon") cptData().ven.push(E);
+  }
 
   function editeurHtml(v) {
     var p = S.F().profil;
@@ -219,7 +244,7 @@
     h += '<div class="fld"><label>Adresse du client</label><input data-e="clientAdresse" value="' + esc(v.clientAdresse) + '"' + (!v.clientAdresse ? ' class="warn"' : "") + "></div>";
     if (v.clientType === "entreprise") h += '<div class="fld"><label>N° TVA du client (obligatoire pour une entreprise)</label><input data-e="clientTva" value="' + esc(v.clientTva || "") + '" placeholder="BE0xxx.xxx.xxx"' + (!v.clientTva ? ' class="warn"' : "") + "></div>" +
       '<div class="anomalie" style="margin:0 0 10px">Client entreprise belge : depuis le 1/1/2026 la facture doit partir via Peppol. Ce PDF ne suffit pas tant qu\'aucun prestataire Peppol n\'est branché.</div>';
-    h += '<div class="two"><div class="fld"><label>Date de facture</label><input type="date" data-e="date" value="' + v.date + '"></div><div class="fld"><label>Date de prestation</label><input type="date" data-e="datePrestation" value="' + (v.datePrestation || "") + '"></div></div>';
+    h += '<div class="two"><div class="fld"><label>Date de facture</label><div style="padding:10px 0;font-size:13.5px;color:var(--gris)">Le jour de la validation (numéro suivant)</div></div><div class="fld"><label>Date de prestation</label><input type="date" data-e="datePrestation" value="' + (v.datePrestation || "") + '"></div></div>';
     h += '<p class="k" style="margin:10px 0 6px;font-size:12px;font-weight:800;color:var(--gris)">LIGNES (prix HTVA)</p>';
     (v.lignes || []).forEach(function (l, i) {
       h += '<div style="display:grid;grid-template-columns:1fr 52px 84px 30px;gap:6px;margin-bottom:6px;align-items:center">' +
@@ -254,6 +279,7 @@
       '<div class="tvaline" style="padding:4px 0"><span><b>Total TVAC</b></span><b class="tnum" style="font-size:18px">' + eur2(v.ttc) + "</b></div>" +
       ((v.paye || 0) > 0 && (v.paye || 0) < v.ttc - 0.009 ? '<div class="tvaline" style="padding:4px 0;color:var(--rouge)"><span>Reste à payer par le client</span><b class="tnum">' + eur2(v.ttc - v.paye) + "</b></div>" : "") + "</div>";
   }
+  function dLocB(ts) { var d = new Date(ts); return isNaN(d) ? "" : fmtDate(d); }
   function valider(v) {
     var p = S.F().profil;
     if (!p.tva || !p.adresse || !p.nom || !p.bce) { toast("err", ["Complète ton profil (Compta → Profil) avant de valider."]); return; }
@@ -261,8 +287,15 @@
     if (v.clientType === "entreprise" && !v.clientTva) { toast("err", ["N° TVA du client entreprise obligatoire."]); return; }
     if (!(v.lignes || []).length || !v.ttc) { toast("err", ["La facture est vide."]); return; }
     if (v.clientType === "entreprise" && !confirm("Client entreprise : la loi impose l'envoi via Peppol depuis le 1/1/2026 et ce n'est pas encore branché. Valider quand même le document ?")) return;
+    /* date d'émission = jour de la validation (numérotation chronologique).
+       Garde-fou : une facture déjà émise plus tard que « aujourd'hui » signale une horloge fausse. */
+    var jour = todayStr();
+    var derniere = cptData().ven.filter(function (x) { return x !== v && x.statut !== "brouillon" && x.type !== "nc" && x.valideeLe && /^\d{4}-\d+$/.test(x.numero || ""); })
+      .map(function (x) { return dLocB(x.valideeLe); }).sort().pop() || "";
+    if (derniere && jour < derniere) { toast("err", ["La date de ton appareil (" + jour + ") est antérieure à la dernière facture validée (" + derniere + ") : vérifie l'heure du téléphone."]); return; }
+    v.date = jour;
     recalc(v);
-    v.numero = S.nextNumero(false);
+    v.numero = S.nextNumero(false, v.date);
     v.statut = (v.paye || 0) >= v.ttc ? "payee" : "envoyee";
     v.valideeLe = new Date().toISOString();
     delete v.payeTout;
@@ -286,9 +319,12 @@
      ou « Annuler le RDV » s'il n'a pas eu lieu. */
   function autoTerminer() {
     if (!CH().autoTerminer) return 0;
+    /* jamais avant d'avoir relu le cloud : sinon un appareil resté hors ligne
+       modifiait sa vieille copie et la renvoyait par-dessus les données à jour */
+    if (window.scSyncPret === false) return 0;
     var td = todayStr(), now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes(), n = 0;
     DB.bookings.forEach(function (b) {
-      if (b.statut === "termine" || b.statut === "annule" || !(b.total > 0) || !b.date) return;
+      if (b.statut === "termine" || b.statut === "annule" || b.noAuto || !(b.total > 0) || !b.date) return;
       var fin = toMin(b.heure || "09:00") + (b.durationMin || 120);
       if (b.date < td || (b.date === td && fin <= nowMin)) { b.statut = "termine"; b.autoTermine = true; n++; }
     });
@@ -296,15 +332,22 @@
     return n;
   }
   function joursEntre(a, b) { return Math.round((parseDateStr(b) - parseDateStr(a)) / 864e5) + 1; }
+  /* RDV dont la facture a été annulée par une note de crédit */
+  function bkCreditees() {
+    var m = {};
+    cptData().ven.forEach(function (v) { if (v.creditee) { var i = (v.source || "").indexOf("bk_"); if (i !== -1) m[v.source.slice(i)] = true; } });
+    return m;
+  }
   function bilan(deb, fin) {
-    autoTerminer();
+    /* calcul pur : ne modifie plus les données (autoTerminer tourne sur son minuteur) */
     var ch = CH(), td = todayStr(), tx = S.tauxPresta();
     var finEcoule = fin < td ? fin : td;
     var nbJ = finEcoule >= deb ? joursEntre(deb, finEcoule) : 0, nbTot = joursEntre(deb, fin);
     var parJourMois = 12 / 365;
-    var real = 0, aVenir = 0, nbR = 0, nbV = 0;
+    var real = 0, aVenir = 0, nbR = 0, nbV = 0, cred = bkCreditees();
     DB.bookings.forEach(function (b) {
       if (b.statut === "annule" || !b.date || b.date < deb || b.date > fin) return;
+      if (cred[b.id]) return; /* facture annulée par note de crédit : pas de revenu */
       if (b.statut === "termine") { real += b.total || 0; nbR++; } else { aVenir += b.total || 0; nbV++; }
     });
     var reel = { essence: 0, produits: 0, pub: 0, autres: 0 }, nbDep = 0;
@@ -361,8 +404,8 @@
     var fm = mk + "-" + pad(new Date(+mk.slice(0, 4), +mk.slice(5, 7), 0).getDate());
     var J = bilan(td, td), Mo = bilan(mk + "-01", fm);
     return '<button data-act="tab" data-tab="revenus" style="display:flex;width:100%;justify-content:space-between;gap:8px;align-items:center;margin:0 0 10px;padding:11px 14px;border-radius:16px;background:#fff;border:1px solid var(--bordure);font-size:12.5px;text-align:left">' +
-      '<span>Aujourd\'hui<br><b class="tnum" style="font-size:16px">' + euro(J.caTTC) + "</b></span>" +
-      "<span>" + MOIS_FULL[+mk.slice(5, 7) - 1] + '<br><b class="tnum" style="font-size:16px">' + euro(Mo.caTTC) + "</b></span>" +
+      '<span>Aujourd\'hui<br><b class="tnum" style="font-size:16px">' + euro(J.caTTC) + "</b>" + (J.aVenir > 0 ? '<br><small style="color:var(--gris)">+ ' + euro(J.aVenir) + " prévus</small>" : "") + "</span>" +
+      "<span>" + MOIS_FULL[+mk.slice(5, 7) - 1] + '<br><b class="tnum" style="font-size:16px">' + euro(Mo.caTTC) + "</b>" + (Mo.aVenir > 0 ? '<br><small style="color:var(--gris)">+ ' + euro(Mo.aVenir) + " prévus</small>" : "") + "</span>" +
       '<span>Bénéfice estimé<br><b class="tnum" style="font-size:16px;color:' + (Mo.benef >= 0 ? "#047857" : "var(--rouge)") + '">' + euro(Mo.benef) + "</b></span>" +
       '<span style="color:var(--bleu);font-weight:800">›</span></button>';
   }
@@ -389,7 +432,7 @@
       out.push({ id: "fac_" + f.id, src: "fournisseur", ref: f.id, type: "SUPPLIER", creancier: f.fournisseur || "Fournisseur", montant: f.montantTTC, officiel: true, echeance: f.echeance || null, statut: "a_payer", iban: f.iban, communication: f.reference, notes: f.numero ? "Facture n° " + f.numero : "" });
     });
     cptData().dep.forEach(function (d) {
-      if (d.statut === "paye") return;
+      if (d.statut === "paye" || d.nature === "perso") return; /* une dépense privée n'est pas une dette de l'entreprise */
       out.push({ id: "dep_" + d.id, src: "depense", ref: d.id, type: "SUPPLIER", creancier: d.fournisseur || "Dépense", montant: d.ttc, officiel: true, echeance: d.echeance || null, statut: "a_payer", iban: d.iban, communication: d.ref, notes: "Dépense scannée pas encore marquée payée" });
     });
     /* TVA : estimation seulement tant qu'aucun montant officiel n'est saisi */
@@ -635,6 +678,7 @@
       if (f === "clientType") { draw(); return; }
     } else if (li != null) {
       var lf = t.getAttribute("data-lf"), L = E.lignes[+li]; if (!L) return;
+      if (lf === "puHT" || lf === "qte") E.ttcCible = null;
       L[lf] = lf === "lib" ? t.value : (t.value === "" ? 0 : Number(t.value.replace(",", ".")) || 0);
     } else return;
     recalc(E);
@@ -665,10 +709,11 @@
       }
       case "l-add": {
         var tt = el.getAttribute("data-t");
+        E.ttcCible = null;
         E.lignes.push(tt === "deplacement" ? { lib: "Déplacement", qte: 1, puHT: 0 } : tt === "remise" ? { lib: "Remise", qte: 1, puHT: 0 } : { lib: "", qte: 1, puHT: 0 });
         draw(); break;
       }
-      case "l-del": E.lignes.splice(+el.getAttribute("data-i"), 1); recalc(E); draw(); break;
+      case "l-del": E.ttcCible = null; E.lignes.splice(+el.getAttribute("data-i"), 1); recalc(E); draw(); break;
       case "fac-apercu": recalc(E); save(); S.ouvrirDoc(S.factureHtml(E)); break;
       case "fac-save": recalc(E); S.log("Brouillon de facture modifié", (E.client || "") + " · " + eur2(E.ttc)); save(); M = null; E = null; draw(); renderAll(); toast("ok", ["Brouillon enregistré — tu peux le finaliser plus tard (Ventes ou fiche RDV)."]); break;
       case "fac-valider": valider(E); break;
@@ -757,7 +802,7 @@
   window.SCB = {
     renderClients: renderClients, renderAPayer: renderAPayer, bkPanel: bkPanel, bkTags: bkTags,
     onTermine: onTermine, factureExpress: factureExpress, ouvrirEditeur: ouvrirEditeur, payer: payer,
-    clients: clients, obligations: obligations, recalc: recalc,
+    clients: clients, obligations: obligations, recalc: recalc, valider: valider, brouillonDepuis: brouillonDepuis, relier: relier,
     bilan: bilan, beneficeHtml: beneficeHtml, stripHtml: stripHtml, autoTerminer: autoTerminer, caProHtml: caProHtml
   };
 })();
