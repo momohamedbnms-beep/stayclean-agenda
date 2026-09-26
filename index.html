@@ -47,12 +47,10 @@ header{background:#fff;border-bottom:1px solid var(--bordure);padding:calc(env(s
 .btn-main:active{opacity:.8}
 .btn-main:disabled{background:#BBDCF3;box-shadow:none}
 nav{display:flex;gap:6px;padding:16px 16px 0}
-nav.deux{flex-direction:column;gap:8px}
+nav.deux{flex-direction:column;gap:6px}
 nav.deux .r1,nav.deux .r2{display:flex;gap:6px}
-nav.deux .r1 button{padding:12px 4px;font-size:13.5px;font-weight:800}
-nav.deux .r2 button{padding:8px 4px;font-size:11.5px;font-weight:700;background:transparent;border-color:transparent;color:var(--gris)}
-nav.deux .r2 button.on{background:var(--nuit);border-color:var(--nuit);color:#fff}
-nav button{flex:1;padding:10px 4px;border-radius:999px;font-size:13px;font-weight:700;background:#fff;border:1px solid var(--bordure)}
+nav.deux button{padding:10px 2px;font-size:13px;font-weight:700}
+nav button{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;padding:10px 4px;border-radius:999px;font-size:13px;font-weight:700;background:#fff;border:1px solid var(--bordure)}
 nav button.on{background:var(--bleu);color:#fff;border-color:var(--bleu)}
 main{padding:16px 20px 100px}
 .sub{font-size:12px;color:var(--gris);font-weight:500;margin-bottom:12px}
@@ -334,9 +332,9 @@ nav button{font-size:12px;padding:10px 2px}
 .pday{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;border-radius:999px;background:#fff;border:1px solid var(--bordure);font-size:14px;font-weight:700;color:var(--nuit);margin-top:6px}
 .pday:active{opacity:.7}
 .crumb{display:flex;align-items:center;gap:8px;margin-top:12px}
-.crumb .home{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:700;color:var(--bleu-dark);background:var(--pale);border-radius:999px;padding:6px 12px}
+.crumb .home{flex-shrink:0;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:700;color:var(--bleu-dark);background:var(--pale);border-radius:999px;padding:6px 12px}
 .crumb .home:active{opacity:.7}
-.crumb .path{font-size:12.5px;font-weight:700;color:var(--gris)}
+.crumb .path{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px;font-weight:700;color:var(--gris)}
 .crumb .path b{color:var(--nuit)}
 .spacebadge{display:inline-flex;align-items:center;gap:6px;margin-top:12px;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:700}
 .spacebadge.pro{background:var(--pale);color:var(--bleu-dark)}
@@ -1927,7 +1925,7 @@ function portalResume() {
     var mo = (window.SCB && SCB.bilan) ? SCB.bilan(mk + "-01", fm) : null;
     var h = '<div class="presume">';
     if (prochain) {
-      var adr = prochain.adresse ? '<a class="padr" href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(prochain.adresse) + '" target="_blank" rel="noopener">📍 ' + esc(prochain.adresse) + "</a>" : "";
+      var adr = prochain.adresse ? '<a class="padr" href="https://waze.com/ul?q=' + encodeURIComponent(prochain.adresse) + '&navigate=yes" target="_blank" rel="noopener">📍 ' + esc(prochain.adresse) + "</a>" : "";
       h += '<button class="pnext" data-act="detail" data-id="' + esc(prochain.id) + '"><span class="pl">Prochain client</span>' +
         '<b>' + (prochain.date === td ? "Aujourd’hui" : humanDate(prochain.date)) + " · " + esc(prochain.heure || "") + " — " + esc(prochain.client || "Client") + "</b>" +
         '<span class="pm">' + esc((prochain.prestations || []).map(function (p) { return p.nom; }).join(" + ") || "Intervention") + " · " + euro(prochain.total) + "</span></button>" + adr;
@@ -1961,14 +1959,14 @@ function renderPortal() {
 }
 
 var PRO_TABS = [["planning", "Planning"], ["clients", "Clients"], ["demandes", "Demandes"], ["devis", "Devis"], ["factures", "Factures"], ["revenus", "Revenus"]];
-var PRO_TABS_1 = [["planning", "📅 Planning"], ["clients", "👤 Clients"], ["demandes", "Demandes"], ["devis", "Devis"]];
-var PRO_TABS_2 = [["factures", "Factures"], ["revenus", "Revenus"]];
+var PRO_TABS_1 = [["planning", "Planning"], ["clients", "Clients"], ["demandes", "Demandes"]];
+var PRO_TABS_2 = [["devis", "Devis"], ["factures", "Factures"], ["revenus", "Revenus"]];
 var PERSO_TABS = [["tableau", "Tableau"], ["agenda", "Agenda"], ["taches", "Tâches"], ["docs", "Docs"]];
 var PRO_TAB_LABEL = { clients: "Clients", tableau: "Accueil", demandes: "Demandes du site", planning: "Planning", devis: "Devis", factures: "Factures", revenus: "Revenus", reglages: "Réglages" };
 var PERSO_TAB_LABEL = { tableau: "Tableau", agenda: "Agenda", taches: "Tâches", docs: "Docs & dossiers" };
 var CPT_TABS = [["apayer", "À payer"], ["situation", "Situation"], ["depenses", "Dépenses"], ["ventes", "Ventes"], ["tva", "TVA"], ["caisse", "Caisse"], ["revenus", "Mes revenus"], ["profil", "Profil"]];
-var CPT_TABS_1 = [["situation", "Situation"], ["apayer", "🔔 À payer"], ["ventes", "Ventes"], ["depenses", "Dépenses"]];
-var CPT_TABS_2 = [["caisse", "💶 Caisse"], ["tva", "TVA"], ["revenus", "📄 Revenus"], ["profil", "Profil"]];
+var CPT_TABS_1 = [["situation", "Situation"], ["apayer", "À payer"], ["ventes", "Ventes"], ["depenses", "Dépenses"]];
+var CPT_TABS_2 = [["caisse", "Caisse"], ["tva", "TVA"], ["revenus", "Revenus"], ["profil", "Profil"]];
 var CPT_TAB_LABEL = { apayer: "À payer & à faire", situation: "Situation", depenses: "Dépenses", ventes: "Ventes", tva: "TVA", caisse: "Caisse", revenus: "Mes revenus", profil: "Profil fiscal" };
 
 function renderChrome() {
@@ -2047,7 +2045,7 @@ function renderDemandes() {
   }
   h += '<button class="linkline" data-act="dem-refresh">🔄 Vérifier s’il y a de nouvelles demandes</button>';
   var nExc = siteExceptions().length;
-  h += '<p class="qa-hint" style="text-align:center">Ton site accepte les réservations <b>sans limite de date</b> — seules tes ' + nExc + " journée" + (nExc > 1 ? "s" : "") + " occupée" + (nExc > 1 ? "s" : "") + " apparaissent complètes.</p>";
+  h += '<p class="qa-hint" style="text-align:center;margin-top:6px">Ton site accepte les réservations <b>sans limite de date</b> — seules tes ' + nExc + " journée" + (nExc > 1 ? "s" : "") + " occupée" + (nExc > 1 ? "s" : "") + " apparaissent complètes.</p>";
 
   if (!nouv.length) h += '<p class="libre" style="text-align:center;margin-top:22px;font-size:13px">Aucune demande en attente 👌</p>';
   nouv.forEach(function (d) {
@@ -3029,11 +3027,12 @@ function renderSituation() {
   var tvq = cptTvaTrim(now.getFullYear(), trimestreOf(mk));
   var resTVA = Math.max(0, tvq.solde);
   h += '<section class="card sec"><p class="k">💰 À mettre de côté <span class="estbadge">estimation</span></p>' +
-    '<p class="k" style="margin-top:6px;font-size:12px">1 · Ton bénéfice estimé du mois</p>' +
+    '<p class="k" style="margin-top:6px;font-size:12px">1 · Bénéfice sur tes dépenses réellement encodées</p>' +
+    '<p class="note" style="margin:2px 0 6px">Différent du « Bénéfice estimé » plus haut, qui ajoute aussi tes charges habituelles (essence, produits, pub) pas encore encodées.</p>' +
     '<div class="tvaline"><span>Encaissé TTC ce mois</span><b class="tnum">' + euro(f.encTTC) + "</b></div>" +
     '<div class="tvaline"><span>− TVA incluse (' + tvaPresta() + '%, elle ne t’appartient pas)</span><b class="tnum">−' + euro(f.tvaIncluse) + "</b></div>" +
     '<div class="tvaline"><span>− Frais pro du mois (hors TVA)</span><b class="tnum">−' + euro(f.fraisProHT) + "</b></div>" +
-    '<div class="tvaline" style="border-top:2px solid var(--bordure)"><span><b>Bénéfice estimé du mois</b></span><b class="tnum">' + euro(f.benef) + "</b></div>" +
+    '<div class="tvaline" style="border-top:2px solid var(--bordure)"><span><b>Bénéfice (dépenses encodées)</b></span><b class="tnum">' + euro(f.benef) + "</b></div>" +
     '<p class="k" style="margin-top:10px;font-size:12px">2 · À réserver sur ce bénéfice</p>' +
     '<div class="tvaline"><span>Cotisations sociales (~' + st2.cotis + '% du bénéfice)</span><b class="tnum">' + euro(f.cotis) + "</b></div>" +
     '<div class="tvaline"><span>Impôts (~' + st2.impot + '% du bénéfice après cotisations)</span><b class="tnum">' + euro(f.impot) + "</b></div>" +
@@ -4677,7 +4676,7 @@ function renderReglages() {
   if (SS.actif) {
     h += '<div class="set-row"><span>J\u2019ouvre \u00e0</span><input type="time" value="' + esc(SS.ouverture) + '" data-site="ouverture"></div>' +
       '<div class="set-row"><span>Je termine au plus tard \u00e0</span><input type="time" value="' + esc(SS.fermeture) + '" data-site="fermeture"></div>' +
-      '<div class="set-row"><span>Heures mises en avant</span><input value="' + esc(SS.conseilles.join(", ")) + '" data-site="conseilles" placeholder="10:00, 13:00, 16:00"></div>' +
+      '<div class="set-row"><span>Heures mises en avant</span><input value="' + esc(SS.conseilles.join(", ")) + '" data-site="conseilles" style="min-width:0;flex:1;max-width:170px" placeholder="10:00, 13:00, 16:00"></div>' +
       '<div class="set-row"><span>Autres d\u00e9parts toutes les (min)</span><input type="number" min="15" step="15" max="120" value="' + (SS.pas || 30) + '" data-site="pas"></div>' +
       '<div class="set-row"><span>D\u00e9lai minimum (jours)</span><input type="number" min="1" max="30" value="' + SS.delaiJours + '" data-site="delaiJours"></div>' +
 
@@ -4872,7 +4871,7 @@ function renderModals() {
       (bk.remarques ? '<p class="rem">' + esc(bk.remarques) + "</p>" : "");
     var acts = "";
     if (bk.telephone) acts += '<a href="tel:' + esc(bk.telephone.replace(/\s/g, "")) + '">Appeler</a>';
-    if (bk.adresse) acts += '<a href="https://maps.google.com/?q=' + encodeURIComponent(bk.adresse) + '" target="_blank" rel="noreferrer">Itinéraire</a>';
+    if (bk.adresse) acts += '<a href="https://waze.com/ul?q=' + encodeURIComponent(bk.adresse) + '&navigate=yes" target="_blank" rel="noreferrer">Itinéraire</a>';
     if (acts) h += '<div class="acts">' + acts + "</div>";
     if (bk.statut !== "annule") {
       h += '<div class="mini-analyse" style="margin-top:14px"><p class="t">✅ Message de confirmation</p>' +
@@ -6477,7 +6476,7 @@ if ("serviceWorker" in navigator) {
 }
 </script>
 <script src="finance.js?v=20260926"></script>
-<script src="business.js?v=20260926"></script>
+<script src="business.js?v=20260926b"></script>
 <script src="origine-google-ads.js?v=20260926"></script>
 </body>
 </html>

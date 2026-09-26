@@ -586,8 +586,8 @@
     if (!l.length) return '<p class="emptyline">Aucun client.</p>';
     return '<section class="card tsec">' + l.slice(0, 150).map(function (c) {
       return '<button class="facrow" data-scb="client" data-k="' + c.key + '"><span class="bd"><span class="fo">' + esc(c.o.societe || c.nom) + '</span><span class="me">' +
-        c.faits.length + " prestation" + (c.faits.length > 1 ? "s" : "") + (c.dernier ? " · dernière " + dfr(c.dernier.date) : "") + (c.prochain ? " · prochaine " + dfr(c.prochain.date) : "") + "</span></span>" +
-        '<span class="mo tnum">' + eur2(c.caTTC) + "</span>" + (c.impaye ? '<span class="fbulle b-retard">Impayé</span>' : c.prochain ? '<span class="fbulle b-ok">RDV</span>' : "") + "</button>";
+        (c.faits.length ? c.faits.length + " prestation" + (c.faits.length > 1 ? "s" : "") : "Nouveau client") + (c.prochain ? " · RDV le " + dfr(c.prochain.date).slice(0, 5) : (c.dernier ? " · dernière " + dfr(c.dernier.date) : "")) + "</span></span>" +
+        (!c.faits.length && c.prochain ? '<span class="mo tnum" style="color:var(--gris);font-weight:600">' + eur2(+c.prochain.total || 0) + "</span>" : '<span class="mo tnum">' + eur2(c.caTTC) + "</span>") + (c.impaye ? '<span class="fbulle b-retard">Impayé</span>' : c.prochain ? '<span class="fbulle b-ok">RDV</span>' : "") + "</button>";
     }).join("") + "</section>";
   }
   function fiche(c) {
