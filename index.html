@@ -1958,11 +1958,11 @@ function renderPortal() {
     "</div>";
 }
 
-var PRO_TABS = [["planning", "Planning"], ["clients", "Clients"], ["demandes", "Demandes"], ["devis", "Devis"], ["factures", "Factures"], ["revenus", "Revenus"]];
-var PRO_TABS_1 = [["planning", "Planning"], ["clients", "Clients"], ["demandes", "Demandes"]];
-var PRO_TABS_2 = [["devis", "Devis"], ["factures", "Factures"], ["revenus", "Revenus"]];
+var PRO_TABS = [["planning", "Planning"], ["messages", "Messages"], ["clients", "Clients"], ["demandes", "Demandes"], ["devis", "Devis"], ["factures", "Factures"], ["revenus", "Revenus"]];
+var PRO_TABS_1 = [["planning", "Planning"], ["messages", "Messages"], ["demandes", "Demandes"]];
+var PRO_TABS_2 = [["clients", "Clients"], ["devis", "Devis"], ["factures", "Factures"], ["revenus", "Revenus"]];
 var PERSO_TABS = [["tableau", "Tableau"], ["agenda", "Agenda"], ["taches", "Tâches"], ["docs", "Docs"]];
-var PRO_TAB_LABEL = { clients: "Clients", tableau: "Accueil", demandes: "Demandes du site", planning: "Planning", devis: "Devis", factures: "Factures", revenus: "Revenus", reglages: "Réglages" };
+var PRO_TAB_LABEL = { messages: "Messages", clients: "Clients", tableau: "Accueil", demandes: "Demandes du site", planning: "Planning", devis: "Devis", factures: "Factures", revenus: "Revenus", reglages: "Réglages" };
 var PERSO_TAB_LABEL = { tableau: "Tableau", agenda: "Agenda", taches: "Tâches", docs: "Docs & dossiers" };
 var CPT_TABS = [["apayer", "À payer"], ["situation", "Situation"], ["depenses", "Dépenses"], ["ventes", "Ventes"], ["tva", "TVA"], ["caisse", "Caisse"], ["revenus", "Mes revenus"], ["profil", "Profil"]];
 var CPT_TABS_1 = [["situation", "Situation"], ["apayer", "À payer"], ["ventes", "Ventes"], ["depenses", "Dépenses"]];
@@ -2006,7 +2006,7 @@ function renderChrome() {
     var nDem = demNouvelles().length;
     function btns(list) {
       return list.map(function (t) {
-        var pastille = (t[0] === "demandes" && nDem) ? '<i class="navdot">' + nDem + "</i>" : "";
+        var nMsg = (t[0] === "messages" && window.SCM && SCM.aTraiter) ? SCM.aTraiter() : 0; var pastille = (t[0] === "demandes" && nDem) ? '<i class="navdot">' + nDem + "</i>" : (nMsg ? '<i class="navdot">' + nMsg + "</i>" : "");
         return '<button class="' + (ui.tab === t[0] ? "on" : "") + '" data-act="tab" data-tab="' + t[0] + '">' + t[1] + pastille + "</button>";
       }).join("");
     }
@@ -4796,6 +4796,7 @@ function renderMain() {
   }
   /* espace pro */
   if (ui.tab === "planning") main.innerHTML = renderPlanning();
+  else if (ui.tab === "messages") { if (window.SCM && SCM.render) SCM.render(main); else main.innerHTML = '<p class="emptyline">Messagerie en cours de chargement… recharge l’app.</p>'; }
   else if (ui.tab === "clients") main.innerHTML = (window.SCB && SCB.renderClients) ? SCB.renderClients() : "";
   else if (ui.tab === "demandes") main.innerHTML = renderDemandes();
   else if (ui.tab === "devis") main.innerHTML = renderDevisTab();
@@ -6477,6 +6478,7 @@ if ("serviceWorker" in navigator) {
 </script>
 <script src="finance.js?v=20260926"></script>
 <script src="business.js?v=20260926b"></script>
+<script src="messagerie.js?v=20261006"></script>
 <script src="origine-google-ads.js?v=20260926"></script>
 </body>
 </html>
