@@ -19,7 +19,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "messagerie-6";
+  var VERSION = "messagerie-6.1";
   var BOITE_WA = 143967;
   var RAPIDES = [
     ["📷 Photo", "Bonjour, pour obtenir un devis précis, il faudra juste nous envoyer une photo de l’élément à nettoyer ainsi que votre code postal📍"],
@@ -340,7 +340,10 @@
   function abonner() {
     var c = sb(); if (!c || S.canal) return;
     try {
-      S.canal = c.channel("scm-messagerie-6")
+      // 6.1 : un nom neuf à chaque abonnement (jamais un ancien canal fermé réutilisé)
+      var canal = c.channel("scm-messagerie-" + Date.now());
+      S.canal = canal;
+      canal
         .on("postgres_changes", { event: "*", schema: "public", table: "sc_wa_conversations" }, function (p) { majConv(p.new); dessiner(); })
         .on("postgres_changes", { event: "*", schema: "public", table: "sc_wa_messages" }, function (p) {
           var bas = presDuBas(); majMsg(p.new); dessiner(); if (bas && estConv() && Number(S.vue) === Number(p.new && p.new.conv_id)) basDePage();
@@ -353,8 +356,17 @@
         .on("postgres_changes", { event: "*", schema: "public", table: "sc_regles" }, function (p) { majListe(S.regles, p.new); dessiner(); })
         .on("postgres_changes", { event: "*", schema: "public", table: "sc_auto" }, function (p) { majListe(S.auto, p.new); dessiner(); })
         .subscribe(function (etat) {
+          // 6.1 : la fermeture du canal rappelle ce même code (« CLOSED ») : sans ce garde-fou, boucle
+          // infinie (« Maximum call stack size exceeded », 25 fois le 7/10) et temps réel coupé.
+          if (S.canal !== canal) return;
           S.tempsReel = etat === "SUBSCRIBED" ? "ok" : /CLOSED|ERROR|TIMED_OUT/.test(String(etat)) ? "ko" : S.tempsReel;
-          if (S.tempsReel === "ko") { try { c.removeChannel(S.canal); } catch (e) {} S.canal = null; }
+          if (S.tempsReel !== "ko") return;
+          S.canal = null;
+          setTimeout(function () {
+            try { var p = c.removeChannel(canal); if (p && typeof p.catch === "function") p.catch(function () {}); } catch (e) {}
+          }, 0);
+          // reconnexion automatique (sans recharger la page)
+          setTimeout(function () { if (!S.canal && document.visibilityState === "visible" && connecte()) abonner(); }, 10000);
         });
     } catch (e) { S.canal = null; }
   }
@@ -1204,7 +1216,7 @@
       '</small></div><button data-scm="sante-verifier" class="scm-btn"' + (S.santeCharge ? " disabled" : "") + ">↻ Vérifier</button></div>";
     var v = (S.sante && S.sante.verifs) || [];
     var lignes = v.slice();
-    lignes.push({ nom: "Ton app (cet appareil)", ok: !S.horsLigne && !S.avert, detail: (S.horsLigne ? "pas de connexion internet" : "en ligne") + " · temps réel " + (S.tempsReel === "ok" ? "connecté" : S.tempsReel === "ko" ? "coupé (recharge la page)" : "en cours") + (S.avert ? " · " + S.avert : "") + " · " + VERSION });
+    lignes.push({ nom: "Ton app (cet appareil)", ok: !S.horsLigne && !S.avert, detail: (S.horsLigne ? "pas de connexion internet" : "en ligne") + " · temps réel " + (S.tempsReel === "ok" ? "connecté" : S.tempsReel === "ko" ? "coupé (reconnexion automatique)" : "en cours") + (S.avert ? " · " + S.avert : "") + " · " + VERSION });
     if (S.sante && S.sante.erreur) lignes.unshift({ nom: "Contrôle du serveur", ok: false, detail: S.sante.erreur });
     h += '<div class="scm-carte">' + lignes.map(function (x) {
       var ic = x.ok === true ? "✅" : x.ok === false ? "⚠️" : "❔";
