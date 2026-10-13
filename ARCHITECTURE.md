@@ -12,7 +12,9 @@ Application web installable (PWA), en JavaScript sans framework, hébergée sur 
 | `origine-google-ads.js` | Badge et compteur des demandes venues de Google Ads. Lecture seule. |
 | `dispo.html` | Page publique des disponibilités. Elle lit `sc_dispo`, `sc_fermes` et `sc_reglages`. |
 | `reserver.html` | Redirige vers stayclean.be. L'ancienne page de réservation est retirée ; elle reste dans l'historique Git. |
-| `sw.js` | Service worker : le réseau d'abord, le cache seulement hors ligne. |
+| `paperasse.html` + `paperasse/` | **Ma Paperasse** (remplace « Ma Vie » sur l'accueil) : papiers perso, rappels, preuves. Même session et même clé IA que l'agenda. Voir `MA-PAPERASSE.md`. |
+| `sw.js` | Service worker : le réseau d'abord, le cache seulement hors ligne. Reçoit aussi les notifications de Ma Paperasse (v36). |
+| `supabase/ma-paperasse.sql`, `supabase/functions/mp-push/` | Côté serveur de Ma Paperasse : tables `mp_*` (RLS), bucket privé `mp-files`, tâche horaire, envoi des notifications. |
 | `tests/` | Banc d'essai automatisé. Il utilise un faux Supabase et des données fictives, jamais la production. |
 
 `business.js` et `finance.js` sont chargés après le script principal. Ils utilisent ses fonctions globales (`DB`, `save`, `renderAll`, `esc`, `todayStr`…).
@@ -30,6 +32,14 @@ Application web installable (PWA), en JavaScript sans framework, hébergée sur 
   - `sc_config` : les réglages et les durées. Le site les lit via `sc_reglages`.
 - **Demandes du site** : `sc_demandes`, relevées toutes les 3 minutes par `siteRecevoir`.
 - **Devis** : table `sc_devis`. La page `stayclean.be/reservation/?d=…` lit un devis par son jeton.
+
+## Ma Paperasse (13/10/2026)
+
+- L'accueil affiche **MA PAPERASSE** à la place de MA VIE ; le bouton ouvre `paperasse.html` (navigation dans la même appli installée, retour par l'historique).
+- L'ancien espace Ma Vie reste accessible par `./#mavie` (lien dans Ma Paperasse → Réglages). `./#reglages` ouvre les réglages de l'agenda.
+- Ma Paperasse lit sur l'appareil, sans les modifier : `DB.settings.sync` (serveur), `DB.settings.provider/apiKey/geminiKey` (IA), `DB.cpt.profil` (prénom) et `DB.docs` (import des anciens documents).
+- Elle écrit `mp.summary.v1` dans localStorage : le résumé affiché sur la carte de l'accueil.
+- Ses données vivent dans Supabase (`mp_items`, `mp-files`), jamais dans `agenda_state`.
 
 ## Sources de vérité (une donnée = un endroit)
 

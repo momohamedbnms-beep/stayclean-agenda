@@ -325,6 +325,12 @@ nav button{font-size:12px;padding:10px 2px}
 .pcard:active{transform:scale(.98)}
 .pcard.pro{background:linear-gradient(135deg,var(--nuit) 0%,#1D4E75 55%,var(--bleu) 120%);color:#fff}
 .pcard.perso{background:linear-gradient(135deg,#3B1D5E 0%,#6D28D9 70%,#A855F7 130%);color:#fff}
+/* Ma Paperasse (remplace « Ma Vie » sur l'accueil, 13/10/2026) */
+.pcard.pap{background:linear-gradient(135deg,#1E1650 0%,#4B32D1 62%,#9C8BFF 130%);color:#fff}
+.pcard .lg{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:14px;background:#F1EDFF;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.pcard .lg svg{width:31px;height:31px;display:block}
+.pcard .pst{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.17);font-size:12px;font-weight:700}
+.pcard .pst.late{background:#FDE2E2;color:#9B1C1C}
 .pcard .em{font-size:30px}
 .pcard .tt{font-size:21px;font-weight:800;letter-spacing:-.02em;margin-top:10px}
 .pcard .ss{font-size:13px;opacity:.75;margin-top:3px;font-weight:500}
@@ -1936,6 +1942,22 @@ function portalResume() {
     return h;
   } catch (e) { return ""; }
 }
+/* ---- Ma Paperasse : espace « papiers » (paperasse.html, même appli, même compte) ----
+   La carte remplace « Ma Vie » sur l'accueil. L'ancien espace Ma Vie reste ouvert via ./#mavie
+   (lien dans Ma Paperasse → Réglages). Le résumé est écrit par Ma Paperasse sur cet appareil. */
+var PAP_LOGO = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M14 6h14l10 10v24a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4z" fill="#ECE8FF" stroke="#20212B" stroke-width="2.6" stroke-linejoin="round"/><path d="M28 6v8a2 2 0 0 0 2 2h8" fill="none" stroke="#20212B" stroke-width="2.6" stroke-linejoin="round"/><path d="M16 22h11M16 28.5h7" fill="none" stroke="#20212B" stroke-width="2.6" stroke-linecap="round"/><circle cx="33.5" cy="35" r="9.5" fill="#4B32D1"/><path d="m29.2 35.2 3 3 5.4-6.2" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function papResume() {
+  try {
+    var r = JSON.parse(localStorage.getItem("mp.summary.v1") || "null");
+    if (!r || !r.at) return "";
+    var u = session && session.user && session.user.id;
+    if (u && r.uid && r.uid !== u) return "";
+    if (r.late) return '<span class="pst late">⚠ ' + r.late + " en retard" + (r.week ? " · " + r.week + " cette semaine" : "") + "</span>";
+    if (r.week) return '<span class="pst">' + r.week + " à régler cette semaine</span>";
+    if (r.check) return '<span class="pst">' + r.check + " info" + (r.check > 1 ? "s" : "") + " à vérifier</span>";
+    return '<span class="pst">✓ Rien d’urgent</span>';
+  } catch (e) { return ""; }
+}
 function renderPortal() {
   return '<div class="portal">' + portalResume() +
     '<p class="pt">Où veux-tu aller ?</p>' +
@@ -1949,10 +1971,10 @@ function renderPortal() {
     '<span class="tt" style="display:block">COMPTA</span>' +
     '<span class="ss" style="display:block">Finances, TVA & frais pro</span>' +
     "</button>" +
-    '<button class="pcard perso" data-act="go-perso">' +
-    '<span class="em">🏠</span><span class="go">›</span>' +
-    '<span class="tt" style="display:block">MA VIE</span>' +
-    '<span class="ss" style="display:block">Mon organisation personnelle</span>' +
+    '<button class="pcard pap" data-act="go-paperasse" aria-label="Ma Paperasse : mes papiers">' +
+    '<span class="lg">' + PAP_LOGO + '</span><span class="go">›</span>' +
+    '<span class="tt" style="display:block">MA PAPERASSE</span>' +
+    '<span class="ss" style="display:block">Factures, amendes, rappels et preuves</span>' + papResume() +
     "</button>" +
     '<button class="pday" data-act="go-jour">📅 Voir ma journée complète</button>' +
     "</div>";
@@ -5329,6 +5351,14 @@ document.addEventListener("click", function (e) {
     }
     case "go-pro": ui.space = "pro"; ui.tab = "planning"; ui.calView = "mois"; ui.monthCursor = null; renderAll(); break;
     case "go-perso": ui.space = "perso"; ui.tab = "tableau"; renderAll(); break;
+    case "go-paperasse": {
+      try { sessionStorage.setItem("mp.from", "agenda"); } catch (e) {}
+      var allerPap = function () { location.href = "paperasse.html"; };
+      /* une modification attend d'être envoyée au cloud : on l'envoie d'abord (2,5 s max) */
+      if (pushTimer && session) { clearTimeout(pushTimer); pushTimer = null; Promise.race([pushCloud(), new Promise(function (r) { setTimeout(r, 2500); })]).then(allerPap, allerPap); }
+      else allerPap();
+      break;
+    }
     case "go-cpt": ui.space = "cpt"; ui.tab = "situation"; renderAll(); break;
     case "go-jour": ui.space = "jour"; renderAll(); break;
     case "go-home": ui.space = "portal"; ui.searchQ = ""; renderAll(); break;
@@ -6452,6 +6482,15 @@ window.addEventListener("online", function () { if (session) pullCloud(); });
   } catch (e) {}
 })();
 
+/* Liens depuis Ma Paperasse : ./#mavie (ancien espace Ma Vie), ./#reglages (clé IA, synchro) */
+(function () {
+  var h = location.hash;
+  if (h === "#mavie") { ui.space = "perso"; ui.tab = "tableau"; }
+  else if (h === "#reglages") { ui.space = "pro"; ui.tab = "reglages"; }
+  else return;
+  try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+})();
+
 (function () {
   var avant = (DB.corbeille || []).length;
   purgerCorbeille();
@@ -6475,6 +6514,15 @@ if (sbConfigured()) initSync(); else setCloud("off");
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(function () {});
 }
+/* Rappel de Ma Paperasse touché pendant que l'agenda est ouvert : on n'interrompt jamais un travail en cours */
+if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", function (e) {
+  if (!e.data || e.data.type !== "mp-open") return;
+  var occupe = ui.qDraft || ui.facDraft || ui.docDraft || ui.depDraft || ui.venDraft || ui.showDevis || ui.showManuel || ui.showFacManuel || ui.qBusy || ui.busy || ui.facBusy || ui.docBusy || ui.depBusy || ui.chatBusy;
+  if (ui.space === "portal" && !occupe) { try { sessionStorage.setItem("mp.from", "agenda"); } catch (er) {} location.href = "paperasse.html"; }
+  else toast("ok", ["📄 Rappel Ma Paperasse : ouvre MA PAPERASSE depuis l’accueil quand tu as fini."]);
+});
+/* retour depuis Ma Paperasse (cache de navigation) : la carte d'accueil se met à jour */
+window.addEventListener("pageshow", function (e) { if (e.persisted && ui.space === "portal") renderAll(); });
 </script>
 <script src="finance.js?v=20260926"></script>
 <script src="business.js?v=20260926b"></script>

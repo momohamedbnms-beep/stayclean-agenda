@@ -1,4 +1,4 @@
-var V = "stayclean-agenda-cache-v35";
+var V = "stayclean-agenda-cache-v36";
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 self.addEventListener("install", function (e) {
   self.skipWaiting();
@@ -43,4 +43,35 @@ self.addEventListener("fetch", function (e) {
       });
     })
   );
+});
+
+/* v36 (13/10/2026) — Ma Paperasse : rappels sur le téléphone, même appli fermée.
+   La fonction Supabase « mp-push » envoie au plus un rappel par jour, à l'heure choisie.
+   Texte discret par défaut (« 2 choses à faire »), sans montant ni nom. */
+self.addEventListener("push", function (e) {
+  var d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (er) { d = { body: e.data ? e.data.text() : "" }; }
+  e.waitUntil(self.registration.showNotification(d.title || "Ma Paperasse", {
+    body: d.body || "Ouvre Ma Paperasse pour voir quoi faire.",
+    icon: "icon-192.png",
+    tag: d.tag || "ma-paperasse",
+    data: { url: d.url || "paperasse.html" }
+  }));
+});
+self.addEventListener("notificationclick", function (e) {
+  e.notification.close();
+  var url = new URL((e.notification.data && e.notification.data.url) || "paperasse.html", self.registration.scope).href;
+  /* Ma Paperasse déjà ouverte : on la montre. L'agenda ouvert : on le montre et c'est lui qui décide
+     (il n'ouvre Ma Paperasse que si rien n'est en cours, pour ne jamais perdre un devis). */
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (list) {
+    var mine = list.filter(function (c) { return c.url.indexOf(self.registration.scope) === 0; });
+    var pap = mine.filter(function (c) { return c.url.indexOf("paperasse.html") !== -1; })[0];
+    if (pap && "focus" in pap) return pap.focus();
+    var other = mine[0];
+    if (other && "focus" in other) {
+      return other.focus().then(function (w) { (w || other).postMessage({ type: "mp-open" }); })
+        .catch(function () { other.postMessage({ type: "mp-open" }); });
+    }
+    return self.clients.openWindow(url);
+  }));
 });
