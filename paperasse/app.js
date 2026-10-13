@@ -274,21 +274,25 @@ const KB = {
 for (const [id, f] of Object.entries(KB)) { f.id = id; f.verified = KB_VERIFIED; }
 
 /* ===== Catégories (icône + libellé) ===== */
+/* Catégories : chacune a sa couleur (classes .cat--<clé> dans app.css) et son dossier dans l'onglet Dossiers.
+   « folder » = nom du dossier ; l'ordre ci-dessous est l'ordre d'affichage à urgence égale. */
 const SECTEURS = {
-  telecom: { label: 'Téléphone et internet', icon: 'smartphone' },
-  energie: { label: 'Énergie', icon: 'bolt' },
-  eau: { label: 'Eau', icon: 'drop' },
-  assurance: { label: 'Assurance', icon: 'shield' },
-  vehicule: { label: 'Véhicule', icon: 'car' },
-  amende: { label: 'Amende', icon: 'ticket' },
-  impot: { label: 'Impôts et taxes', icon: 'landmark' },
-  logement: { label: 'Logement', icon: 'home' },
-  sante: { label: 'Santé', icon: 'file' },
-  banque: { label: 'Banque et crédit', icon: 'card' },
-  commerce: { label: 'Achat ou service', icon: 'receipt' },
-  administration: { label: 'Administration', icon: 'landmark' },
-  autre: { label: 'Autre', icon: 'file' },
+  telecom: { label: 'Téléphone et internet', folder: 'Téléphone et internet', icon: 'smartphone' },
+  energie: { label: 'Énergie', folder: 'Énergie', icon: 'bolt' },
+  eau: { label: 'Eau', folder: 'Eau', icon: 'drop' },
+  vehicule: { label: 'Véhicule', folder: 'Voiture', icon: 'car' },
+  assurance: { label: 'Assurance', folder: 'Assurances', icon: 'shield' },
+  amende: { label: 'Amende', folder: 'Amendes', icon: 'ticket' },
+  impot: { label: 'Impôts et taxes', folder: 'Impôts et taxes', icon: 'landmark' },
+  logement: { label: 'Logement', folder: 'Logement', icon: 'home' },
+  banque: { label: 'Banque et crédit', folder: 'Banque et crédit', icon: 'card' },
+  sante: { label: 'Santé', folder: 'Santé', icon: 'heart' },
+  commerce: { label: 'Achat ou service', folder: 'Achats et services', icon: 'receipt' },
+  administration: { label: 'Administration', folder: 'Administration', icon: 'stamp' },
+  autre: { label: 'Autre', folder: 'Autres papiers', icon: 'file' },
 };
+const sectKey = (d) => (d && SECTEURS[d.secteur] ? d.secteur : 'autre');
+const catCls = (key) => `cat cat--${SECTEURS[key] ? key : 'autre'}`;
 const ETAPES = {
   facture: { label: 'Facture', rank: 1 },
   abonnement: { label: 'Abonnement', rank: 1 },
@@ -1762,7 +1766,7 @@ function searchDossiers(q, list) {
       if (amounts.some((a) => amts.some((x) => Math.abs(x - a) <= Math.max(1, a * 0.01)))) s += 5; else neg = true;
     }
     if (tokens.length) {
-      const hay = norm([d.titre, d.via, d.sujet, d.etapeLabel, (SECTEURS[d.secteur] || {}).label, d.resume, ...(d.references || []).map((r) => r.valeur), d.vehicule && d.vehicule.plaque].filter(Boolean).join(' '));
+      const hay = norm([d.titre, d.via, d.sujet, d.etapeLabel, (SECTEURS[d.secteur] || {}).label, (SECTEURS[d.secteur] || {}).folder, d.resume, ...(d.references || []).map((r) => r.valeur), d.vehicule && d.vehicule.plaque].filter(Boolean).join(' '));
       const hits = tokens.filter((tk) => hay.includes(tk)).length;
       if (hits) s += hits * 2; else if (!hints.length && !amounts.length && !paidWanted && !lateWanted) neg = true;
     }
@@ -2303,7 +2307,7 @@ function scheduleRender() {
 function typingIn(el) { const a = document.activeElement; return !!(a && el && el.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== 'file'); }
 
 function chipHTML(c) { return `<span class="chip chip--${c.cls}">${icon(c.icon)}${esc(c.label)}</span>`; }
-function tileHTML(d, lg) { const s = SECTEURS[d.secteur] || SECTEURS.autre; return `<span class="tile${lg ? ' tile--lg' : ''}" aria-hidden="true">${icon(s.icon)}</span>`; }
+function tileHTML(d, lg) { const k = sectKey(d); return `<span class="tile ${catCls(k)}${lg ? ' tile--lg' : ''}" aria-hidden="true">${icon(SECTEURS[k].icon)}</span>`; }
 function amountHTML(d) { return d.montant && isNum(d.montant.total) ? money(d.montant.total) : ''; }
 function dueLine(v) {
   if (v.rdv && v.rdv >= todayISO() && (!v.due || v.rdv < v.due)) return `Rendez-vous le ${dMed(v.rdv)}`;
@@ -2618,15 +2622,18 @@ function renderTodo() {
       <button type="button" class="see-all" data-act="open-page" data-page="deadlines">Tout voir${icon('chev-r', 'sm')}</button></div>
       <div class="list">${rest.slice(0, 3).map((v) => rowHTML(v)).join('')}</div></section>`;
   }
-  const verifyRows = [];
-  for (const v of checks.filter((x) => x !== top)) verifyRows.push(`<button type="button" class="row" data-act="do-action" data-id="${esc(v.id)}"><span class="verify__icon">${icon('help')}</span><span class="row__main"><span class="row__title">${esc(v.d.titre)}${amountHTML(v.d) ? ' · ' + amountHTML(v.d) : ''}</span><span class="row__sub">${esc(v.blockingFlag.message)}</span></span>${icon('chev-r')}</button>`);
-  for (const doc of pend) verifyRows.push(pendingRowHTML(doc));
-  if (verifyRows.length) {
+  /* À vérifier : une seule ligne si un seul point, sinon un résumé qui ouvre la liste (moins de choses à la fois) */
+  const verifyItems = [...checks.filter((x) => x !== top).map((v) => ({ v })), ...pend.map((doc) => ({ doc }))];
+  if (verifyItems.length === 1) {
+    const it = verifyItems[0];
     html += `<section class="section" aria-labelledby="h-check"><div class="section-head"><h2 id="h-check">À vérifier</h2></div>
-      <div class="verify">${verifyRows.slice(0, 4).join('')}</div>
-      ${verifyRows.length > 4 ? `<button type="button" class="link-btn" data-act="open-filter" data-filter="check">Voir les ${verifyRows.length} infos à vérifier</button>` : ''}</section>`;
+      <div class="list">${it.v ? verifyRowHTML(it.v) : pendingRowHTML(it.doc)}</div></section>`;
+  } else if (verifyItems.length > 1) {
+    const names = uniq(verifyItems.map((it) => (it.v ? it.v.d.titre : 'courrier à classer')));
+    html += `<section class="section" aria-label="À vérifier"><button type="button" class="vcard" data-act="open-page" data-page="verify">
+      <span class="verify__icon">${icon('help')}</span><span class="row__main"><span class="row__title">${verifyItems.length} infos à vérifier</span><span class="row__sub">${esc(truncate(names.join(', '), 90))}</span></span>${icon('chev-r')}</button></section>`;
   }
-  if (!top && !rest.length && !verifyRows.length) {
+  if (!top && !rest.length && !verifyItems.length) {
     html += `<section class="card empty"><svg class="art" viewBox="0 0 140 120" aria-hidden="true"><use href="#art-empty"/></svg><p>L’appli ne connaît que les courriers que tu ajoutes. Un nouveau papier ? Scanne-le.</p>
       <button type="button" class="btn btn--soft btn--block" data-act="scan">${icon('camera')}Scanner un courrier</button></section>`;
   }
@@ -2646,59 +2653,90 @@ function pendingRowHTML(doc) {
   return `<button type="button" class="row" data-act="resume-doc" data-id="${esc(doc.id)}">${thumb}<span class="row__main"><span class="row__title">Document du ${esc(dShort(stampToISO(doc.createdAt)))}</span><span class="row__sub">${esc(sub)}</span></span>${icon('chev-r')}</button>`;
 }
 
+function verifyRowHTML(v) {
+  return `<button type="button" class="row" data-act="do-action" data-id="${esc(v.id)}">${tileHTML(v.d)}<span class="row__main"><span class="row__title">${esc(v.d.titre)}${amountHTML(v.d) ? ' · ' + amountHTML(v.d) : ''}</span><span class="row__sub">${esc(v.blockingFlag.message)}</span></span>${icon('chev-r')}</button>`;
+}
 /* ---------- Dossiers ---------- */
 function renderDossiers() {
   const el = $('#tab-dossiers');
   const mode = isDemo() ? 'demo' : 'real';
   if (el.dataset.mode !== mode) {
     el.dataset.mode = mode;
-    el.innerHTML = `<header class="hero hero--plain"><div class="topbar"><div class="topbar__who"><h1 class="page-title">Dossiers</h1></div>
+    el.innerHTML = `<header class="hero hero--plain"><div class="topbar"><div class="topbar__who"><div><h1 class="page-title">Dossiers</h1><p class="page-sub" id="dosSub"></p></div></div>
         <button type="button" class="icon-btn icon-btn--solid" data-act="open-page" data-page="settings" aria-label="Réglages">${icon('settings')}</button></div></header>
-      <div class="search">${icon('search')}<input id="q" class="input" type="search" enterkeyhint="search" autocomplete="off" placeholder="Cherche « mon assurance »…" aria-label="Rechercher un dossier"><button type="button" class="search__clear" data-act="search-clear" aria-label="Effacer la recherche" hidden>${icon('x')}</button></div>
-      <div class="filters" id="filters" role="group" aria-label="Filtrer les dossiers"></div>
+      <div class="search">${icon('search')}<input id="q" class="input" type="search" enterkeyhint="search" autocomplete="off" placeholder="Cherche « mon assurance »…" aria-label="Rechercher un papier"><button type="button" class="search__clear" data-act="search-clear" aria-label="Effacer la recherche" hidden>${icon('x')}</button></div>
       <div id="dossierResults" class="stack"></div>`;
     $('#q').value = UI.search;
   }
   renderDossierResults();
 }
-function filterCounts(V, pend) {
-  return { all: V.length, todo: V.filter((v) => v.bucket === 'action').length, check: V.filter((v) => v.bucket === 'check').length + pend.length, done: V.filter((v) => v.done || v.bucket === 'none').length };
+/* Un dossier par catégorie : nombre de papiers, le plus urgent, ce qu'il reste à payer */
+function folderStats(V) {
+  const by = new Map();
+  for (const v of V) {
+    const k = sectKey(v.d);
+    if (!by.has(k)) by.set(k, { key: k, items: [], late: 0, soon: 0, check: 0, todo: 0, wait: 0, keep: 0, done: 0, due: 0, score: -1 });
+    const f = by.get(k); f.items.push(v);
+    if (v.done) f.done++;
+    else if (v.status === 'check') f.check++;
+    else if (v.bucket === 'none') f.keep++;
+    else if (v.status === 'late') f.late++;
+    else if (v.status === 'soon') f.soon++;
+    else if (v.status === 'wait') f.wait++;
+    else f.todo++;
+    if (!v.done && !v.waiting && v.d.montant && isNum(v.d.montant.total)) f.due = round2(f.due + v.d.montant.total);
+    if (!v.done) f.score = Math.max(f.score, v.score);
+  }
+  const order = Object.keys(SECTEURS);
+  return Array.from(by.values()).sort((a, b) => (b.score >= 0) - (a.score >= 0) || b.score - a.score || order.indexOf(a.key) - order.indexOf(b.key));
+}
+function folderChip(f) {
+  if (f.late) return `<span class="chip chip--late folder__chip">${icon('alert')}${f.late} en retard</span>`;
+  if (f.soon) return `<span class="chip chip--soon folder__chip">${icon('clock')}${f.soon} cette semaine</span>`;
+  if (f.check) return `<span class="chip chip--check folder__chip">${icon('help')}${f.check} à vérifier</span>`;
+  if (f.todo) return `<span class="chip chip--on-hero folder__chip">${icon('todo')}${f.todo} à régler</span>`;
+  if (f.wait) return `<span class="chip chip--wait folder__chip">${icon('hourglass')}${f.wait} en attente</span>`;
+  return `<span class="chip chip--done folder__chip">${icon('check')}À jour</span>`;
+}
+function folderHTML(f) {
+  const S = SECTEURS[f.key]; const n = f.items.length;
+  const urgent = f.late ? `, ${f.late} en retard` : f.soon ? `, ${f.soon} cette semaine` : '';
+  return `<button type="button" class="folder ${catCls(f.key)}" data-act="open-folder" data-sect="${f.key}" aria-label="${esc(S.folder)} : ${n} ${plural(n, 'papier', 'papiers')}${esc(urgent)}">
+    <span class="folder__tab" aria-hidden="true"></span><span class="folder__paper" aria-hidden="true"></span>
+    <span class="folder__front">
+      <span class="folder__top"><span class="folder__disc" aria-hidden="true">${icon(S.icon)}</span>${f.due ? `<span class="folder__amount">${money(f.due)}</span>` : ''}</span>
+      <span class="folder__name">${esc(S.folder)}</span>
+      <span class="folder__count">${n} ${plural(n, 'papier', 'papiers')}</span>
+      ${folderChip(f)}
+    </span></button>`;
 }
 function renderDossierResults() {
   const box = $('#dossierResults'); if (!box) return;
-  if (!store.loaded) { box.innerHTML = `<div class="skel" style="height:120px;border-radius:28px"></div><div class="skel" style="height:120px;border-radius:28px"></div>`; return; }
+  if (!store.loaded) { box.innerHTML = `<div class="folders">${'<div class="skel" style="height:170px;border-radius:20px"></div>'.repeat(4)}</div>`; return; }
   const V = views(); const pend = pendingDocs();
-  const c = filterCounts(V, pend);
-  const F = [['todo', 'À faire'], ['check', 'À vérifier'], ['done', 'Réglés']];
-  $('#filters').innerHTML = F.map(([k, l]) => `<button type="button" class="fpill${UI.filter === k ? ' is-on' : ''}" data-act="filter" data-filter="${k}" aria-pressed="${UI.filter === k}">${l}<span class="count">${c[k]}</span></button>`).join('');
   const clear = $('.search__clear'); if (clear) clear.hidden = !UI.search;
-  let list = V.filter((v) => UI.filter === 'all' || (UI.filter === 'todo' && v.bucket === 'action') || (UI.filter === 'check' && v.bucket === 'check') || (UI.filter === 'done' && (v.done || v.bucket === 'none')));
+  const sub = $('#dosSub'); if (sub) sub.textContent = V.length ? `${V.length} ${plural(V.length, 'papier rangé', 'papiers rangés')} par catégorie` : 'Tes papiers, rangés par catégorie';
   if (!V.length && !pend.length) {
-    box.innerHTML = `<section class="card empty"><svg class="art" viewBox="0 0 140 120" aria-hidden="true"><use href="#art-empty"/></svg><h3>Pas encore de dossier</h3><p>Chaque courrier scanné est rangé dans le bon dossier, avec ses rappels et ses preuves.</p><button type="button" class="btn btn--primary btn--block" data-act="scan">${icon('camera')}Scanner un courrier</button></section>`;
+    box.innerHTML = `<section class="card empty"><svg class="art" viewBox="0 0 140 120" aria-hidden="true"><use href="#art-empty"/></svg><h3>Pas encore de papier</h3><p>Chaque courrier scanné est rangé tout seul dans le bon dossier : téléphone, énergie, voiture, amendes…</p><button type="button" class="btn btn--primary btn--block" data-act="scan">${icon('camera')}Scanner un courrier</button></section>`;
     return;
   }
   let html = '';
   const q = UI.search.trim();
   if (q) {
     let res;
-    if (UI.aiSearch && UI.aiSearch.q === q && UI.aiSearch.ids) res = UI.aiSearch.ids.map((id) => list.find((v) => v.id === id)).filter(Boolean);
-    else res = searchDossiers(q, list);
+    if (UI.aiSearch && UI.aiSearch.q === q && UI.aiSearch.ids) res = UI.aiSearch.ids.map((id) => V.find((v) => v.id === id)).filter(Boolean);
+    else res = searchDossiers(q, V);
     if (!res.length) {
       const busy = UI.aiSearch && UI.aiSearch.q === q && UI.aiSearch.busy;
-      html += `<div class="card stack center"><p>Aucun dossier trouvé pour « ${esc(q)} ».</p>
+      html += `<div class="card stack center"><p>Aucun papier trouvé pour « ${esc(q)} ».</p>
         ${aiReady() && !isDemo() ? `<button type="button" class="btn btn--soft btn--block" data-act="ai-search" ${busy ? 'disabled' : ''}>${busy ? '<span class="spin"></span>Recherche…' : icon('sparkle') + 'Demander à Claude de chercher'}</button>` : ''}</div>`;
     } else {
       if (UI.aiSearch && UI.aiSearch.q === q && UI.aiSearch.ids) html += `<p class="tiny muted" style="padding-inline:4px">${icon('sparkle', 'sm')} Résultats trouvés par Claude</p>`;
       html += `<div class="dcards">${res.map(dcardHTML).join('')}</div>`;
     }
   } else {
-    if (UI.filter === 'check' && pend.length) html += `<div class="verify">${pend.map(pendingRowHTML).join('')}</div>`;
-    if (!list.length && !(UI.filter === 'check' && pend.length)) html += `<p class="center muted" style="padding:20px">Rien ici pour le moment.</p>`;
-    const open = list.filter((v) => !v.done && v.bucket !== 'none');
-    const closed = list.filter((v) => v.done || v.bucket === 'none').sort((a, b) => String(b.d.updatedAt || '').localeCompare(String(a.d.updatedAt || '')));
-    if (open.length) html += `<div class="dcards">${open.map(dcardHTML).join('')}</div>`;
-    if (closed.length) html += `${open.length ? '<h2 class="month" style="margin-top:8px">Réglés et classés</h2>' : ''}<div class="dcards">${closed.map(dcardHTML).join('')}</div>`;
-    if (UI.filter === 'all' && V.length >= 2) html = `<div class="filters" aria-label="Exemples de recherche">${['Mon assurance', 'L’amende de 180 euros', 'La facture déjà payée'].map((s) => `<button type="button" class="pill-btn hint" data-act="search-suggest" data-q="${esc(s)}">${icon('search', 'sm')}${esc(s)}</button>`).join('')}</div>` + html;
+    if (pend.length) html += `<button type="button" class="vcard" data-act="open-page" data-page="verify"><span class="verify__icon">${icon('file')}</span><span class="row__main"><span class="row__title">${pend.length} ${plural(pend.length, 'courrier à classer', 'courriers à classer')}</span><span class="row__sub">Scannés, pas encore rangés dans un dossier</span></span>${icon('chev-r')}</button>`;
+    html += `<div class="folders">${folderStats(V).map(folderHTML).join('')}</div>`;
   }
   box.innerHTML = html;
 }
@@ -2710,6 +2748,41 @@ function dcardHTML(v) {
   </button>`;
 }
 
+/* ---------- Page d'un dossier (une catégorie) ---------- */
+PAGES.folder = (props) => {
+  const k = SECTEURS[props.sect] ? props.sect : 'autre';
+  const S = SECTEURS[k];
+  const V = views().filter((v) => sectKey(v.d) === k);
+  if (!V.length) return null;
+  const f = folderStats(V)[0];
+  const act = V.filter((v) => !v.done && v.bucket === 'action');
+  const chk = V.filter((v) => !v.done && v.bucket === 'check');
+  const keep = V.filter((v) => !v.done && v.bucket === 'none');
+  const done = V.filter((v) => v.done).sort((a, b) => String(b.d.updatedAt || '').localeCompare(String(a.d.updatedAt || '')));
+  const sec = (title, arr, rowFn) => arr.length ? `<section class="section"><div class="section-head"><h2>${title}</h2><span class="tiny muted">${arr.length}</span></div><div class="list">${arr.map(rowFn).join('')}</div></section>` : '';
+  return `<header class="hero hero--cat ${catCls(k)}">
+      <div class="topbar"><button type="button" class="icon-btn icon-btn--solid" data-act="back" aria-label="Retour aux dossiers">${icon('chev-l')}</button></div>
+      <div class="fhead"><span class="folder__disc folder__disc--lg" aria-hidden="true">${icon(S.icon)}</span>
+        <h1 class="fhead__t">${esc(S.folder)}</h1>
+        <div class="hero__chips"><span class="chip chip--on-hero">${V.length} ${plural(V.length, 'papier', 'papiers')}</span>${f.due ? `<span class="chip chip--on-hero">${icon('euro')}${money(f.due)} à payer</span>` : ''}${act.length || chk.length ? '' : `<span class="chip chip--on-hero">${icon('check')}Rien à faire</span>`}</div></div>
+    </header>
+    ${sec('À régler', act, (v) => rowHTML(v))}
+    ${sec('À vérifier', chk, verifyRowHTML)}
+    ${sec('À garder', keep, (v) => rowHTML(v, { noChip: true, sub: v.d.sujet || v.d.etapeLabel || 'Pour information' }))}
+    ${done.length ? `<details class="fold"${act.length || chk.length || keep.length ? '' : ' open'}><summary>${icon('check-circle', 'sm')}Réglés et classés<span class="tiny muted">${done.length}</span>${icon('chev-d', 'sm')}</summary><div class="list">${done.map((v) => rowHTML(v)).join('')}</div></details>` : ''}
+    <button type="button" class="btn btn--ghost btn--block" data-act="scan">${icon('camera')}Scanner un courrier</button>`;
+};
+/* ---------- Page « À vérifier » ---------- */
+PAGES.verify = () => {
+  const checks = views().filter((v) => v.bucket === 'check');
+  const pend = pendingDocs();
+  if (!checks.length && !pend.length) return null;
+  return `${'<div class="topbar" style="margin-top:8px">'}<button type="button" class="icon-btn icon-btn--solid" data-act="back" aria-label="Retour">${icon('chev-l')}</button><h1 class="page-title" style="font-size:26px">À vérifier</h1></div>
+    <p class="ink2" style="padding-inline:4px">Une info manque ou se lit mal. Touche une ligne : une seule question à la fois.</p>
+    ${checks.length ? `<div class="list">${checks.map(verifyRowHTML).join('')}</div>` : ''}
+    ${pend.length ? `<section class="section"><div class="section-head"><h2>Courriers à classer</h2></div><div class="list">${pend.map(pendingRowHTML).join('')}</div></section>` : ''}`;
+};
+
 /* ---------- Preuves ---------- */
 function proofDate(p) { return p.date || stampToISO(p.createdAt); }
 function proofCardHTML(p) {
@@ -2718,7 +2791,7 @@ function proofCardHTML(p) {
   const f = (p.files || [])[0];
   const thumb = f ? `<img src="${esc(assetUrl(f.thumb || f.ref))}" alt="" loading="lazy">` : `<span class="thumb__ph">${icon(T.icon, 'lg')}<span>${esc(T.label)}</span></span>`;
   return `<button type="button" class="pcard" data-act="open-proof" data-id="${esc(p.id)}" aria-label="${esc(T.label)}, ${esc(p.beneficiaire || (d && d.titre) || '')}, ${isNum(p.montant) ? esc(money(p.montant)) : ''}">
-    <span class="thumb">${thumb}</span>
+    <span class="thumb${d ? ' ' + catCls(sectKey(d)) : ''}">${thumb}</span>
     <span class="pcard__body"><span class="chip chip--${T.chip} pcard__chip">${icon(T.icon)}${esc(T.label)}</span><span class="pcard__who">${esc(p.beneficiaire || (d && d.titre) || 'Sans dossier')}</span>
       ${isNum(p.montant) ? `<span class="pcard__amount">${money(p.montant)}</span>` : ''}
       <span class="pcard__meta">${esc(p.type === 'virement_programme' ? 'Prévu le ' + dShort(proofDate(p)) : 'Le ' + dShort(proofDate(p)))}${d && norm(d.titre) !== norm(p.beneficiaire) && !norm(p.beneficiaire).includes(norm(d.titre)) ? ' · ' + esc(d.titre) : ''}</span></span>
@@ -2773,7 +2846,7 @@ PAGES.dossier = (props) => {
   const d = getD(props.id);
   if (!d) return null;
   const v = view(d);
-  const S = SECTEURS[d.secteur] || SECTEURS.autre;
+  const sk = sectKey(d); const S = SECTEURS[sk];
   const hasPay = !!(d.paiement && (d.paiement.iban || d.paiement.communication));
   const due = v.due;
   const dueHTML = due
@@ -2783,11 +2856,19 @@ PAGES.dossier = (props) => {
   const rdvHTML = v.rdv ? `<span class="brief__k">Rendez-vous</span><span class="brief__v"><strong>${esc(cap(dLong(v.rdv)))}</strong>${d.vehicule.heure ? ' à ' + esc(timeFr(d.vehicule.heure)) : ''}</span>` : '';
   const amountRow = d.montant && isNum(d.montant.total)
     ? `<span class="brief__k">Montant</span><span class="brief__v"><span class="brief__amount">${money(d.montant.total)}</span>${(d.historiqueMontants || []).length > 1 ? `<br><span class="muted small">Avant : ${esc(money(d.historiqueMontants[d.historiqueMontants.length - 2].total))}</span>` : ''}${v.amountNote ? `<div class="brief__note${v.amountNote.late ? ' is-late' : ''}">${icon('alert')}<span>${esc(v.amountNote.text)}</span></div>` : ''}</span>` : '';
-  const pills = [`<button type="button" class="pill-btn" data-act="sheet-understand" data-id="${esc(d.id)}">${icon('sparkle', 'sm')}Comprendre</button>`, `<button type="button" class="pill-btn" data-act="sheet-details" data-id="${esc(d.id)}">${icon('info', 'sm')}Voir les détails</button>`, `<button type="button" class="pill-btn" data-act="view-doc" data-id="${esc(d.id)}">${icon('file', 'sm')}Voir le document</button>`];
-  if (hasPay && v.action.act !== 'sheet-pay') pills.push(`<button type="button" class="pill-btn" data-act="sheet-pay" data-id="${esc(d.id)}">${icon('euro', 'sm')}Comment payer</button>`);
+  /* Une action principale, 3 raccourcis, le reste replié dans « Plus d'options » (moins de choix à la fois) */
+  const id = esc(d.id); const main = v.done ? null : v.action.act;
+  const quick = (v.done
+    ? [['view-doc', 'file', 'Le document'], ['sheet-details', 'info', 'Les détails'], ['sheet-understand', 'sparkle', 'Comprendre']]
+    : [['view-doc', 'file', 'Le document'], ['sheet-proof-add', 'receipt', 'Ajouter la preuve'], ['sheet-snooze', 'snooze', 'Plus tard']]).filter((q) => q[0] !== main);
+  const more = [];
+  if (hasPay && main !== 'sheet-pay') more.push(['sheet-pay', 'euro', 'Comment payer']);
+  if (!v.done) more.push(['sheet-understand', 'sparkle', 'Comprendre'], ['sheet-details', 'info', 'Les détails'], ['sheet-contact', 'phone', 'Appeler le service']);
+  const moreBtns = more.filter((q) => q[0] !== main).map(([a, ic, l]) => `<button type="button" class="pill-btn" data-act="${a}" data-id="${id}">${icon(ic, 'sm')}${l}</button>`);
+  const tab = props.tab === 'suivi' ? 'suivi' : 'qa';
   const answers = (UI.qa[d.id] || []).map((x) => answerHTML(d, x)).join('');
   const tl = journalItems(d);
-  return `<header class="hero hero--doc">
+  return `<header class="hero hero--cat ${catCls(sk)}">
       <div class="topbar"><button type="button" class="icon-btn icon-btn--solid" data-act="back" aria-label="Retour">${icon('chev-l')}</button><div style="flex:1"></div>
         <button type="button" class="icon-btn icon-btn--solid" data-act="sheet-menu" data-id="${esc(d.id)}" aria-label="Plus d’options pour ce dossier">${icon('more')}</button></div>
       <div class="dhead__cat"><span class="chip chip--on-hero">${icon(S.icon)}${esc(S.label)}</span><span class="chip chip--on-hero">${esc(d.etapeLabel || 'Document')}</span>${d.scope === 'pro' ? `<span class="chip chip--on-hero">${icon('briefcase')}Pro</span>` : ''}</div>
@@ -2796,29 +2877,28 @@ PAGES.dossier = (props) => {
       ${d.via ? `<p class="dhead__via">Courrier de ${esc(d.via)}</p>` : ''}
     </header>
     <section class="card brief" aria-label="Ce qu’il faut faire">
-      <div class="stack-s"><div class="eyebrow">${chipHTML(v.chip)}<span>À faire</span></div><p class="brief__do">${esc(v.action.consigne)}</p></div>
+      <div class="stack-s"><div class="eyebrow">${chipHTML(v.chip)}</div><p class="brief__do">${esc(v.action.consigne)}</p></div>
       <div class="brief__grid">
         <span class="brief__k">Avant le</span><span class="brief__v">${dueHTML}${pr ? `<br><span class="muted small">${icon('bell', 'sm')} ${esc(pr)}</span>` : ''}</span>
         ${rdvHTML}${amountRow}
       </div>
       ${v.done ? '' : actionButton(v, 'btn--block')}
-      <div class="pills">${pills.join('')}</div>
     </section>
-    ${v.done ? '' : `<div class="quick">
-      <button type="button" class="quick__btn" data-act="sheet-proof-add" data-id="${esc(d.id)}"><span class="disc">${icon('receipt')}</span>Ajouter la preuve</button>
-      <button type="button" class="quick__btn" data-act="sheet-contact" data-id="${esc(d.id)}"><span class="disc">${icon('phone')}</span>Appeler le service</button>
-      <button type="button" class="quick__btn" data-act="sheet-snooze" data-id="${esc(d.id)}"><span class="disc">${icon('snooze')}</span>Me le rappeler plus tard</button>
-    </div>`}
-    <section class="card qa" aria-labelledby="qa-${esc(d.id)}">
-      <h2 id="qa-${esc(d.id)}" style="font-size:20px">Une question ?</h2>
+    <div class="quick quick--${quick.length} ${catCls(sk)}">${quick.map(([a, ic, l]) => `<button type="button" class="quick__btn" data-act="${a}" data-id="${id}"><span class="disc">${icon(ic)}</span>${l}</button>`).join('')}</div>
+    ${moreBtns.length ? `<details class="fold fold--more"><summary>${icon('more', 'sm')}Plus d’options${icon('chev-d', 'sm')}</summary><div class="pills2${moreBtns.length % 2 ? ' is-odd' : ''}">${moreBtns.join('')}</div></details>` : ''}
+    <div class="seg" role="tablist" aria-label="Questions ou suivi du dossier">
+      <button type="button" class="seg__b${tab === 'qa' ? ' is-on' : ''}" role="tab" aria-selected="${tab === 'qa'}" data-act="dtab" data-tab="qa">${icon('message', 'sm')}Une question ?</button>
+      <button type="button" class="seg__b${tab === 'suivi' ? ' is-on' : ''}" role="tab" aria-selected="${tab === 'suivi'}" data-act="dtab" data-tab="suivi">${icon('clock', 'sm')}Suivi${tl.length ? ` <span class="seg__n">${tl.length}</span>` : ''}</button>
+    </div>
+    ${tab === 'qa' ? `<section class="card qa" aria-labelledby="qa-${esc(d.id)}">
+      <h2 id="qa-${esc(d.id)}" class="sr">Une question ?</h2>
       <div class="qa__chips">${STD_QUESTIONS.map((q, i) => `<button type="button" class="qa-chip" data-act="ask" data-id="${esc(d.id)}" data-qi="${i}">${esc(q)}</button>`).join('')}</div>
       <div id="answers-${esc(d.id)}" class="stack" aria-live="polite">${answers}</div>
       ${aiReady() ? `<form class="qa__form" data-form="ask" data-id="${esc(d.id)}"><input class="input" id="askInput-${esc(d.id)}" name="q" placeholder="Pose ta question…" autocomplete="off" aria-label="Pose ta question sur ce dossier"><button type="submit" class="btn btn--primary btn--sm" aria-label="Envoyer la question">${icon('send', 'sm')}</button></form>` : `<p class="tiny muted">Réponses construites à partir du dossier et des règles vérifiées.</p>`}
-    </section>
-    <section class="card" aria-labelledby="tl-${esc(d.id)}"><h2 id="tl-${esc(d.id)}" style="font-size:20px;margin-bottom:6px">Suivi</h2>
+    </section>` : `<section class="card" aria-labelledby="tl-${esc(d.id)}"><h2 id="tl-${esc(d.id)}" class="sr">Suivi</h2>
       <div class="tl">${tl.join('') || '<p class="muted">Rien pour le moment.</p>'}</div>
       <button type="button" class="link-btn" data-act="scan-into" data-id="${esc(d.id)}">${icon('plus', 'sm')}Ajouter un courrier à ce dossier</button>
-    </section>`;
+    </section>`}`;
 };
 function answerHTML(d, x) {
   if (x.busy) return `<div class="answer"><span class="answer__q">${esc(x.q)}</span><span class="wrap"><span class="spin" style="color:var(--violet)"></span><span class="muted">Claude lit ton dossier…</span></span><button type="button" class="link-btn" data-act="ask-stop" data-id="${esc(d.id)}">Arrêter</button></div>`;
@@ -4083,7 +4163,9 @@ const ACT = {
   'scan-into': (el) => { closeAllSheets(); newScan(el.dataset.id); openPage('scan'); },
   'go-search': () => { switchTab('dossiers'); setTimeout(() => { const q = $('#q'); if (q) q.focus(); }, 60); },
   'open-page': (el) => { closeAllSheets(); openPage(el.dataset.page, { noScan: false }); },
-  'open-filter': (el) => { UI.filter = el.dataset.filter; switchTab('dossiers'); },
+  'open-filter': (el) => { if (el.dataset.filter === 'check') openPage('verify'); else switchTab('dossiers'); },
+  'open-folder': (el) => openPage('folder', { sect: el.dataset.sect }),
+  dtab: (el) => { const top = UI.pages[UI.pages.length - 1]; if (!top || top.name !== 'dossier') return; top.props.tab = el.dataset.tab === 'suivi' ? 'suivi' : 'qa'; renderPage(false); },
   back: () => backPage(),
   'open-dossier': (el) => openDossier(el.dataset.id),
   'do-action': (el) => doAction(el.dataset.id),

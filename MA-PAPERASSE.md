@@ -8,6 +8,8 @@ Rien de nouveau à connecter : Ma Paperasse utilise **ton compte**, **ton serveu
 
 - Accueil : la carte violette **MA PAPERASSE** (avec son logo) remplace MA VIE. Elle affiche un résumé : « 1 en retard · 2 cette semaine ».
 - `paperasse.html` : l'espace complet (À faire · Dossiers · Scanner · Preuves). La flèche **‹** en haut à gauche revient à l'accueil.
+- **Dossiers rangés par catégorie** (v2) : une chemise colorée par catégorie (Téléphone et internet, Énergie, Eau, Voiture, Assurances, Amendes, Impôts, Logement, Banque, Santé, Achats, Administration, Autres), avec le nombre de papiers, le plus urgent et ce qu'il reste à payer. On touche une chemise → ses papiers : À régler, À vérifier, À garder, et les réglés repliés. Chaque catégorie garde sa couleur partout (lignes, en-tête de la fiche, preuves).
+- **Moins de choses à la fois** : sur « À faire », les infos à vérifier tiennent en une ligne ; sur la fiche d'un papier, une action principale, 3 raccourcis, le reste dans « Plus d'options », et « Une question ? » / « Suivi » en onglets.
 - L'ancien espace **Ma Vie** n'est pas supprimé : Ma Paperasse → Réglages → « Ouvrir l'ancien espace Ma Vie » (adresse `./#mavie`). Ses documents peuvent être **importés** dans Ma Paperasse en un geste ; rien n'est effacé dans l'agenda.
 - Rappels : une notification par jour au maximum, à l'heure choisie (9 h par défaut, heure de Bruxelles), **même appli fermée**. Texte discret par défaut : « 2 choses à faire », sans montant ni nom.
 
