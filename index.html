@@ -327,6 +327,8 @@ nav button{font-size:12px;padding:10px 2px}
 .pcard.perso{background:linear-gradient(135deg,#3B1D5E 0%,#6D28D9 70%,#A855F7 130%);color:#fff}
 /* Ma Paperasse (remplace « Ma Vie » sur l'accueil, 13/10/2026) */
 .pcard.pap{background:linear-gradient(135deg,#1E1650 0%,#4B32D1 62%,#9C8BFF 130%);color:#fff}
+.pcard.cal{background:linear-gradient(135deg,#431407 0%,#C2410C 62%,#FDBA74 130%);color:#fff}
+.pcard.cal .lg{background:#FFF1E7}
 .pcard .lg{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:14px;background:#F1EDFF;box-shadow:0 4px 12px rgba(0,0,0,.2)}
 .pcard .lg svg{width:31px;height:31px;display:block}
 .pcard .pst{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.17);font-size:12px;font-weight:700}
@@ -1958,6 +1960,22 @@ function papResume() {
     return '<span class="pst">✓ Rien d’urgent</span>';
   } catch (e) { return ""; }
 }
+/* ---- Mes Calories : repas dictés, poids et évolution (calories.html, même appli, même compte) ----
+   Le résumé de la carte est écrit par Mes Calories sur cet appareil (ct.summary.v1). */
+var CAL_LOGO = '<svg viewBox="0 0 48 48" aria-hidden="true"><g transform="translate(-3.6 -0.8) scale(1.9)"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" fill="#FFF1E7" stroke="#20212B" stroke-width="1.37" stroke-linejoin="round" stroke-linecap="round"/></g><circle cx="34" cy="35" r="9.5" fill="#C2410C"/><path d="M34 30.4v8.4M30.3 35.3l3.7 3.7 3.7-3.7" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function calResume() {
+  try {
+    var r = JSON.parse(localStorage.getItem("ct.summary.v1") || "null");
+    if (!r || !r.at) return "";
+    var u = session && session.user && session.user.id;
+    if (u && r.uid && r.uid !== u) return "";
+    var auj = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Brussels", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    var kg = typeof r.kg === "number" ? " · " + r.kg.toLocaleString("fr-BE", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " kg" : "";
+    if (r.date !== auj || !r.eaten) return '<span class="pst">Rien noté aujourd’hui' + kg + "</span>";
+    var reste = Math.round((r.target || 2000) - r.eaten);
+    return '<span class="pst">' + (reste >= 0 ? reste.toLocaleString("fr-BE") + " kcal restantes" : Math.abs(reste).toLocaleString("fr-BE") + " kcal au-dessus") + kg + "</span>";
+  } catch (e) { return ""; }
+}
 function renderPortal() {
   return '<div class="portal">' + portalResume() +
     '<p class="pt">Où veux-tu aller ?</p>' +
@@ -1975,6 +1993,11 @@ function renderPortal() {
     '<span class="lg">' + PAP_LOGO + '</span><span class="go">›</span>' +
     '<span class="tt" style="display:block">MA PAPERASSE</span>' +
     '<span class="ss" style="display:block">Factures, amendes, rappels et preuves</span>' + papResume() +
+    "</button>" +
+    '<button class="pcard cal" data-act="go-calories" aria-label="Mes Calories : repas et poids">' +
+    '<span class="lg">' + CAL_LOGO + '</span><span class="go">›</span>' +
+    '<span class="tt" style="display:block">MES CALORIES</span>' +
+    '<span class="ss" style="display:block">Repas dictés, poids et évolution</span>' + calResume() +
     "</button>" +
     '<button class="pday" data-act="go-jour">📅 Voir ma journée complète</button>' +
     "</div>";
@@ -5357,6 +5380,14 @@ document.addEventListener("click", function (e) {
       /* une modification attend d'être envoyée au cloud : on l'envoie d'abord (2,5 s max) */
       if (pushTimer && session) { clearTimeout(pushTimer); pushTimer = null; Promise.race([pushCloud(), new Promise(function (r) { setTimeout(r, 2500); })]).then(allerPap, allerPap); }
       else allerPap();
+      break;
+    }
+    case "go-calories": {
+      try { sessionStorage.setItem("ct.from", "agenda"); } catch (e) {}
+      var allerCal = function () { location.href = "calories.html"; };
+      /* une modification attend d'être envoyée au cloud : on l'envoie d'abord (2,5 s max) */
+      if (pushTimer && session) { clearTimeout(pushTimer); pushTimer = null; Promise.race([pushCloud(), new Promise(function (r) { setTimeout(r, 2500); })]).then(allerCal, allerCal); }
+      else allerCal();
       break;
     }
     case "go-cpt": ui.space = "cpt"; ui.tab = "situation"; renderAll(); break;

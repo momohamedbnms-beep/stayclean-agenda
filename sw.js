@@ -1,4 +1,4 @@
-var V = "stayclean-agenda-cache-v36";
+var V = "stayclean-agenda-cache-v37";
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 self.addEventListener("install", function (e) {
   self.skipWaiting();
@@ -45,6 +45,8 @@ self.addEventListener("fetch", function (e) {
   );
 });
 
+/* v37 (13/10/2026) — Mes Calories (calories.html) : nouvelle carte de l'accueil.
+   Rien ne change ici : la page et ses fichiers passent par la même règle « réseau d'abord ». */
 /* v36 (13/10/2026) — Ma Paperasse : rappels sur le téléphone, même appli fermée.
    La fonction Supabase « mp-push » envoie au plus un rappel par jour, à l'heure choisie.
    Texte discret par défaut (« 2 choses à faire »), sans montant ni nom. */

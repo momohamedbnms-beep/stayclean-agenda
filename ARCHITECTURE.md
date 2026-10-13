@@ -13,8 +13,10 @@ Application web installable (PWA), en JavaScript sans framework, hébergée sur 
 | `dispo.html` | Page publique des disponibilités. Elle lit `sc_dispo`, `sc_fermes` et `sc_reglages`. |
 | `reserver.html` | Redirige vers stayclean.be. L'ancienne page de réservation est retirée ; elle reste dans l'historique Git. |
 | `paperasse.html` + `paperasse/` | **Ma Paperasse** (remplace « Ma Vie » sur l'accueil) : papiers perso, rappels, preuves. Même session et même clé IA que l'agenda. Voir `MA-PAPERASSE.md`. |
-| `sw.js` | Service worker : le réseau d'abord, le cache seulement hors ligne. Reçoit aussi les notifications de Ma Paperasse (v36). |
+| `calories.html` + `calories/` | **Mes Calories** (4e carte de l'accueil) : repas dictés, calories, pesées et évolution. Même session et même clé IA que l'agenda. Voir `MES-CALORIES.md`. |
+| `sw.js` | Service worker : le réseau d'abord, le cache seulement hors ligne. Reçoit aussi les notifications de Ma Paperasse (v36 ; v37 pour Mes Calories). |
 | `supabase/ma-paperasse.sql`, `supabase/functions/mp-push/` | Côté serveur de Ma Paperasse : tables `mp_*` (RLS), bucket privé `mp-files`, tâche horaire, envoi des notifications. |
+| `supabase/mes-calories.sql` | Côté serveur de Mes Calories : table `cal_items` (RLS). |
 | `tests/` | Banc d'essai automatisé. Il utilise un faux Supabase et des données fictives, jamais la production. |
 
 `business.js` et `finance.js` sont chargés après le script principal. Ils utilisent ses fonctions globales (`DB`, `save`, `renderAll`, `esc`, `todayStr`…).
@@ -40,6 +42,13 @@ Application web installable (PWA), en JavaScript sans framework, hébergée sur 
 - Ma Paperasse lit sur l'appareil, sans les modifier : `DB.settings.sync` (serveur), `DB.settings.provider/apiKey/geminiKey` (IA), `DB.cpt.profil` (prénom) et `DB.docs` (import des anciens documents).
 - Elle écrit `mp.summary.v1` dans localStorage : le résumé affiché sur la carte de l'accueil.
 - Ses données vivent dans Supabase (`mp_items`, `mp-files`), jamais dans `agenda_state`.
+
+## Mes Calories (13/10/2026)
+
+- L'accueil affiche une 4e carte **MES CALORIES** ; le bouton ouvre `calories.html` (même appli installée, retour par l'historique).
+- Mes Calories lit sur l'appareil, sans les modifier : `DB.settings.sync` (serveur), `DB.settings.provider/apiKey/geminiKey` (IA) et `DB.cpt.profil` (prénom).
+- Elle écrit `ct.summary.v1` dans localStorage (kcal du jour, objectif, dernier poids) : le résumé de la carte de l'accueil.
+- Ses données vivent dans Supabase (`cal_items`), jamais dans `agenda_state`.
 
 ## Sources de vérité (une donnée = un endroit)
 
