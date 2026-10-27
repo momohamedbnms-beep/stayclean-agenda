@@ -2906,7 +2906,8 @@ async function connectAccount() {
   setSyncState('connecting');
   await syncNow();
   clearInterval(Sync.timer);
-  Sync.timer = setInterval(() => { if (document.visibilityState === 'visible') syncNow(); }, 60000);
+  // toutes les minutes quand l'appli est affichée ; pas de relance en boucle si la table n'est pas installée (on réessaie à la réouverture)
+  Sync.timer = setInterval(() => { if (document.visibilityState === 'visible' && Sync.state !== 'not_installed') syncNow(); }, 60000);
   const confirmed = await hostSessionUser();
   if (confirmed && confirmed.id !== user.id) location.reload(); // autre compte connecté entre-temps
 }
