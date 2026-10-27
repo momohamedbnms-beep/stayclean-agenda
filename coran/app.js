@@ -3435,6 +3435,8 @@ function initModules() {
     runSequence, stopAudio, pauseAudio, resumeAudio, wordTimings, arHTML, playerNotify,
     addKinds(list) { for (const k of list) if (!KINDS.includes(k)) { KINDS.push(k); if (!Store.mem[k]) Store.mem[k] = new Map(); } },
     registerTab(name, fn) { MODULE_TABS[name] = fn; },
+    /* réglages de l'agenda sur cet appareil (lecture seule) : clé Gemini pour la partie orale, par exemple */
+    agendaSettings() { refreshAgendaDB(); const db = readAgendaDB(); return (db && db.settings) || {}; },
   };
   for (const m of mods) { try { m(api); } catch (e) { console.error('module', e); } }
   if (!MODULE_TABS.arabe && UI.tab === 'arabe') UI.tab = 'learn';

@@ -1,4 +1,4 @@
-var V = "stayclean-agenda-cache-v40";
+var V = "stayclean-agenda-cache-v41";
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 self.addEventListener("install", function (e) {
   self.skipWaiting();
@@ -45,6 +45,8 @@ self.addEventListener("fetch", function (e) {
   );
 });
 
+/* v41 (28/10/2026) — Mon Coran : « Lire et écrire l'arabe » en 10 chapitres (Étudier, M'entraîner, Examens blancs,
+   Fiches PDF), examens notés par l'appli avec clavier arabe et partie orale. Même règle « réseau d'abord ». */
 /* v40 (27/10/2026) — Mon Coran : onglet « Lire et écrire l'arabe » (coran/arabe.js) et fiches PDF (coran/fiches/).
    Même règle « réseau d'abord » ; les fiches ne sont mises en cache qu'une fois ouvertes. */
 /* v39 (27/10/2026) — Mon Coran : voix principale Al-Luhaidan avec repères par verset (coran/data/timing/),

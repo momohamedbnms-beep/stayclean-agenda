@@ -416,14 +416,15 @@ def build(words, Q):
         'special': L.SPECIAL, 'signs': L.SIGNS, 'mushaf': L.MUSHAF, 'stops': L.STOPS, 'mx': mx,
         'words': [{k: w[k] for k in ('id', 'ar', 'tr', 'loc', 'clip', 'lv', 'f', 'l', 'n', 'edge', 'uth')} for w in out_words],
         'passages': keep,
-        'skills': P.SKILLS, 'errors': P.ERRORS, 'levels': P.LEVELS, 'exams': {str(k): v for k, v in P.EXAMS.items()}, 'validation': P.VALIDATION,
+        'skills': P.SKILLS, 'errors': P.ERRORS, 'levels': P.LEVELS, 'parts': P.PARTS, 'chapters': P.CHAPTERS,
+        'chExams': P.CHAPTER_EXAMS, 'validation': P.VALIDATION,
     }
     return bank
 
 
 MARKS = {'wasla': 'ٱ', 'dagger': 'ٰ', 'small_waw': 'ۥ', 'small_ya': 'ۦ', 'zero': '۟', 'rect_zero': '۠',
          'madd': 'ٓ', 'iqlab': 'ۭۢ'}
-BANK_VERSION = '20261028b'
+BANK_VERSION = '20261028c'
 
 
 def display_first(w):
@@ -446,6 +447,14 @@ def check(bank):
         for wid in l['ex']:
             if wid not in lw:
                 errs.append('exemple manquant ' + wid)
+    units = [u['id'] for lv in bank['levels'] for u in lv['units']]
+    in_ch = [u for c in bank['chapters'] for u in c['units']]
+    if sorted(units) != sorted(in_ch):
+        errs.append('chapitres : unités manquantes ou en double')
+    for k, secs in bank['chExams'].items():
+        n = sum(x['n'] for x in secs)
+        if n != (30 if k == 'final' else 20):
+            errs.append('examen %s : %d questions' % (k, n))
     for feat in ['long_a', 'long_i', 'long_u', 'sukun', 'shadda', 'tanwin', 'article_moon', 'article_sun', 'hamza', 'ta_marbuta', 'alif_maqsura', 'lam_alif', 'wasla']:
         n = len([w for w in bank['words'] if feat in w['f']])
         if n < 40:

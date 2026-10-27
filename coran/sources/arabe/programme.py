@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Programme « Lire et écrire l'arabe » : niveaux, unités, compétences, grilles d'examen.
+"""Programme « Lire et écrire l'arabe » : 10 chapitres en 3 parties, étapes, examens.
 
 Ce fichier ne contient que l'organisation pédagogique et les consignes (en français). Les lettres, signes
 et mots viennent de lettres.py et du texte coranique (build_bank.py). Choix de conception (pas une norme) :
-validation d'un niveau à 16/20 sur chaque compétence obligatoire, confirmée sur une autre série lors d'une
-séance ultérieure (au moins le lendemain).
+un examen par chapitre, 20 questions notées par l'appli, réussi à partir de 16/20 ; un examen final sur tout.
 """
 
 # Compétences suivies séparément
@@ -175,51 +174,141 @@ LEVELS = [
     },
 ]
 
-# Grilles d'examen (annoncées avant de commencer). obligatoire = compte pour la validation.
-EXAMS = {
-    0: [{"comp": "rec", "titre": "Reconnaissance", "n": 10, "type": "auto", "obligatoire": True}],
-    1: [
-        {"comp": "rec", "titre": "Reconnaître les lettres (ordre variable)", "n": 14, "type": "auto", "obligatoire": True},
-        {"comp": "lie", "titre": "Retrouver une lettre dans un mot", "n": 8, "type": "auto", "obligatoire": True},
-        {"comp": "ecr", "titre": "Écrire des lettres (sur papier ou à l’écran)", "n": 6, "type": "auto-eval", "obligatoire": True},
+# ---------------------------------------------------------------------------------------------------------------
+# Le cours : 3 parties, 10 chapitres. Un chapitre = des étapes numérotées (les unités ci-dessus, dans l'ordre),
+# puis l'entraînement, puis l'examen du chapitre. Les niveaux ci-dessus restent la référence des contenus
+# (lettres déjà vues, mots, passages) ; l'élève, lui, ne voit que les chapitres.
+PARTS = [
+    {"id": "p1", "n": 1, "nom": "Les lettres", "desc": "Les 28 lettres : les reconnaître, les nommer, les écrire.", "chapitres": [1, 2, 3, 4, 5]},
+    {"id": "p2", "n": 2, "nom": "Lire des mots", "desc": "Voyelles, signes et formes particulières : déchiffrer n’importe quel mot.", "chapitres": [6, 7, 8]},
+    {"id": "p3", "n": 3, "nom": "Lire le Coran", "desc": "Les signes du mushaf, les pauses, puis lire couramment.", "chapitres": [9, 10]},
+]
+
+CHAPTERS = [
+    {"n": 1, "id": "c1", "part": "p1", "lv": 0, "titre": "Les bases", "units": ["u0a", "u0b", "u0c"],
+     "but": "Savoir dans quel sens on lit, ce qui distingue une lettre d’une autre (les points), à quoi servent les petits signes, et quelles lettres ne s’attachent jamais à la suivante.",
+     "savoir": ["L’arabe se lit de droite à gauche : la première lettre d’un mot est tout à droite.",
+                "Beaucoup de lettres ont la même forme : seuls les points les distinguent (ب ت ث).",
+                "Les voyelles brèves sont de petits signes au-dessus ou au-dessous des lettres.",
+                "Six lettres ne s’attachent jamais à la suivante : ا د ذ ر ز و."]},
+    {"n": 2, "id": "c2", "part": "p1", "lv": 1, "titre": "ا ب ت ث ن ي", "units": ["u1a", "u1b"],
+     "but": "Reconnaître, nommer et écrire ا ب ت ث ن ي, seules et à leur place dans un mot.",
+     "savoir": ["ب ت ث ن ي ont la même petite dent au début et au milieu d’un mot : on les distingue par les points.",
+                "En fin de mot, ن forme une coupe et ي une boucle.",
+                "L’alif ne s’attache pas à la lettre suivante."]},
+    {"n": 3, "id": "c3", "part": "p1", "lv": 1, "titre": "ج ح خ · د ذ ر ز و", "units": ["u1c", "u1d"],
+     "but": "Reconnaître, nommer et écrire ج ح خ (une seule forme, trois points différents) et د ذ ر ز و (qui ne s’attachent pas).",
+     "savoir": ["ج : point dessous ; ح : aucun point ; خ : point dessus.",
+                "ح est un h soufflé ; خ est raclé, comme la jota espagnole.",
+                "د ذ ر ز و ne s’attachent jamais à la lettre suivante."]},
+    {"n": 4, "id": "c4", "part": "p1", "lv": 1, "titre": "س ش ص ض · ط ظ ع غ", "units": ["u1e", "u1f"],
+     "but": "Reconnaître, nommer et écrire س ش ص ض ط ظ ع غ et distinguer les sons proches.",
+     "savoir": ["س ش : trois petites dents ; ص ض : une boucle allongée.",
+                "ص ض ط ظ sont emphatiques : la langue se relève vers l’arrière, le son devient plus grave.",
+                "ع est un son de gorge avec la voix ; غ ressemble au r parisien."]},
+    {"n": 5, "id": "c5", "part": "p1", "lv": 1, "titre": "ف ق ك ل م ه", "units": ["u1g", "u1h"],
+     "but": "Reconnaître, nommer et écrire les six dernières lettres : tu connais alors les 28.",
+     "savoir": ["ف : un point ; ق : deux points.",
+                "ل suivi de ا s’écrit toujours لا.",
+                "ه change beaucoup de forme selon sa place : ه هـ ـهـ ـه."]},
+    {"n": 6, "id": "c6", "part": "p2", "lv": 2, "titre": "Les voyelles courtes", "units": ["u2a", "u2b", "u2c", "u2d"],
+     "but": "Lire et écrire une lettre avec sa voyelle (a, i, ou), puis des mots courts syllabe par syllabe.",
+     "savoir": ["Fatḥa (trait au-dessus) : « a ». Kasra (trait au-dessous) : « i ». Ḍamma (petit wāw au-dessus) : « ou ».",
+                "On lit lettre par lettre, de droite à gauche, chaque lettre avec sa voyelle."]},
+    {"n": 7, "id": "c7", "part": "p2", "lv": 3, "titre": "Allonger, arrêter, doubler", "units": ["u3a", "u3b", "u3c", "u3d"],
+     "but": "Lire les voyelles longues, le sukūn (pas de voyelle), la shadda (lettre doublée) et le tanwīn (an, in, oun).",
+     "savoir": ["ا après une fatḥa, ي après une kasra, و après une ḍamma : la voyelle s’allonge.",
+                "Sukūn (petit rond) : la lettre n’a pas de voyelle.",
+                "Shadda : la lettre est prononcée deux fois.",
+                "Tanwīn : voyelle doublée en fin de mot, « an », « in », « oun »."]},
+    {"n": 8, "id": "c8", "part": "p2", "lv": 4, "titre": "Les mots", "units": ["u4a", "u4b", "u4c", "u4d", "u4e", "u4f"],
+     "but": "Lire l’article (lettres lunaires et solaires), la hamza, ة et ى, la ligature لا et les petits mots attachés.",
+     "savoir": ["Devant une lettre lunaire, le ل de ال se prononce ; devant une lettre solaire, il se tait et la lettre suivante est doublée.",
+                "La hamza (ء) est une attaque de la voix ; son support ne se prononce pas.",
+                "ة se lit « t » en liaison (« h » à l’arrêt) ; ى en fin de mot se lit « â »."]},
+    {"n": 9, "id": "c9", "part": "p3", "lv": 5, "titre": "Lire le mushaf", "units": ["u5a", "u5b", "u5c", "u5d"],
+     "but": "Comprendre les signes propres au mushaf et les signes de pause, puis lire un passage avec ses arrêts.",
+     "savoir": ["ٱ ne se prononce pas quand on enchaîne ; le petit alif ٰ se lit « â ».",
+                "Les signes de pause disent où s’arrêter ou enchaîner ; à la fin d’un verset, on peut toujours s’arrêter.",
+                "Le mushaf indique les allongements (ٓ) et les lettres muettes (۟)."]},
+    {"n": 10, "id": "c10", "part": "p3", "lv": 6, "titre": "Lire couramment", "units": ["u6a", "u7a"],
+     "but": "Lire des passages sans hésiter, puis des passages jamais travaillés, en gardant une lecture juste.",
+     "savoir": ["D’abord la justesse, ensuite l’aisance : jamais la vitesse au prix de la justesse.",
+                "Lire par petits groupes de mots, réécouter, relire d’une traite."]},
+]
+
+# Examens : 20 questions notées par l'appli (une question = 1 point ; une dictée juste sans ses voyelles quand
+# elles étaient demandées = ½ point). L'examen final : 30 questions ramenées sur 20. Partie orale à part.
+# types « k_… » : réponse tapée au clavier arabe de l'appli. full = les voyelles comptent.
+CHAPTER_EXAMS = {
+    "c1": [
+        {"titre": "Le sens de lecture", "types": ["sens"], "n": 5},
+        {"titre": "La première lettre, au clavier", "types": ["k_premiere"], "n": 3},
+        {"titre": "Les points", "types": ["points"], "n": 6},
+        {"titre": "Les lettres qui ne s’attachent pas", "types": ["liaison", "forme"], "n": 6},
     ],
-    2: [
-        {"comp": "voy", "titre": "Lire des syllabes", "n": 10, "type": "auto", "obligatoire": True},
-        {"comp": "dec", "titre": "Déchiffrer des mots nouveaux", "n": 8, "type": "auto", "obligatoire": True},
-        {"comp": "ecr", "titre": "Dictée de mots", "n": 5, "type": "auto", "obligatoire": True},
-        {"comp": "ecr", "titre": "Écrire sans modèle", "n": 4, "type": "auto-eval", "obligatoire": False},
+    "c2": "LETTRES", "c3": "LETTRES", "c4": "LETTRES",
+    "c5": [
+        {"titre": "Nommer les lettres", "types": ["nom"], "n": 5},
+        {"titre": "Reconnaître une lettre", "types": ["lettre", "son"], "n": 4},
+        {"titre": "Les lettres dans un mot", "types": ["forme"], "n": 5},
+        {"titre": "Écrire la lettre, au clavier", "types": ["k_lettre"], "n": 4},
+        {"titre": "Dictée de mots", "types": ["k_dictee"], "n": 2, "fb": ["k_lettre"]},
     ],
-    3: [
-        {"comp": "voy", "titre": "Lire les signes", "n": 10, "type": "auto", "obligatoire": True},
-        {"comp": "dec", "titre": "Déchiffrer des mots nouveaux", "n": 10, "type": "auto", "obligatoire": True},
-        {"comp": "ecr", "titre": "Dictée de mots", "n": 5, "type": "auto", "obligatoire": True},
-        {"comp": "pas", "titre": "Lecture à voix haute", "n": 4, "type": "auto-eval", "obligatoire": False},
+    "c6": [
+        {"titre": "Lire une syllabe", "types": ["syllabe"], "n": 5},
+        {"titre": "Lire un mot", "types": ["lecture"], "n": 4},
+        {"titre": "Écouter", "types": ["ecoute"], "n": 4},
+        {"titre": "Écrire une syllabe, avec sa voyelle", "types": ["k_syllabe"], "n": 4},
+        {"titre": "Dictée de mots, avec les voyelles", "types": ["k_dictee"], "n": 3, "full": True},
     ],
-    4: [
-        {"comp": "voy", "titre": "Formes particulières", "n": 10, "type": "auto", "obligatoire": True},
-        {"comp": "dec", "titre": "Déchiffrer des mots nouveaux", "n": 12, "type": "auto", "obligatoire": True},
-        {"comp": "ecr", "titre": "Dictée de mots", "n": 6, "type": "auto", "obligatoire": True},
-        {"comp": "pas", "titre": "Lecture à voix haute", "n": 4, "type": "auto-eval", "obligatoire": False},
+    "c7": [
+        {"titre": "Les signes", "types": ["signe"], "n": 6},
+        {"titre": "Lire un mot", "types": ["lecture"], "n": 5},
+        {"titre": "Écouter", "types": ["ecoute"], "n": 4},
+        {"titre": "Dictée de mots, avec les voyelles et les signes", "types": ["k_dictee"], "n": 5, "full": True},
     ],
-    5: [
-        {"comp": "voy", "titre": "Signes du mushaf et de pause", "n": 10, "type": "auto", "obligatoire": True},
-        {"comp": "dec", "titre": "Mots du mushaf jamais travaillés", "n": 10, "type": "auto", "obligatoire": True},
-        {"comp": "pas", "titre": "Lire un passage avec ses arrêts", "n": 2, "type": "auto-eval", "obligatoire": True},
+    "c8": [
+        {"titre": "L’article", "types": ["article"], "n": 4},
+        {"titre": "Formes particulières", "types": ["special"], "n": 4},
+        {"titre": "Lire un mot", "types": ["lecture"], "n": 5},
+        {"titre": "Écouter", "types": ["ecoute"], "n": 4},
+        {"titre": "Dictée de mots", "types": ["k_dictee"], "n": 3},
     ],
-    6: [
-        {"comp": "dec", "titre": "Mots nouveaux", "n": 10, "type": "auto", "obligatoire": True},
-        {"comp": "pas", "titre": "Passages nouveaux, sans phonétique", "n": 3, "type": "auto-eval", "obligatoire": True},
-        {"comp": "flu", "titre": "Fluidité (justesse, hésitations, continuité)", "n": 2, "type": "auto-eval", "obligatoire": True},
+    "c9": [
+        {"titre": "Les signes du mushaf", "types": ["mushaf"], "n": 6, "marks": ["wasla", "dagger", "small_waw", "small_ya", "zero", "madd"]},
+        {"titre": "Les signes de pause", "types": ["mushaf"], "n": 5, "marks": ["lazim", "awla_waqf", "jaiz", "awla_wasl", "mamnu", "taanuq"]},
+        {"titre": "Lire un mot", "types": ["lecture"], "n": 5},
+        {"titre": "Écouter", "types": ["ecoute"], "n": 4},
     ],
-    7: [
-        {"comp": "dec", "titre": "Mots nouveaux de tout le Coran", "n": 12, "type": "auto", "obligatoire": True},
-        {"comp": "pas", "titre": "Passages peu familiers", "n": 3, "type": "auto-eval", "obligatoire": True},
-        {"comp": "flu", "titre": "Fluidité", "n": 2, "type": "auto-eval", "obligatoire": True},
+    "c10": [
+        {"titre": "Des mots jamais travaillés", "types": ["lecture"], "n": 8, "fresh": True},
+        {"titre": "Écouter", "types": ["ecoute"], "n": 6},
+        {"titre": "Dictée de mots", "types": ["k_dictee"], "n": 3},
+        {"titre": "Signes du mushaf et de pause", "types": ["mushaf"], "n": 3},
+    ],
+    "final": [
+        {"titre": "Les lettres", "types": ["nom", "lettre", "son"], "n": 6, "lv": 1},
+        {"titre": "Les lettres dans un mot", "types": ["forme"], "n": 4, "lv": 1},
+        {"titre": "Voyelles et signes", "types": ["syllabe", "signe"], "n": 5, "lv": 3},
+        {"titre": "Lire des mots", "types": ["lecture", "article", "special"], "n": 6, "lv": 4},
+        {"titre": "Écouter", "types": ["ecoute"], "n": 4, "lv": 4},
+        {"titre": "Écrire au clavier", "types": ["k_lettre", "k_dictee"], "n": 5, "lv": 3},
     ],
 }
+LETTRES = [
+    {"titre": "Nommer les lettres", "types": ["nom"], "n": 5},
+    {"titre": "Reconnaître une lettre", "types": ["lettre", "son"], "n": 4},
+    {"titre": "Les lettres dans un mot", "types": ["forme"], "n": 5},
+    {"titre": "Écrire la lettre, au clavier", "types": ["k_lettre"], "n": 4},
+    {"titre": "Dictée de mots", "types": ["k_dictee"], "n": 2, "fb": ["k_lettre"]},
+]
+for _k, _v in list(CHAPTER_EXAMS.items()):
+    if _v == "LETTRES":
+        CHAPTER_EXAMS[_k] = LETTRES
 
 VALIDATION = {
     "seuil": 16, "sur": 20,
-    "regle": "Chaque compétence obligatoire doit atteindre 16/20, puis être confirmée sur une autre série lors d’une séance ultérieure (au moins le lendemain). Une note de reconnaissance ne compense jamais une lecture ou une écriture insuffisante.",
-    "nature": "Choix de conception ajustable, pas une norme scientifique.",
+    "regle": "Chaque examen compte 20 questions notées par l’appli (l’examen final : 30, ramenées sur 20). Réussi à partir de 16/20 ; en dessous, on refait un examen similaire, avec d’autres questions. La partie orale est notée à part, à titre indicatif.",
+    "nature": "Choix de conception ajustable, pas une norme scientifique. Aucun contenu n’a été relu par un enseignant.",
 }

@@ -1,573 +1,711 @@
 {
- "format": 1,
- "version": "20261028b",
+ "format": 2,
+ "version": "20261028c",
  "note": "Fiches produites à partir de la banque de l’appli (lettres, mots du Coran en écriture adaptée, passages Tanzil). Les modèles à repasser sont la lettre de la police en gris : ils ne montrent pas l’ordre des traits. Fiches non relues par un enseignant.",
- "fiches": [
+ "chapters": [
   {
-   "id": "cahier-0",
-   "lv": 0,
-   "unit": null,
-   "titre": "Cahier du niveau 0",
-   "desc": "Les 3 fiches du niveau dans un seul PDF.",
-   "cahier": true,
-   "couleur": {
-    "pdf": "coran/fiches/cahier-0-couleur.pdf",
-    "png": "coran/fiches/u0a-couleur.png",
-    "thumb": "coran/fiches/u0a-couleur.webp"
+   "ch": "c1",
+   "n": 1,
+   "titre": "Les bases",
+   "revision": {
+    "id": "rev-c1",
+    "couleur": {
+     "pdf": "coran/fiches/rev-c1-couleur.pdf",
+     "png": "coran/fiches/rev-c1-couleur.png",
+     "thumb": "coran/fiches/rev-c1-couleur.webp"
+    },
+    "eco": {
+     "pdf": "coran/fiches/rev-c1-eco.pdf",
+     "png": "coran/fiches/rev-c1-eco.png",
+     "thumb": "coran/fiches/rev-c1-eco.webp"
+    },
+    "titre": "Fiche de révision",
+    "desc": "Ce qu’il faut savoir, en une page, et ce que vérifie l’examen du chapitre."
    },
-   "eco": {
-    "pdf": "coran/fiches/cahier-0-eco.pdf",
-    "png": "coran/fiches/u0a-eco.png",
-    "thumb": "coran/fiches/u0a-eco.webp"
+   "exos": [
+    {
+     "id": "u0a",
+     "couleur": {
+      "pdf": "coran/fiches/u0a-couleur.pdf",
+      "png": "coran/fiches/u0a-couleur.png",
+      "thumb": "coran/fiches/u0a-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u0a-eco.pdf",
+      "png": "coran/fiches/u0a-eco.png",
+      "thumb": "coran/fiches/u0a-eco.webp"
+     },
+     "titre": "Le sens de lecture",
+     "desc": "Lire de droite à gauche : écrire les lettres dans l’ordre."
+    },
+    {
+     "id": "u0b",
+     "couleur": {
+      "pdf": "coran/fiches/u0b-couleur.pdf",
+      "png": "coran/fiches/u0b-couleur.png",
+      "thumb": "coran/fiches/u0b-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u0b-eco.pdf",
+      "png": "coran/fiches/u0b-eco.png",
+      "thumb": "coran/fiches/u0b-eco.webp"
+     },
+     "titre": "Lettre, points et signes",
+     "desc": "Compter les points, repérer les signes."
+    },
+    {
+     "id": "u0c",
+     "couleur": {
+      "pdf": "coran/fiches/u0c-couleur.pdf",
+      "png": "coran/fiches/u0c-couleur.png",
+      "thumb": "coran/fiches/u0c-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u0c-eco.pdf",
+      "png": "coran/fiches/u0c-eco.png",
+      "thumb": "coran/fiches/u0c-eco.webp"
+     },
+     "titre": "Les lettres qui ne s’attachent pas",
+     "desc": "Les six lettres qui ne s’attachent pas."
+    }
+   ],
+   "cahier": {
+    "couleur": {
+     "pdf": "coran/fiches/chapitre-1-couleur.pdf"
+    },
+    "eco": {
+     "pdf": "coran/fiches/chapitre-1-eco.pdf"
+    }
    }
   },
   {
-   "id": "u0a",
-   "lv": 0,
-   "unit": "u0a",
-   "titre": "Le sens de lecture",
-   "desc": "Lire de droite à gauche : écrire les lettres dans l’ordre.",
-   "couleur": {
-    "pdf": "coran/fiches/u0a-couleur.pdf",
-    "png": "coran/fiches/u0a-couleur.png",
-    "thumb": "coran/fiches/u0a-couleur.webp"
+   "ch": "c2",
+   "n": 2,
+   "titre": "ا ب ت ث ن ي",
+   "revision": {
+    "id": "rev-c2",
+    "couleur": {
+     "pdf": "coran/fiches/rev-c2-couleur.pdf",
+     "png": "coran/fiches/rev-c2-couleur.png",
+     "thumb": "coran/fiches/rev-c2-couleur.webp"
+    },
+    "eco": {
+     "pdf": "coran/fiches/rev-c2-eco.pdf",
+     "png": "coran/fiches/rev-c2-eco.png",
+     "thumb": "coran/fiches/rev-c2-eco.webp"
+    },
+    "titre": "Fiche de révision",
+    "desc": "Ce qu’il faut savoir, en une page, et ce que vérifie l’examen du chapitre."
    },
-   "eco": {
-    "pdf": "coran/fiches/u0a-eco.pdf",
-    "png": "coran/fiches/u0a-eco.png",
-    "thumb": "coran/fiches/u0a-eco.webp"
+   "exos": [
+    {
+     "id": "u1a",
+     "couleur": {
+      "pdf": "coran/fiches/u1a-couleur.pdf",
+      "png": "coran/fiches/u1a-couleur.png",
+      "thumb": "coran/fiches/u1a-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u1a-eco.pdf",
+      "png": "coran/fiches/u1a-eco.png",
+      "thumb": "coran/fiches/u1a-eco.webp"
+     },
+     "titre": "ا ب ت ث",
+     "desc": "Lettres à repasser et à écrire, formes selon la place, mots exemples."
+    },
+    {
+     "id": "u1b",
+     "couleur": {
+      "pdf": "coran/fiches/u1b-couleur.pdf",
+      "png": "coran/fiches/u1b-couleur.png",
+      "thumb": "coran/fiches/u1b-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u1b-eco.pdf",
+      "png": "coran/fiches/u1b-eco.png",
+      "thumb": "coran/fiches/u1b-eco.webp"
+     },
+     "titre": "ن ي",
+     "desc": "Lettres à repasser et à écrire, formes selon la place, mots exemples."
+    }
+   ],
+   "cahier": {
+    "couleur": {
+     "pdf": "coran/fiches/chapitre-2-couleur.pdf"
+    },
+    "eco": {
+     "pdf": "coran/fiches/chapitre-2-eco.pdf"
+    }
    }
   },
   {
-   "id": "u0b",
-   "lv": 0,
-   "unit": "u0b",
-   "titre": "Lettre, points et signes",
-   "desc": "Compter les points, repérer les signes.",
-   "couleur": {
-    "pdf": "coran/fiches/u0b-couleur.pdf",
-    "png": "coran/fiches/u0b-couleur.png",
-    "thumb": "coran/fiches/u0b-couleur.webp"
+   "ch": "c3",
+   "n": 3,
+   "titre": "ج ح خ · د ذ ر ز و",
+   "revision": {
+    "id": "rev-c3",
+    "couleur": {
+     "pdf": "coran/fiches/rev-c3-couleur.pdf",
+     "png": "coran/fiches/rev-c3-couleur.png",
+     "thumb": "coran/fiches/rev-c3-couleur.webp"
+    },
+    "eco": {
+     "pdf": "coran/fiches/rev-c3-eco.pdf",
+     "png": "coran/fiches/rev-c3-eco.png",
+     "thumb": "coran/fiches/rev-c3-eco.webp"
+    },
+    "titre": "Fiche de révision",
+    "desc": "Ce qu’il faut savoir, en une page, et ce que vérifie l’examen du chapitre."
    },
-   "eco": {
-    "pdf": "coran/fiches/u0b-eco.pdf",
-    "png": "coran/fiches/u0b-eco.png",
-    "thumb": "coran/fiches/u0b-eco.webp"
+   "exos": [
+    {
+     "id": "u1c",
+     "couleur": {
+      "pdf": "coran/fiches/u1c-couleur.pdf",
+      "png": "coran/fiches/u1c-couleur.png",
+      "thumb": "coran/fiches/u1c-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u1c-eco.pdf",
+      "png": "coran/fiches/u1c-eco.png",
+      "thumb": "coran/fiches/u1c-eco.webp"
+     },
+     "titre": "ج ح خ",
+     "desc": "Lettres à repasser et à écrire, formes selon la place, mots exemples."
+    },
+    {
+     "id": "u1d",
+     "couleur": {
+      "pdf": "coran/fiches/u1d-couleur.pdf",
+      "png": "coran/fiches/u1d-couleur.png",
+      "thumb": "coran/fiches/u1d-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u1d-eco.pdf",
+      "png": "coran/fiches/u1d-eco.png",
+      "thumb": "coran/fiches/u1d-eco.webp"
+     },
+     "titre": "د ذ ر ز و",
+     "desc": "Lettres à repasser et à écrire, formes selon la place, mots exemples."
+    }
+   ],
+   "cahier": {
+    "couleur": {
+     "pdf": "coran/fiches/chapitre-3-couleur.pdf"
+    },
+    "eco": {
+     "pdf": "coran/fiches/chapitre-3-eco.pdf"
+    }
    }
   },
   {
-   "id": "u0c",
-   "lv": 0,
-   "unit": "u0c",
-   "titre": "Les lettres qui ne s’attachent pas",
-   "desc": "Les six lettres qui ne s’attachent pas.",
-   "couleur": {
-    "pdf": "coran/fiches/u0c-couleur.pdf",
-    "png": "coran/fiches/u0c-couleur.png",
-    "thumb": "coran/fiches/u0c-couleur.webp"
+   "ch": "c4",
+   "n": 4,
+   "titre": "س ش ص ض · ط ظ ع غ",
+   "revision": {
+    "id": "rev-c4",
+    "couleur": {
+     "pdf": "coran/fiches/rev-c4-couleur.pdf",
+     "png": "coran/fiches/rev-c4-couleur.png",
+     "thumb": "coran/fiches/rev-c4-couleur.webp"
+    },
+    "eco": {
+     "pdf": "coran/fiches/rev-c4-eco.pdf",
+     "png": "coran/fiches/rev-c4-eco.png",
+     "thumb": "coran/fiches/rev-c4-eco.webp"
+    },
+    "titre": "Fiche de révision",
+    "desc": "Ce qu’il faut savoir, en une page, et ce que vérifie l’examen du chapitre."
    },
-   "eco": {
-    "pdf": "coran/fiches/u0c-eco.pdf",
-    "png": "coran/fiches/u0c-eco.png",
-    "thumb": "coran/fiches/u0c-eco.webp"
+   "exos": [
+    {
+     "id": "u1e",
+     "couleur": {
+      "pdf": "coran/fiches/u1e-couleur.pdf",
+      "png": "coran/fiches/u1e-couleur.png",
+      "thumb": "coran/fiches/u1e-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u1e-eco.pdf",
+      "png": "coran/fiches/u1e-eco.png",
+      "thumb": "coran/fiches/u1e-eco.webp"
+     },
+     "titre": "س ش ص ض",
+     "desc": "Lettres à repasser et à écrire, formes selon la place, mots exemples."
+    },
+    {
+     "id": "u1f",
+     "couleur": {
+      "pdf": "coran/fiches/u1f-couleur.pdf",
+      "png": "coran/fiches/u1f-couleur.png",
+      "thumb": "coran/fiches/u1f-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u1f-eco.pdf",
+      "png": "coran/fiches/u1f-eco.png",
+      "thumb": "coran/fiches/u1f-eco.webp"
+     },
+     "titre": "ط ظ ع غ",
+     "desc": "Lettres à repasser et à écrire, formes selon la place, mots exemples."
+    }
+   ],
+   "cahier": {
+    "couleur": {
+     "pdf": "coran/fiches/chapitre-4-couleur.pdf"
+    },
+    "eco": {
+     "pdf": "coran/fiches/chapitre-4-eco.pdf"
+    }
    }
   },
   {
-   "id": "cahier-1",
-   "lv": 1,
-   "unit": null,
-   "titre": "Cahier du niveau 1",
-   "desc": "Les 8 fiches du niveau dans un seul PDF.",
-   "cahier": true,
-   "couleur": {
-    "pdf": "coran/fiches/cahier-1-couleur.pdf",
-    "png": "coran/fiches/u1a-couleur.png",
-    "thumb": "coran/fiches/u1a-couleur.webp"
+   "ch": "c5",
+   "n": 5,
+   "titre": "ف ق ك ل م ه",
+   "revision": {
+    "id": "rev-c5",
+    "couleur": {
+     "pdf": "coran/fiches/rev-c5-couleur.pdf",
+     "png": "coran/fiches/rev-c5-couleur.png",
+     "thumb": "coran/fiches/rev-c5-couleur.webp"
+    },
+    "eco": {
+     "pdf": "coran/fiches/rev-c5-eco.pdf",
+     "png": "coran/fiches/rev-c5-eco.png",
+     "thumb": "coran/fiches/rev-c5-eco.webp"
+    },
+    "titre": "Fiche de révision",
+    "desc": "Ce qu’il faut savoir, en une page, et ce que vérifie l’examen du chapitre."
    },
-   "eco": {
-    "pdf": "coran/fiches/cahier-1-eco.pdf",
-    "png": "coran/fiches/u1a-eco.png",
-    "thumb": "coran/fiches/u1a-eco.webp"
+   "exos": [
+    {
+     "id": "u1g",
+     "couleur": {
+      "pdf": "coran/fiches/u1g-couleur.pdf",
+      "png": "coran/fiches/u1g-couleur.png",
+      "thumb": "coran/fiches/u1g-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u1g-eco.pdf",
+      "png": "coran/fiches/u1g-eco.png",
+      "thumb": "coran/fiches/u1g-eco.webp"
+     },
+     "titre": "ف ق ك ل",
+     "desc": "Lettres à repasser et à écrire, formes selon la place, mots exemples."
+    },
+    {
+     "id": "u1h",
+     "couleur": {
+      "pdf": "coran/fiches/u1h-couleur.pdf",
+      "png": "coran/fiches/u1h-couleur.png",
+      "thumb": "coran/fiches/u1h-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u1h-eco.pdf",
+      "png": "coran/fiches/u1h-eco.png",
+      "thumb": "coran/fiches/u1h-eco.webp"
+     },
+     "titre": "م ه",
+     "desc": "Lettres à repasser et à écrire, formes selon la place, mots exemples."
+    }
+   ],
+   "cahier": {
+    "couleur": {
+     "pdf": "coran/fiches/chapitre-5-couleur.pdf"
+    },
+    "eco": {
+     "pdf": "coran/fiches/chapitre-5-eco.pdf"
+    }
    }
   },
   {
-   "id": "u1a",
-   "lv": 1,
-   "unit": "u1a",
-   "titre": "ا ب ت ث",
-   "desc": "Lettres à repasser et à écrire, formes selon la place, mots exemples.",
-   "couleur": {
-    "pdf": "coran/fiches/u1a-couleur.pdf",
-    "png": "coran/fiches/u1a-couleur.png",
-    "thumb": "coran/fiches/u1a-couleur.webp"
+   "ch": "c6",
+   "n": 6,
+   "titre": "Les voyelles courtes",
+   "revision": {
+    "id": "rev-c6",
+    "couleur": {
+     "pdf": "coran/fiches/rev-c6-couleur.pdf",
+     "png": "coran/fiches/rev-c6-couleur.png",
+     "thumb": "coran/fiches/rev-c6-couleur.webp"
+    },
+    "eco": {
+     "pdf": "coran/fiches/rev-c6-eco.pdf",
+     "png": "coran/fiches/rev-c6-eco.png",
+     "thumb": "coran/fiches/rev-c6-eco.webp"
+    },
+    "titre": "Fiche de révision",
+    "desc": "Ce qu’il faut savoir, en une page, et ce que vérifie l’examen du chapitre."
    },
-   "eco": {
-    "pdf": "coran/fiches/u1a-eco.pdf",
-    "png": "coran/fiches/u1a-eco.png",
-    "thumb": "coran/fiches/u1a-eco.webp"
+   "exos": [
+    {
+     "id": "u2abc",
+     "couleur": {
+      "pdf": "coran/fiches/u2abc-couleur.pdf",
+      "png": "coran/fiches/u2abc-couleur.png",
+      "thumb": "coran/fiches/u2abc-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u2abc-eco.pdf",
+      "png": "coran/fiches/u2abc-eco.png",
+      "thumb": "coran/fiches/u2abc-eco.webp"
+     },
+     "titre": "Fatḥa, kasra, ḍamma",
+     "desc": "30 syllabes à lire et transcrire."
+    },
+    {
+     "id": "u2d",
+     "couleur": {
+      "pdf": "coran/fiches/u2d-couleur.pdf",
+      "png": "coran/fiches/u2d-couleur.png",
+      "thumb": "coran/fiches/u2d-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u2d-eco.pdf",
+      "png": "coran/fiches/u2d-eco.png",
+      "thumb": "coran/fiches/u2d-eco.webp"
+     },
+     "titre": "Syllabes et premiers mots",
+     "desc": "Mots courts à lire et recopier."
+    }
+   ],
+   "cahier": {
+    "couleur": {
+     "pdf": "coran/fiches/chapitre-6-couleur.pdf"
+    },
+    "eco": {
+     "pdf": "coran/fiches/chapitre-6-eco.pdf"
+    }
    }
   },
   {
-   "id": "u1b",
-   "lv": 1,
-   "unit": "u1b",
-   "titre": "ن ي",
-   "desc": "Lettres à repasser et à écrire, formes selon la place, mots exemples.",
-   "couleur": {
-    "pdf": "coran/fiches/u1b-couleur.pdf",
-    "png": "coran/fiches/u1b-couleur.png",
-    "thumb": "coran/fiches/u1b-couleur.webp"
+   "ch": "c7",
+   "n": 7,
+   "titre": "Allonger, arrêter, doubler",
+   "revision": {
+    "id": "rev-c7",
+    "couleur": {
+     "pdf": "coran/fiches/rev-c7-couleur.pdf",
+     "png": "coran/fiches/rev-c7-couleur.png",
+     "thumb": "coran/fiches/rev-c7-couleur.webp"
+    },
+    "eco": {
+     "pdf": "coran/fiches/rev-c7-eco.pdf",
+     "png": "coran/fiches/rev-c7-eco.png",
+     "thumb": "coran/fiches/rev-c7-eco.webp"
+    },
+    "titre": "Fiche de révision",
+    "desc": "Ce qu’il faut savoir, en une page, et ce que vérifie l’examen du chapitre."
    },
-   "eco": {
-    "pdf": "coran/fiches/u1b-eco.pdf",
-    "png": "coran/fiches/u1b-eco.png",
-    "thumb": "coran/fiches/u1b-eco.webp"
+   "exos": [
+    {
+     "id": "u3a",
+     "couleur": {
+      "pdf": "coran/fiches/u3a-couleur.pdf",
+      "png": "coran/fiches/u3a-couleur.png",
+      "thumb": "coran/fiches/u3a-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u3a-eco.pdf",
+      "png": "coran/fiches/u3a-eco.png",
+      "thumb": "coran/fiches/u3a-eco.webp"
+     },
+     "titre": "Voyelles longues",
+     "desc": "Mots à lire et à recopier, avec corrigé."
+    },
+    {
+     "id": "u3b",
+     "couleur": {
+      "pdf": "coran/fiches/u3b-couleur.pdf",
+      "png": "coran/fiches/u3b-couleur.png",
+      "thumb": "coran/fiches/u3b-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u3b-eco.pdf",
+      "png": "coran/fiches/u3b-eco.png",
+      "thumb": "coran/fiches/u3b-eco.webp"
+     },
+     "titre": "Le sukūn",
+     "desc": "Mots à lire et à recopier, avec corrigé."
+    },
+    {
+     "id": "u3c",
+     "couleur": {
+      "pdf": "coran/fiches/u3c-couleur.pdf",
+      "png": "coran/fiches/u3c-couleur.png",
+      "thumb": "coran/fiches/u3c-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u3c-eco.pdf",
+      "png": "coran/fiches/u3c-eco.png",
+      "thumb": "coran/fiches/u3c-eco.webp"
+     },
+     "titre": "La shadda",
+     "desc": "Mots à lire et à recopier, avec corrigé."
+    },
+    {
+     "id": "u3d",
+     "couleur": {
+      "pdf": "coran/fiches/u3d-couleur.pdf",
+      "png": "coran/fiches/u3d-couleur.png",
+      "thumb": "coran/fiches/u3d-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u3d-eco.pdf",
+      "png": "coran/fiches/u3d-eco.png",
+      "thumb": "coran/fiches/u3d-eco.webp"
+     },
+     "titre": "Le tanwīn",
+     "desc": "Mots à lire et à recopier, avec corrigé."
+    }
+   ],
+   "cahier": {
+    "couleur": {
+     "pdf": "coran/fiches/chapitre-7-couleur.pdf"
+    },
+    "eco": {
+     "pdf": "coran/fiches/chapitre-7-eco.pdf"
+    }
    }
   },
   {
-   "id": "u1c",
-   "lv": 1,
-   "unit": "u1c",
-   "titre": "ج ح خ",
-   "desc": "Lettres à repasser et à écrire, formes selon la place, mots exemples.",
-   "couleur": {
-    "pdf": "coran/fiches/u1c-couleur.pdf",
-    "png": "coran/fiches/u1c-couleur.png",
-    "thumb": "coran/fiches/u1c-couleur.webp"
+   "ch": "c8",
+   "n": 8,
+   "titre": "Les mots",
+   "revision": {
+    "id": "rev-c8",
+    "couleur": {
+     "pdf": "coran/fiches/rev-c8-couleur.pdf",
+     "png": "coran/fiches/rev-c8-couleur.png",
+     "thumb": "coran/fiches/rev-c8-couleur.webp"
+    },
+    "eco": {
+     "pdf": "coran/fiches/rev-c8-eco.pdf",
+     "png": "coran/fiches/rev-c8-eco.png",
+     "thumb": "coran/fiches/rev-c8-eco.webp"
+    },
+    "titre": "Fiche de révision",
+    "desc": "Ce qu’il faut savoir, en une page, et ce que vérifie l’examen du chapitre."
    },
-   "eco": {
-    "pdf": "coran/fiches/u1c-eco.pdf",
-    "png": "coran/fiches/u1c-eco.png",
-    "thumb": "coran/fiches/u1c-eco.webp"
+   "exos": [
+    {
+     "id": "u4ab",
+     "couleur": {
+      "pdf": "coran/fiches/u4ab-couleur.pdf",
+      "png": "coran/fiches/u4ab-couleur.png",
+      "thumb": "coran/fiches/u4ab-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u4ab-eco.pdf",
+      "png": "coran/fiches/u4ab-eco.png",
+      "thumb": "coran/fiches/u4ab-eco.webp"
+     },
+     "titre": "L’article : lettres lunaires et solaires",
+     "desc": "Classer des mots : lunaire ou solaire."
+    },
+    {
+     "id": "u4c",
+     "couleur": {
+      "pdf": "coran/fiches/u4c-couleur.pdf",
+      "png": "coran/fiches/u4c-couleur.png",
+      "thumb": "coran/fiches/u4c-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u4c-eco.pdf",
+      "png": "coran/fiches/u4c-eco.png",
+      "thumb": "coran/fiches/u4c-eco.webp"
+     },
+     "titre": "La hamza",
+     "desc": "Mots à lire et à recopier, avec corrigé."
+    },
+    {
+     "id": "u4d",
+     "couleur": {
+      "pdf": "coran/fiches/u4d-couleur.pdf",
+      "png": "coran/fiches/u4d-couleur.png",
+      "thumb": "coran/fiches/u4d-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u4d-eco.pdf",
+      "png": "coran/fiches/u4d-eco.png",
+      "thumb": "coran/fiches/u4d-eco.webp"
+     },
+     "titre": "Tā’ marbūṭa et alif maqṣūra",
+     "desc": "Mots à lire et à recopier, avec corrigé."
+    },
+    {
+     "id": "u4e",
+     "couleur": {
+      "pdf": "coran/fiches/u4e-couleur.pdf",
+      "png": "coran/fiches/u4e-couleur.png",
+      "thumb": "coran/fiches/u4e-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u4e-eco.pdf",
+      "png": "coran/fiches/u4e-eco.png",
+      "thumb": "coran/fiches/u4e-eco.webp"
+     },
+     "titre": "La ligature lām-alif",
+     "desc": "Mots à lire et à recopier, avec corrigé."
+    },
+    {
+     "id": "u4f",
+     "couleur": {
+      "pdf": "coran/fiches/u4f-couleur.pdf",
+      "png": "coran/fiches/u4f-couleur.png",
+      "thumb": "coran/fiches/u4f-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u4f-eco.pdf",
+      "png": "coran/fiches/u4f-eco.png",
+      "thumb": "coran/fiches/u4f-eco.webp"
+     },
+     "titre": "Petits mots attachés et alif de liaison",
+     "desc": "Mots à lire et à recopier, avec corrigé."
+    }
+   ],
+   "cahier": {
+    "couleur": {
+     "pdf": "coran/fiches/chapitre-8-couleur.pdf"
+    },
+    "eco": {
+     "pdf": "coran/fiches/chapitre-8-eco.pdf"
+    }
    }
   },
   {
-   "id": "u1d",
-   "lv": 1,
-   "unit": "u1d",
-   "titre": "د ذ ر ز و",
-   "desc": "Lettres à repasser et à écrire, formes selon la place, mots exemples.",
-   "couleur": {
-    "pdf": "coran/fiches/u1d-couleur.pdf",
-    "png": "coran/fiches/u1d-couleur.png",
-    "thumb": "coran/fiches/u1d-couleur.webp"
+   "ch": "c9",
+   "n": 9,
+   "titre": "Lire le mushaf",
+   "revision": {
+    "id": "rev-c9",
+    "couleur": {
+     "pdf": "coran/fiches/rev-c9-couleur.pdf",
+     "png": "coran/fiches/rev-c9-couleur.png",
+     "thumb": "coran/fiches/rev-c9-couleur.webp"
+    },
+    "eco": {
+     "pdf": "coran/fiches/rev-c9-eco.pdf",
+     "png": "coran/fiches/rev-c9-eco.png",
+     "thumb": "coran/fiches/rev-c9-eco.webp"
+    },
+    "titre": "Fiche de révision",
+    "desc": "Ce qu’il faut savoir, en une page, et ce que vérifie l’examen du chapitre."
    },
-   "eco": {
-    "pdf": "coran/fiches/u1d-eco.pdf",
-    "png": "coran/fiches/u1d-eco.png",
-    "thumb": "coran/fiches/u1d-eco.webp"
+   "exos": [
+    {
+     "id": "u5a",
+     "couleur": {
+      "pdf": "coran/fiches/u5a-couleur.pdf",
+      "png": "coran/fiches/u5a-couleur.png",
+      "thumb": "coran/fiches/u5a-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u5a-eco.pdf",
+      "png": "coran/fiches/u5a-eco.png",
+      "thumb": "coran/fiches/u5a-eco.webp"
+     },
+     "titre": "Du manuel au mushaf",
+     "desc": "Les signes du mushaf avec un exemple."
+    },
+    {
+     "id": "u5b",
+     "couleur": {
+      "pdf": "coran/fiches/u5b-couleur.pdf",
+      "png": "coran/fiches/u5b-couleur.png",
+      "thumb": "coran/fiches/u5b-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u5b-eco.pdf",
+      "png": "coran/fiches/u5b-eco.png",
+      "thumb": "coran/fiches/u5b-eco.webp"
+     },
+     "titre": "Les signes de pause",
+     "desc": "Signes de pause et deux versets."
+    },
+    {
+     "id": "u5d",
+     "couleur": {
+      "pdf": "coran/fiches/u5d-couleur.pdf",
+      "png": "coran/fiches/u5d-couleur.png",
+      "thumb": "coran/fiches/u5d-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u5d-eco.pdf",
+      "png": "coran/fiches/u5d-eco.png",
+      "thumb": "coran/fiches/u5d-eco.webp"
+     },
+     "titre": "Lire un passage avec ses arrêts",
+     "desc": "Trois passages à lire avec leurs arrêts."
+    }
+   ],
+   "cahier": {
+    "couleur": {
+     "pdf": "coran/fiches/chapitre-9-couleur.pdf"
+    },
+    "eco": {
+     "pdf": "coran/fiches/chapitre-9-eco.pdf"
+    }
    }
   },
   {
-   "id": "u1e",
-   "lv": 1,
-   "unit": "u1e",
-   "titre": "س ش ص ض",
-   "desc": "Lettres à repasser et à écrire, formes selon la place, mots exemples.",
-   "couleur": {
-    "pdf": "coran/fiches/u1e-couleur.pdf",
-    "png": "coran/fiches/u1e-couleur.png",
-    "thumb": "coran/fiches/u1e-couleur.webp"
+   "ch": "c10",
+   "n": 10,
+   "titre": "Lire couramment",
+   "revision": {
+    "id": "rev-c10",
+    "couleur": {
+     "pdf": "coran/fiches/rev-c10-couleur.pdf",
+     "png": "coran/fiches/rev-c10-couleur.png",
+     "thumb": "coran/fiches/rev-c10-couleur.webp"
+    },
+    "eco": {
+     "pdf": "coran/fiches/rev-c10-eco.pdf",
+     "png": "coran/fiches/rev-c10-eco.png",
+     "thumb": "coran/fiches/rev-c10-eco.webp"
+    },
+    "titre": "Fiche de révision",
+    "desc": "Ce qu’il faut savoir, en une page, et ce que vérifie l’examen du chapitre."
    },
-   "eco": {
-    "pdf": "coran/fiches/u1e-eco.pdf",
-    "png": "coran/fiches/u1e-eco.png",
-    "thumb": "coran/fiches/u1e-eco.webp"
-   }
-  },
-  {
-   "id": "u1f",
-   "lv": 1,
-   "unit": "u1f",
-   "titre": "ط ظ ع غ",
-   "desc": "Lettres à repasser et à écrire, formes selon la place, mots exemples.",
-   "couleur": {
-    "pdf": "coran/fiches/u1f-couleur.pdf",
-    "png": "coran/fiches/u1f-couleur.png",
-    "thumb": "coran/fiches/u1f-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/u1f-eco.pdf",
-    "png": "coran/fiches/u1f-eco.png",
-    "thumb": "coran/fiches/u1f-eco.webp"
-   }
-  },
-  {
-   "id": "u1g",
-   "lv": 1,
-   "unit": "u1g",
-   "titre": "ف ق ك ل",
-   "desc": "Lettres à repasser et à écrire, formes selon la place, mots exemples.",
-   "couleur": {
-    "pdf": "coran/fiches/u1g-couleur.pdf",
-    "png": "coran/fiches/u1g-couleur.png",
-    "thumb": "coran/fiches/u1g-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/u1g-eco.pdf",
-    "png": "coran/fiches/u1g-eco.png",
-    "thumb": "coran/fiches/u1g-eco.webp"
-   }
-  },
-  {
-   "id": "u1h",
-   "lv": 1,
-   "unit": "u1h",
-   "titre": "م ه",
-   "desc": "Lettres à repasser et à écrire, formes selon la place, mots exemples.",
-   "couleur": {
-    "pdf": "coran/fiches/u1h-couleur.pdf",
-    "png": "coran/fiches/u1h-couleur.png",
-    "thumb": "coran/fiches/u1h-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/u1h-eco.pdf",
-    "png": "coran/fiches/u1h-eco.png",
-    "thumb": "coran/fiches/u1h-eco.webp"
-   }
-  },
-  {
-   "id": "cahier-2",
-   "lv": 2,
-   "unit": null,
-   "titre": "Cahier du niveau 2",
-   "desc": "Les 2 fiches du niveau dans un seul PDF.",
-   "cahier": true,
-   "couleur": {
-    "pdf": "coran/fiches/cahier-2-couleur.pdf",
-    "png": "coran/fiches/u2abc-couleur.png",
-    "thumb": "coran/fiches/u2abc-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/cahier-2-eco.pdf",
-    "png": "coran/fiches/u2abc-eco.png",
-    "thumb": "coran/fiches/u2abc-eco.webp"
-   }
-  },
-  {
-   "id": "u2abc",
-   "lv": 2,
-   "unit": "u2a",
-   "titre": "Fatḥa, kasra, ḍamma",
-   "desc": "30 syllabes à lire et transcrire.",
-   "couleur": {
-    "pdf": "coran/fiches/u2abc-couleur.pdf",
-    "png": "coran/fiches/u2abc-couleur.png",
-    "thumb": "coran/fiches/u2abc-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/u2abc-eco.pdf",
-    "png": "coran/fiches/u2abc-eco.png",
-    "thumb": "coran/fiches/u2abc-eco.webp"
-   }
-  },
-  {
-   "id": "u2d",
-   "lv": 2,
-   "unit": "u2d",
-   "titre": "Syllabes et premiers mots",
-   "desc": "Mots courts à lire et recopier.",
-   "couleur": {
-    "pdf": "coran/fiches/u2d-couleur.pdf",
-    "png": "coran/fiches/u2d-couleur.png",
-    "thumb": "coran/fiches/u2d-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/u2d-eco.pdf",
-    "png": "coran/fiches/u2d-eco.png",
-    "thumb": "coran/fiches/u2d-eco.webp"
-   }
-  },
-  {
-   "id": "cahier-3",
-   "lv": 3,
-   "unit": null,
-   "titre": "Cahier du niveau 3",
-   "desc": "Les 4 fiches du niveau dans un seul PDF.",
-   "cahier": true,
-   "couleur": {
-    "pdf": "coran/fiches/cahier-3-couleur.pdf",
-    "png": "coran/fiches/u3a-couleur.png",
-    "thumb": "coran/fiches/u3a-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/cahier-3-eco.pdf",
-    "png": "coran/fiches/u3a-eco.png",
-    "thumb": "coran/fiches/u3a-eco.webp"
-   }
-  },
-  {
-   "id": "u3a",
-   "lv": 3,
-   "unit": "u3a",
-   "titre": "Voyelles longues",
-   "desc": "Mots à lire et à recopier, avec corrigé.",
-   "couleur": {
-    "pdf": "coran/fiches/u3a-couleur.pdf",
-    "png": "coran/fiches/u3a-couleur.png",
-    "thumb": "coran/fiches/u3a-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/u3a-eco.pdf",
-    "png": "coran/fiches/u3a-eco.png",
-    "thumb": "coran/fiches/u3a-eco.webp"
-   }
-  },
-  {
-   "id": "u3b",
-   "lv": 3,
-   "unit": "u3b",
-   "titre": "Le sukūn",
-   "desc": "Mots à lire et à recopier, avec corrigé.",
-   "couleur": {
-    "pdf": "coran/fiches/u3b-couleur.pdf",
-    "png": "coran/fiches/u3b-couleur.png",
-    "thumb": "coran/fiches/u3b-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/u3b-eco.pdf",
-    "png": "coran/fiches/u3b-eco.png",
-    "thumb": "coran/fiches/u3b-eco.webp"
-   }
-  },
-  {
-   "id": "u3c",
-   "lv": 3,
-   "unit": "u3c",
-   "titre": "La shadda",
-   "desc": "Mots à lire et à recopier, avec corrigé.",
-   "couleur": {
-    "pdf": "coran/fiches/u3c-couleur.pdf",
-    "png": "coran/fiches/u3c-couleur.png",
-    "thumb": "coran/fiches/u3c-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/u3c-eco.pdf",
-    "png": "coran/fiches/u3c-eco.png",
-    "thumb": "coran/fiches/u3c-eco.webp"
-   }
-  },
-  {
-   "id": "u3d",
-   "lv": 3,
-   "unit": "u3d",
-   "titre": "Le tanwīn",
-   "desc": "Mots à lire et à recopier, avec corrigé.",
-   "couleur": {
-    "pdf": "coran/fiches/u3d-couleur.pdf",
-    "png": "coran/fiches/u3d-couleur.png",
-    "thumb": "coran/fiches/u3d-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/u3d-eco.pdf",
-    "png": "coran/fiches/u3d-eco.png",
-    "thumb": "coran/fiches/u3d-eco.webp"
-   }
-  },
-  {
-   "id": "cahier-4",
-   "lv": 4,
-   "unit": null,
-   "titre": "Cahier du niveau 4",
-   "desc": "Les 5 fiches du niveau dans un seul PDF.",
-   "cahier": true,
-   "couleur": {
-    "pdf": "coran/fiches/cahier-4-couleur.pdf",
-    "png": "coran/fiches/u4ab-couleur.png",
-    "thumb": "coran/fiches/u4ab-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/cahier-4-eco.pdf",
-    "png": "coran/fiches/u4ab-eco.png",
-    "thumb": "coran/fiches/u4ab-eco.webp"
-   }
-  },
-  {
-   "id": "u4ab",
-   "lv": 4,
-   "unit": "u4a",
-   "titre": "L’article : lettres lunaires et solaires",
-   "desc": "Classer des mots : lunaire ou solaire.",
-   "couleur": {
-    "pdf": "coran/fiches/u4ab-couleur.pdf",
-    "png": "coran/fiches/u4ab-couleur.png",
-    "thumb": "coran/fiches/u4ab-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/u4ab-eco.pdf",
-    "png": "coran/fiches/u4ab-eco.png",
-    "thumb": "coran/fiches/u4ab-eco.webp"
-   }
-  },
-  {
-   "id": "u4c",
-   "lv": 4,
-   "unit": "u4c",
-   "titre": "La hamza",
-   "desc": "Mots à lire et à recopier, avec corrigé.",
-   "couleur": {
-    "pdf": "coran/fiches/u4c-couleur.pdf",
-    "png": "coran/fiches/u4c-couleur.png",
-    "thumb": "coran/fiches/u4c-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/u4c-eco.pdf",
-    "png": "coran/fiches/u4c-eco.png",
-    "thumb": "coran/fiches/u4c-eco.webp"
-   }
-  },
-  {
-   "id": "u4d",
-   "lv": 4,
-   "unit": "u4d",
-   "titre": "Tā’ marbūṭa et alif maqṣūra",
-   "desc": "Mots à lire et à recopier, avec corrigé.",
-   "couleur": {
-    "pdf": "coran/fiches/u4d-couleur.pdf",
-    "png": "coran/fiches/u4d-couleur.png",
-    "thumb": "coran/fiches/u4d-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/u4d-eco.pdf",
-    "png": "coran/fiches/u4d-eco.png",
-    "thumb": "coran/fiches/u4d-eco.webp"
-   }
-  },
-  {
-   "id": "u4e",
-   "lv": 4,
-   "unit": "u4e",
-   "titre": "La ligature lām-alif",
-   "desc": "Mots à lire et à recopier, avec corrigé.",
-   "couleur": {
-    "pdf": "coran/fiches/u4e-couleur.pdf",
-    "png": "coran/fiches/u4e-couleur.png",
-    "thumb": "coran/fiches/u4e-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/u4e-eco.pdf",
-    "png": "coran/fiches/u4e-eco.png",
-    "thumb": "coran/fiches/u4e-eco.webp"
-   }
-  },
-  {
-   "id": "u4f",
-   "lv": 4,
-   "unit": "u4f",
-   "titre": "Petits mots attachés et alif de liaison",
-   "desc": "Mots à lire et à recopier, avec corrigé.",
-   "couleur": {
-    "pdf": "coran/fiches/u4f-couleur.pdf",
-    "png": "coran/fiches/u4f-couleur.png",
-    "thumb": "coran/fiches/u4f-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/u4f-eco.pdf",
-    "png": "coran/fiches/u4f-eco.png",
-    "thumb": "coran/fiches/u4f-eco.webp"
-   }
-  },
-  {
-   "id": "cahier-5",
-   "lv": 5,
-   "unit": null,
-   "titre": "Cahier du niveau 5",
-   "desc": "Les 3 fiches du niveau dans un seul PDF.",
-   "cahier": true,
-   "couleur": {
-    "pdf": "coran/fiches/cahier-5-couleur.pdf",
-    "png": "coran/fiches/u5a-couleur.png",
-    "thumb": "coran/fiches/u5a-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/cahier-5-eco.pdf",
-    "png": "coran/fiches/u5a-eco.png",
-    "thumb": "coran/fiches/u5a-eco.webp"
-   }
-  },
-  {
-   "id": "u5a",
-   "lv": 5,
-   "unit": "u5a",
-   "titre": "Du manuel au mushaf",
-   "desc": "Les signes du mushaf avec un exemple.",
-   "couleur": {
-    "pdf": "coran/fiches/u5a-couleur.pdf",
-    "png": "coran/fiches/u5a-couleur.png",
-    "thumb": "coran/fiches/u5a-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/u5a-eco.pdf",
-    "png": "coran/fiches/u5a-eco.png",
-    "thumb": "coran/fiches/u5a-eco.webp"
-   }
-  },
-  {
-   "id": "u5b",
-   "lv": 5,
-   "unit": "u5b",
-   "titre": "Les signes de pause",
-   "desc": "Signes de pause et deux versets.",
-   "couleur": {
-    "pdf": "coran/fiches/u5b-couleur.pdf",
-    "png": "coran/fiches/u5b-couleur.png",
-    "thumb": "coran/fiches/u5b-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/u5b-eco.pdf",
-    "png": "coran/fiches/u5b-eco.png",
-    "thumb": "coran/fiches/u5b-eco.webp"
-   }
-  },
-  {
-   "id": "u5d",
-   "lv": 5,
-   "unit": "u5d",
-   "titre": "Lire un passage avec ses arrêts",
-   "desc": "Trois passages à lire avec leurs arrêts.",
-   "couleur": {
-    "pdf": "coran/fiches/u5d-couleur.pdf",
-    "png": "coran/fiches/u5d-couleur.png",
-    "thumb": "coran/fiches/u5d-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/u5d-eco.pdf",
-    "png": "coran/fiches/u5d-eco.png",
-    "thumb": "coran/fiches/u5d-eco.webp"
-   }
-  },
-  {
-   "id": "u6a",
-   "lv": 6,
-   "unit": "u6a",
-   "titre": "Cycle de fluidité",
-   "desc": "Deux passages et un carnet de lecture sur 5 jours.",
-   "couleur": {
-    "pdf": "coran/fiches/u6a-couleur.pdf",
-    "png": "coran/fiches/u6a-couleur.png",
-    "thumb": "coran/fiches/u6a-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/u6a-eco.pdf",
-    "png": "coran/fiches/u6a-eco.png",
-    "thumb": "coran/fiches/u6a-eco.webp"
-   }
-  },
-  {
-   "id": "u7a",
-   "lv": 7,
-   "unit": "u7a",
-   "titre": "Passages peu familiers",
-   "desc": "Trois passages peu familiers et ton bilan.",
-   "couleur": {
-    "pdf": "coran/fiches/u7a-couleur.pdf",
-    "png": "coran/fiches/u7a-couleur.png",
-    "thumb": "coran/fiches/u7a-couleur.webp"
-   },
-   "eco": {
-    "pdf": "coran/fiches/u7a-eco.pdf",
-    "png": "coran/fiches/u7a-eco.png",
-    "thumb": "coran/fiches/u7a-eco.webp"
+   "exos": [
+    {
+     "id": "u6a",
+     "couleur": {
+      "pdf": "coran/fiches/u6a-couleur.pdf",
+      "png": "coran/fiches/u6a-couleur.png",
+      "thumb": "coran/fiches/u6a-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u6a-eco.pdf",
+      "png": "coran/fiches/u6a-eco.png",
+      "thumb": "coran/fiches/u6a-eco.webp"
+     },
+     "titre": "Cycle de fluidité",
+     "desc": "Deux passages et un carnet de lecture sur 5 jours."
+    },
+    {
+     "id": "u7a",
+     "couleur": {
+      "pdf": "coran/fiches/u7a-couleur.pdf",
+      "png": "coran/fiches/u7a-couleur.png",
+      "thumb": "coran/fiches/u7a-couleur.webp"
+     },
+     "eco": {
+      "pdf": "coran/fiches/u7a-eco.pdf",
+      "png": "coran/fiches/u7a-eco.png",
+      "thumb": "coran/fiches/u7a-eco.webp"
+     },
+     "titre": "Passages peu familiers",
+     "desc": "Trois passages peu familiers et ton bilan."
+    }
+   ],
+   "cahier": {
+    "couleur": {
+     "pdf": "coran/fiches/chapitre-10-couleur.pdf"
+    },
+    "eco": {
+     "pdf": "coran/fiches/chapitre-10-eco.pdf"
+    }
    }
   }
  ]
