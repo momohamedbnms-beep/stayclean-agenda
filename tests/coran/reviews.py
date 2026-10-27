@@ -17,7 +17,7 @@ def set_day(e, n):
     e.js(f"() => window.__QR.setToday('{day(n)}')"); e.page.wait_for_timeout(350)
 def recite_full(e, result='solo'):
     pg = e.page
-    pg.click('[data-act="session-start"]'); pg.wait_for_timeout(600)
+    pg.click('#tab-learn [data-act="session-start"]'); pg.wait_for_timeout(600)
     assert step(pg) == 'recite', step(pg)
     pg.click('[data-act="recited"]'); pg.wait_for_timeout(200)
     pg.click(f'.choice[data-r="{result}"]'); pg.wait_for_timeout(500)
@@ -32,6 +32,15 @@ def finish(e):
         pg.click('.done .sess__acts [data-act="session-close"]'); pg.wait_for_timeout(400)
     elif pg.locator('#pages .sess__top [data-act="session-close"]').count():
         pg.click('#pages .sess__top [data-act="session-close"]'); pg.wait_for_timeout(400)
+def known_start(e, s):
+    """« Le vérifier en la récitant » : depuis le lecteur, fin de sourate → séance guidée et étapes de cette sourate."""
+    pg = e.page
+    pg.click('.nav__tab[data-tab="read"]'); pg.wait_for_timeout(300)
+    pg.fill('#readSearch', str(s)); pg.wait_for_timeout(250)
+    pg.click(f'#readList .srow[data-s="{s}"]'); pg.wait_for_timeout(1200)
+    pg.click('.page .self-card [data-page="sura-progress"]'); pg.wait_for_timeout(500)
+    pg.click('.page [data-act="known-start"]'); pg.wait_for_timeout(700)
+    pg.fill('#readSearch', '') if pg.locator('#readSearch').is_visible() else None
 def prog(e, s): return e.js(f"() => {{ const p = window.__QR.progressOf({s}); window.__QR.refreshMilestones(p); return p }}")
 def rev(e, rid): return e.js(f"() => window.__QR.Store.mem.review.get('{rid}') || null")
 
@@ -39,7 +48,7 @@ with sync_playwright() as p:
     # ---------- A. « Je connais déjà Al-Fatiha » puis révisions espacées ----------
     e = Env(p)
     pg = e.open()
-    pg.click('[data-act="known-start"]'); pg.wait_for_timeout(700)
+    known_start(e, 1)
     check('connue : on commence par réciter', step(pg) == 'recite')
     check('connue : consigne sourate entière', 'Toute la sourate Al-Fatiha' in pg.locator('.page--session .sub').inner_text())
     pg.click('[data-act="recited"]'); pg.wait_for_timeout(200)
@@ -53,19 +62,24 @@ with sync_playwright() as p:
     r = rev(e, 's1')
     check('révision de la sourate à J+1', r and r['due'] == day(1) and r['first'] == day(0), r)
     check('parcours : sourate suivante = Al-Ikhlas', e.js("() => window.__QR.prefs().current") == 112)
+    while e.js("() => window.__QR.Store.session && !window.__QR.Store.session.done") and step(pg) in ('after', 'link-after', 'link-intro'):
+        pg.click('.sess__acts [data-act="step-continue"]'); pg.wait_for_timeout(300)
+    check('fin de séance : « Marquer « Je connais » » proposé, rien d’office', pg.locator('.done .mz-offer [data-act="mz-set-sura"][data-s="1"]').count() == 1 and e.js("() => window.__QR.surahState(1)") == 'none')
+    pg.click('.done .mz-offer [data-act="mz-set-sura"][data-s="1"]'); pg.wait_for_timeout(500)
+    check('marquée à ta demande : Al-Fatiha « Je connais »', e.js("() => window.__QR.surahState(1)") == 'known')
     finish(e)
-    check('accueil : Al-Ikhlas proposée', 'Al-Ikhlas' in pg.locator('.today__name').inner_text())
+    check('séance guidée suivante : sur Al-Ikhlas', 'Al-Ikhlas' in pg.locator('#tab-learn .mz-guided').inner_text(), pg.locator('#tab-learn .mz-guided').inner_text())
     e.shot('51-home-next')
     # Mes progrès
     pg.click('.nav__tab[data-tab="progress"]'); pg.wait_for_timeout(400)
     e.shot('52-progress')
     txt = pg.locator('#tab-progress').inner_text()
-    check('Mes progrès : état « Mémorisée — auto-évaluation »', 'Mémorisée — auto-évaluation' in txt)
+    check('Mes progrès : Al-Fatiha « Je connais »', 'Je connais' in pg.locator('#tab-progress .mz-fat').inner_text())
     pg.click('.nav__tab[data-tab="learn"]'); pg.wait_for_timeout(300)
     # J+1 : révision sans aide → jalon 5
     set_day(e, 1)
-    check('J+1 : révision prévue', 'Révision prévue' in pg.locator('.today__label').inner_text())
-    check('J+1 : libellé du bouton', pg.locator('[data-act="session-start"]').inner_text().strip() == 'Commencer ma séance')
+    check('J+1 : révision prévue', 'révision prévue' in pg.locator('#tab-learn .mz-guided').inner_text())
+    check('J+1 : libellé du bouton', 'Commencer ma séance' in pg.locator('#tab-learn [data-act="session-start"]').inner_text())
     recite_full(e, 'solo')
     pr = prog(e, 1); r = rev(e, 's1')
     check('J+1 : jalon 5 = nouvelle récitation le lendemain', pr['m'].get('5') == day(1), pr['m'])
@@ -135,8 +149,8 @@ with sync_playwright() as p:
       Q.renderAll();
     }}""")
     pg.wait_for_timeout(500)
-    check('accueil : « Révision prévue »', 'Révision prévue' in pg.locator('.today__label').inner_text())
-    pg.click('[data-act="session-start"]'); pg.wait_for_timeout(600)
+    check('accueil : « révisions prévues »', 'révisions prévues' in pg.locator('#tab-learn .mz-guided').inner_text() or 'révision prévue' in pg.locator('#tab-learn .mz-guided').inner_text())
+    pg.click('#tab-learn [data-act="session-start"]'); pg.wait_for_timeout(600)
     items = e.js("() => window.__QR.Store.session.items.map(i => [i.type, i.s, i.a1, i.a2, (i.reviewIds||[]).length])")
     print('items', items)
     check('trois révisions qui se suivent → une seule récitation « Versets 1 à 3 »', items[0] == ['review', 112, 1, 3, 3], items)
@@ -162,7 +176,7 @@ with sync_playwright() as p:
     finish(e)
     # le lendemain, réussite → l'espacement reprend
     set_day(e, 1)
-    pg.click('[data-act="session-start"]'); pg.wait_for_timeout(600)
+    pg.click('#tab-learn [data-act="session-start"]'); pg.wait_for_timeout(600)
     items = e.js("() => window.__QR.Store.session.items.map(i => [i.type, i.s, i.a1, i.a2])")
     check('J+1 : le groupe revient', items[0] == ['review', 112, 1, 3], items)
     pg.click('[data-act="recited"]'); pg.wait_for_timeout(150)
@@ -175,7 +189,7 @@ with sync_playwright() as p:
     # ---------- C. Audio indisponible ----------
     e = Env(p, audio_ok=False)
     pg = e.open()
-    pg.click('[data-act="session-start"]'); pg.wait_for_timeout(600)
+    pg.click('#tab-learn [data-act="session-start"]'); pg.wait_for_timeout(600)
     pg.click('.sess__acts [data-act="learn-listen"]'); pg.wait_for_timeout(2500)
     txt = pg.locator('.page--session').inner_text()
     check('audio en échec : message clair', pg.locator('.page--session .notice--warn').count() == 1, txt[:300])

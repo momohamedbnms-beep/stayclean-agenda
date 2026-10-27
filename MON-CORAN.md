@@ -1,6 +1,6 @@
 # Mon Coran dans StayClean Agenda
 
-Cinquième carte de l'accueil : **MON CORAN**. On ouvre, on sait quoi apprendre, on écoute, on répète, on récite sans regarder, et on voit ses progrès. Tout est en français ; le texte du Coran reste en arabe, avec la phonétique et la traduction du sens en option.
+Cinquième carte de l'accueil : **MON CORAN**. On ouvre, on sait où on en est (juz par juz, groupe par groupe), on étudie à sa façon, on dit soi-même ce qu'on connaît, et on voit ses progrès. Rien de quotidien, aucune durée imposée. Tout est en français ; le texte du Coran reste en arabe, avec la phonétique et la traduction du sens en option.
 
 Section **privée** : rien n'est mélangé aux données professionnelles (`agenda_state`, compta, clients).
 
@@ -8,12 +8,12 @@ Section **privée** : rien n'est mélangé aux données professionnelles (`agend
 
 | Onglet | Ce qu'on y fait |
 |---|---|
-| **Apprendre** (par défaut) | « Un peu chaque jour » : la sourate et le passage du moment, **Commencer ma séance** ou **Reprendre ma séance**, « Environ 10 min », les révisions prévues. Au premier lancement : 5, 10 ou 15 minutes (10 présélectionné, modifiable, on peut passer). |
+| **Mémoriser** (par défaut) | « Où j’en suis » (le groupe que tu apprends, sinon le prochain du parcours), « La méthode, étape par étape » (écouter, répéter, réciter sans regarder, marquer « Je connais »), puis **Ton parcours, juz par juz** : Al-Fatiha, juz 30, 29… 1. Un juz → ses 8 groupes ; un groupe → ce qu’il est pour toi (**Pas encore**, **J’apprends**, **Je connais**), « Étudier dans le lecteur », « Séance guidée » (facultative), ses sourates avec leur état. Aucune question de minutes. |
 | **Lire** | Les 114 sourates : recherche par nom français, nom translittéré, nom arabe, numéro, verset (`2:255`), page (`page 42`) ou juz (`juz 30`). Reprise automatique de la dernière lecture, favoris avec étiquette libre, sourates / juz / pages. |
 | **Arabe** | « Lire et écrire l’arabe » en **10 chapitres**, quatre rubriques dans l’ordre : **Étudier** (où j’en suis, puis les chapitres et leurs étapes numérotées), **M’entraîner** (10 exercices par chapitre), **Examens blancs** (les 11 examens visibles d’un coup, notés par l’appli, clavier arabe, partie orale) et **Fiches PDF** (une fiche de révision par chapitre et ses fiches d’exercices). |
-| **Mes progrès** | Sourates travaillées, récitées sans aide, **connues à 100 % (validées par toi)**, révisions prévues, jours de pratique. Une ligne par sourate : état écrit + « x étapes sur 6 », ou barre pleine « Auto-évaluation du … » pour une sourate validée seul. |
+| **Mes progrès** | **Ce que tu connais du Coran** en % (pondéré par les mots), nombre de sourates, de groupes et de juz connus ; **la carte des 30 juz** (remplissage = connu, contour safran = J’apprends) ; les groupes **en cours** ; **Lire et écrire l’arabe** (chapitres réussis, en cours, dernier examen). |
 
-Réglages (icône en haut à droite) : ambiance (**Vert doux**, **Papier**, **Nuit**), durée, nombre de répétitions, silence pour répéter, parcours, récitateur, rappel, texte hors ligne, audio téléchargé, enregistrements, sauvegarde, sources.
+Réglages (icône en haut à droite) : ambiance (**Vert doux**, **Papier**, **Nuit**), nombre de répétitions, silence pour répéter, récitateur, rappel facultatif (chaque semaine par défaut, ou chaque jour), texte hors ligne, audio téléchargé, enregistrements, sauvegarde, sources.
 
 ### Lecteur
 
@@ -23,7 +23,7 @@ Réglages (icône en haut à droite) : ambiance (**Vert doux**, **Papier**, **Nu
 - Texte arabe de droite à gauche, numéros de verset dans l'étoile à huit branches, jamais seuls en début de ligne. Le français est marqué « Traduction du sens — Rachid Maach (QuranEnc, version 1.0.3) ». Les notes du traducteur sont derrière **Comprendre**.
 - Lecteur audio discret : lecture continue, répéter un verset (3, 5, 10 fois, en boucle), répéter un groupe de versets, silence entre les répétitions, précédent / suivant, vitesse 1× / 0,75× / 1,25×, arrêt immédiat. Jamais de lecture automatique, jamais deux sons à la fois. Plein écran.
 - **Suivi du texte** pendant la récitation : fond menthe discret sur le verset récité, fond arrondi plus marqué sur le mot récité quand des repères mot à mot existent (jamais de lettres qui grossissent ou sautent). Tout est calculé à chaque image depuis la **position réelle de l'audio** (pause, déplacement, vitesse compris). Le texte défile doucement seulement quand le passage approche du bord ; si tu fais défiler toi-même, le suivi se met en pause et **Revenir à la récitation** apparaît. Mouvement réduit respecté.
-- **Étudier seul, à ta façon** : en bas de chaque sourate, la carte « Étudier à ta façon » et le bouton **Je la connais à 100 %**. C'est noté tout de suite dans Mes progrès comme une auto-évaluation (distincte des récitations faites dans l'appli), annulable ; l'appli propose d'ajouter des révisions espacées sans les imposer. Aucune séance obligatoire.
+- **Étudier seul, à ta façon** : en bas de chaque sourate, « Cette sourate, pour toi » avec **Pas encore / J’apprends / Je connais**. C’est noté tout de suite (Mémoriser, Mes progrès, liste Lire), annulable. Aucune séance obligatoire.
 
 ### Récitateurs
 
@@ -44,18 +44,28 @@ Aucun fournisseur ne publie de repères pour cet enregistrement. Ils sont calcul
 
 **Couverture** : 111 sourates sur 114 avec suivi par verset (non utilisables pour l'instant : 2, 9, 40) ; 4934 versets sur 5736 repérables seuls, les autres surlignés par groupes (499 limites non confirmées sur 5625). **Mot à mot : 0 %** pour Al-Luhaidan (aucun repère publié, rien d'inventé). Mot à mot disponible avec Al-Husary, Al-Minshawi et Alafasy (repères quran-align, CC BY 4.0).
 
-### Une séance (méthode en 4 étapes)
+### Juz, groupes et statuts (« Mémoriser »)
+
+- **240 groupes**, 8 par juz (environ deux pages et demie chacun) : `coran/data/groupes.json`, construit par `coran/sources/build_groupes.py` à partir des quarts de hizb (۞) de Tanzil Quran Metadata. Dans une sourate de 1 200 mots au plus, une limite qui tombe au milieu de la sourate est déplacée au début de cette sourate ou de la suivante (la plus proche), si les deux groupes voisins gardent au moins 170 mots ; les limites de juz ne bougent jamais (26 limites déplacées, liste affichée par le script). Contrôles : 6 236 versets couverts une fois, dans l’ordre, débuts de juz identiques aux métadonnées, total des mots identique.
+- **Parcours conseillé** (tout reste ouvert) : Al-Fatiha, puis le juz 30 du groupe 8 (les sourates les plus courtes) au groupe 1, puis les juz 29 à 1, chacun du groupe 1 au groupe 8.
+- **Statuts déclarés seulement** : **Pas encore**, **J’apprends**, **Je connais**, pour une sourate (fin de sourate, détail, liste d’un groupe : un toucher fait Pas encore → J’apprends → Je connais), un groupe ou tout un juz. Chaque changement affiche **Annuler**. « J’apprends » ne retire jamais des versets déjà connus. Ouvrir, écouter, lancer une séance ou y répondre **ne change jamais** un statut ; une sourate récitée en entier sans aide en séance guidée est seulement **proposée** au marquage « Je connais ».
+- **Pourcentages pondérés par les mots** (un long verset compte plus qu’un court) ; « En partie » quand une partie seulement est connue ; jamais « 100 % » avant que tout soit connu.
+- **Ancienne version** : une sourate validée « Je la connais à 100 % » reste connue ; une sourate seulement ouverte, travaillée ou récitée (ancien « En apprentissage ») repart à « Pas encore ».
+
+### Séance guidée (facultative, méthode en 4 étapes)
+
+Depuis un groupe ou une sourate (« Séance guidée »), ou en bas de « Mémoriser ». Dans le juz 30, elle commence par Al-Ikhlas, Al-Falaq, An-Nas, Al-Kawthar, Al-ʿAsr, Al-Kafirun, puis les plus courtes ; ailleurs, dans l’ordre du mushaf, au premier verset du groupe. Aucune durée : elle ne s’arrête jamais pour « temps écoulé ».
 
 1. **Écouter** la récitation en suivant le texte (le récitateur est nommé).
 2. **Répéter** : écoute, puis silence pour répéter à voix haute ; 3 fois par défaut (réglable), « Encore une fois », « Masquer le texte ». C'est un réglage pédagogique, pas une règle religieuse.
 3. **Réciter** : le texte est masqué et l'audio coupé. « À toi, sans regarder. » **Un indice** révèle un mot, **Réafficher le texte** montre tout : dans les deux cas la tentative compte « avec aide » (le bouton « Sans aide » est désactivé). Puis : **Sans aide**, **Avec une hésitation** ou **À retravailler**. Ensuite on réécoute la référence pour corriger.
 4. **Relier** : on récite l'enchaînement avec les versets précédents. Quand tous les versets sont travaillés, l'appli propose la sourate entière, de mémoire.
 
-Les révisions prévues passent **avant** le nouveau. Plusieurs versets qui se suivent sont révisés d'une seule récitation (6 versets au plus ; chacun garde son calendrier). Après une absence de 4 jours ou plus : « On reprend tranquillement. », 3 révisions au plus et pas de dette.
+Les révisions prévues de la séance guidée passent **avant** le nouveau. Plusieurs versets qui se suivent sont révisés d'une seule récitation (6 versets au plus ; chacun garde son calendrier). Après une absence de 4 jours ou plus : « On reprend tranquillement. », 3 révisions au plus et pas de dette.
 
 Enregistrement facultatif de sa voix pour se réécouter : il reste sur le téléphone (IndexedDB), supprimable, jamais envoyé. Aucune note automatique de tajwid, aucune voix synthétique, aucune « certification ».
 
-### Révisions espacées (choix de conception, réglable dans le code)
+### Révisions espacées de la séance guidée (choix de conception, réglable dans le code)
 
 - Départ à la **première récitation sans aide** : J+1, J+3, J+7, J+14, J+30 (repères comptés depuis cette première réussite), puis entretien (écart doublé, de 30 à 120 jours).
 - **Avec une hésitation** : la prochaine révision est rapprochée (écart divisé par deux).
@@ -63,15 +73,11 @@ Enregistrement facultatif de sa voix pour se réécouter : il reste sur le tél�
 - Une sourate entière réussie sans aide « couvre » les révisions de ses passages.
 - Référence : Cepeda et al. (2006), *Distributed practice in verbal recall tasks* ; pour la récitation de mémoire : Roediger & Karpicke (2006), *Test-enhanced learning*.
 
-### Les 6 étapes d'une sourate
+### Les 6 étapes d'une sourate (séance guidée)
 
 1. J'ai écouté la sourate. 2. J'ai travaillé tous ses versets. 3. J'ai récité chaque verset sans aide. 4. J'ai récité la sourate entière sans aide. 5. Je l'ai récitée à nouveau sans aide le lendemain ou plus tard. 6. … au moins une semaine après la première réussite complète.
 
-Les étapes 5 et 6 demandent une **nouvelle récitation** à la bonne date : elles ne se cochent jamais toutes seules. « Parcours validé à 100 % » décrit le parcours dans l'appli, pas la mémoire. États : *À découvrir*, *En apprentissage*, *Mémorisée — auto-évaluation*, *À revoir* (une difficulté n'efface jamais le travail fait). **Vérifiée avec un enseignant** est une mention que tu renseignes toi-même ; l'appli l'affiche comme telle.
-
-### Parcours proposé (modifiable)
-
-Al-Fatiha (avec « Je la connais déjà » : essai de récitation complète), puis Al-Ikhlas, Al-Falaq, An-Nas, Al-Kawthar, Al-Asr, Al-Kafirun, puis le reste de Juz Amma des sourates les plus courtes aux plus longues. Le parcours ne change jamais l'ordre du lecteur. Al-Fatiha n'appartient pas à Juz Amma (référence : https://quran.com/fr/juz/30).
+Elles décrivent le travail fait dans la séance guidée (détail d’une sourate) et ne changent pas le statut. Les étapes 5 et 6 demandent une **nouvelle récitation** à la bonne date : elles ne se cochent jamais toutes seules. **Vérifiée avec un enseignant** est une mention que tu renseignes toi-même ; l'appli l'affiche comme telle.
 
 ## Lire et écrire l’arabe (onglet « Arabe », `coran/arabe.js`)
 
@@ -112,7 +118,7 @@ Contrôles faits à la construction : 114 sourates, 6 236 versets, numérotation
 ## Installation (une seule fois)
 
 1. **Base de données** : Supabase → SQL Editor → colle [`supabase/mon-coran.sql`](supabase/mon-coran.sql) → **Run**. Il crée seulement la table `qr_items` (RLS : chaque compte ne voit que ses lignes). On peut le relancer sans risque. Sans cette étape, Mon Coran fonctionne quand même, mais **sur ce téléphone seulement** (c'est écrit dans Mes progrès et les réglages) ; l'export / import JSON reste possible.
-2. **Mise en ligne** : publier sur `main` → GitHub Pages. Le service worker passe en v41.
+2. **Mise en ligne** : publier sur `main` → GitHub Pages. Le service worker passe en v42.
 3. Sur l'iPhone : ouvre StayClean Agenda **depuis l'icône** → MON CORAN.
 
 ## Comment c'est construit
@@ -123,10 +129,11 @@ Contrôles faits à la construction : 114 sourates, 6 236 versets, numérotation
 | `coran/app.js` | Le code, lisible, sans étape de compilation (sections « ===== »). |
 | `coran/app.css` | Styles et les 3 ambiances (contrastes vérifiés). |
 | `coran/data/index.json`, `coran/data/s/001…114.json` | Contenu préparé par `build.py` (texte, phonétique, traduction, notes, pages, juz). |
+| `coran/data/groupes.json` | 240 groupes de mémorisation, mots par verset, parcours conseillé, premiers mots de chaque juz (`coran/sources/build_groupes.py`). |
 | `coran/fonts/`, `coran/livre-sur-pupitre.webp` | Polices et illustration. |
 | `supabase/mon-coran.sql` | Table `qr_items`, RLS, droits. |
 
-**Données** (privées au compte connecté) : table `qr_items`, une ligne par élément, `kind` = `prefs` (réglages), `pos` (dernière lecture), `fav` (favoris), `attempt` (une ligne par tentative, jamais modifiée), `progress` (étapes par sourate), `review` (calendrier de révision). Ouvrir un verset n'est jamais compté comme une réussite. Synchro incrémentale par `updated_at` (posé par le serveur), le plus récent gagne, suppression = `deleted = true`. Copie locale dans IndexedDB (`mon-coran`) pour un affichage immédiat et hors ligne ; la séance en cours, l'audio téléchargé et les enregistrements restent sur l'appareil. Résumé de la carte d'accueil : `qr.summary.v1`. Aucun texte du Coran n'est stocké dans la base.
+**Données** (privées au compte connecté) : table `qr_items`, une ligne par élément, `kind` = `prefs` (réglages), `pos` (dernière lecture), `fav` (favoris), `attempt` (une ligne par tentative, jamais modifiée), `progress` (par sourate : `kv` versets connus et `lr` versets en cours, déclarés par toi, plus les étapes de la séance guidée), `review` (calendrier de révision de la séance guidée). Ouvrir un verset n'est jamais compté comme une réussite. Synchro incrémentale par `updated_at` (posé par le serveur), le plus récent gagne, suppression = `deleted = true`. Copie locale dans IndexedDB (`mon-coran`) pour un affichage immédiat et hors ligne ; la séance en cours, l'audio téléchargé et les enregistrements restent sur l'appareil. Résumé de la carte d'accueil : `qr.summary.v1` (format 2 : % du Coran connu et groupe en cours ou prochaine étape, rien de quotidien). Aucun texte du Coran n'est stocké dans la base.
 
 ## Limites connues (dites dans l'appli)
 
@@ -149,7 +156,7 @@ Contrôles faits à la construction : 114 sourates, 6 236 versets, numérotation
 ```
 python3 -m http.server 8765 --bind 127.0.0.1   # depuis la racine du dépôt
 cd tests/coran && python3 session.py && python3 reviews.py && python3 reader.py && python3 content.py && python3 agenda.py
-python3 luhaidan.py && python3 autodidacte.py   # voix principale, suivi, versets regroupés ; « Je la connais à 100 % »
+python3 luhaidan.py && python3 autodidacte.py && python3 memoriser.py   # voix principale, suivi ; étudier seul ; juz, groupes, statuts, Mes progrès
 python3 arabe.py && python3 arabe_niveaux.py && python3 arabe_contenu.py && python3 arabe_ecrans.py   # « Lire et écrire l'arabe » (chapitres, examens, clavier, oral simulé, fiches, contenus, écrans)
 npm install @supabase/supabase-js@2.117.1 && python3 sync.py   # sauvegarde sur le compte, avec un faux serveur
 ```

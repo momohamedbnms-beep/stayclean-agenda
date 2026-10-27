@@ -1989,6 +1989,13 @@ function qrResume() {
     var u = session && session.user && session.user.id;
     if (u && r.uid && r.uid !== u) return "";
     var auj = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Brussels", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    if (r.v === 2) { /* Mémoriser : ce que tu connais et où tu en es (rien de quotidien) */
+      if (r.done) return '<span class="pst">✓ Tout le Coran marqué connu</span>';
+      var bits = [];
+      if (r.pct) bits.push(esc(r.pct) + " % du Coran connu");
+      if (r.name) bits.push((r.learning ? "En cours : " : "Prochaine étape : ") + esc(r.name));
+      return bits.length ? '<span class="pst">' + bits.join(" · ") + "</span>" : "";
+    }
     if (r.date === auj && r.done) return '<span class="pst">✓ Séance faite aujourd’hui</span>';
     if (r.date === auj && r.due) return '<span class="pst">' + r.due + (r.due > 1 ? " révisions prévues" : " révision prévue") + " aujourd’hui</span>";
     return r.name ? '<span class="pst">En cours : ' + esc(r.name) + "</span>" : "";
