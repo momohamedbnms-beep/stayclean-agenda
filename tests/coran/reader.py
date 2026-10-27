@@ -71,6 +71,9 @@ with sync_playwright() as p:
     check('mode Pages : verset 2:255 présent', pg.locator('#mv-2-255').count() == 1)
     e.shot('64-page-42')
     pg.click('#pages [data-act="back"]'); pg.wait_for_timeout(400)
+    # la recherche est gardée au retour (voulu) : on l'efface avant de parcourir par juz
+    check('recherche gardée au retour à la liste', pg.input_value('#readSearch') == '2:255', pg.input_value('#readSearch'))
+    pg.fill('#readSearch', ''); pg.wait_for_timeout(250)
     # juz 30 → 78:1
     pg.click('[data-act="read-seg"][data-seg="juz"]'); pg.wait_for_timeout(300)
     e.shot('65-juz-list')

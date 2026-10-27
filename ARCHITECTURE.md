@@ -15,11 +15,11 @@ Application web installable (PWA), en JavaScript sans framework, hébergée sur 
 | `paperasse.html` + `paperasse/` | **Ma Paperasse** (remplace « Ma Vie » sur l'accueil) : papiers perso, rappels, preuves. Même session et même clé IA que l'agenda. Voir `MA-PAPERASSE.md`. |
 | `calories.html` + `calories/` | **Mes Calories** (4e carte de l'accueil) : repas dictés, calories, pesées et évolution. Même session et même clé IA que l'agenda. Voir `MES-CALORIES.md`. |
 | `coran.html` + `coran/` | **Mon Coran** (5e carte de l'accueil) : apprendre, lire et réviser le Coran (lecteur 114 sourates, séances en 4 étapes, révisions espacées, progrès). Même session que l'agenda, données privées à part. Voir `MON-CORAN.md`. |
-| `sw.js` | Service worker : le réseau d'abord, le cache seulement hors ligne. Reçoit aussi les notifications de Ma Paperasse (v36 ; v37 pour Mes Calories ; v38 pour Mon Coran). |
+| `sw.js` | Service worker : le réseau d'abord, le cache seulement hors ligne. Reçoit aussi les notifications de Ma Paperasse (v36 ; v37 pour Mes Calories ; v38 pour Mon Coran ; v39 : voix Al-Luhaidan, suivi du texte, « Je la connais à 100 % »). |
 | `supabase/ma-paperasse.sql`, `supabase/functions/mp-push/` | Côté serveur de Ma Paperasse : tables `mp_*` (RLS), bucket privé `mp-files`, tâche horaire, envoi des notifications. |
 | `supabase/mes-calories.sql` | Côté serveur de Mes Calories : table `cal_items` (RLS). |
 | `supabase/mon-coran.sql` | Côté serveur de Mon Coran : table `qr_items` (RLS). |
-| `tests/` | Banc d'essai automatisé. Il utilise un faux Supabase et des données fictives, jamais la production. `tests/coran/` : séances, révisions, lecteur et aller-retour avec l'agenda (audio remplacé par un bip local). |
+| `tests/` | Banc d'essai automatisé. Il utilise un faux Supabase et des données fictives, jamais la production. `tests/coran/` : séances, révisions, lecteur, voix principale et suivi du texte (`luhaidan.py`), étude en autonomie (`autodidacte.py`) et aller-retour avec l'agenda (audio remplacé par un son local). |
 
 `business.js` et `finance.js` sont chargés après le script principal. Ils utilisent ses fonctions globales (`DB`, `save`, `renderAll`, `esc`, `todayStr`…).
 
@@ -58,6 +58,7 @@ Application web installable (PWA), en JavaScript sans framework, hébergée sur 
 - Mon Coran lit sur l'appareil, sans les modifier : `DB.settings.sync` (serveur) et la session Supabase de l'agenda.
 - Elle écrit `qr.summary.v1` dans localStorage (sourate en cours, révisions du jour, séance faite) : le résumé de la carte de l'accueil.
 - Ses données vivent dans Supabase (`qr_items`), jamais dans `agenda_state`. Le texte du Coran est un fichier statique (`coran/data/`), construit à partir de sources vérifiées (`coran/sources/`).
+- Repères audio (`coran/data/timing/`) : mot à mot quran-align pour les voix EveryAyah ; par verset pour Al-Luhaidan, calculés hors de l'appli (`coran/sources/timing/`, méthode et validation dans `MON-CORAN.md`). L'appli ne s'en sert que si la taille du fichier audio est exactement celle du fichier aligné.
 
 ## Sources de vérité (une donnée = un endroit)
 

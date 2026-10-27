@@ -1,4 +1,4 @@
-var V = "stayclean-agenda-cache-v38";
+var V = "stayclean-agenda-cache-v39";
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 self.addEventListener("install", function (e) {
   self.skipWaiting();
@@ -45,6 +45,8 @@ self.addEventListener("fetch", function (e) {
   );
 });
 
+/* v39 (27/10/2026) — Mon Coran : voix principale Al-Luhaidan avec repères par verset (coran/data/timing/),
+   suivi du texte pendant la récitation, « Je la connais à 100 % ». Même règle « réseau d'abord ». */
 /* v38 (27/10/2026) — Mon Coran (coran.html + coran/) : nouvelle carte de l'accueil.
    Même règle « réseau d'abord » : le texte d'une sourate reste lisible hors ligne une fois ouvert
    (ou après « Garder le texte hors ligne » dans ses réglages). L'audio n'est jamais mis en cache ici :
