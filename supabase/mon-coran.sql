@@ -10,7 +10,8 @@
 --                attempt   tentatives de récitation (une ligne par tentative, jamais modifiée)
 --                progress  étapes d'apprentissage et jalons par sourate
 --                review    calendrier de révision
---                ar_state  « Lire et écrire l'arabe » : niveau, unités, compétences, séance
+--                ar_state  « Lire et écrire l'arabe » : niveau, unité en cours, notions vues, niveaux réussis et confirmés
+--                          (la séance en cours reste sur le téléphone)
 --                ar_att    « Lire et écrire l'arabe » : réponses aux exercices (journal des erreurs)
 --                ar_exam   « Lire et écrire l'arabe » : examens blancs et de niveau
 -- Les textes du Coran ne sont PAS ici : ils sont servis en fichiers statiques (coran/data/).

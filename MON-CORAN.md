@@ -10,6 +10,7 @@ Section **privée** : rien n'est mélangé aux données professionnelles (`agend
 |---|---|
 | **Apprendre** (par défaut) | « Un peu chaque jour » : la sourate et le passage du moment, **Commencer ma séance** ou **Reprendre ma séance**, « Environ 10 min », les révisions prévues. Au premier lancement : 5, 10 ou 15 minutes (10 présélectionné, modifiable, on peut passer). |
 | **Lire** | Les 114 sourates : recherche par nom français, nom translittéré, nom arabe, numéro, verset (`2:255`), page (`page 42`) ou juz (`juz 30`). Reprise automatique de la dernière lecture, favoris avec étiquette libre, sourates / juz / pages. |
+| **Arabe** | « Lire et écrire l’arabe » : niveau en cours, unité en cours, compétence à travailler, **Commencer / Continuer ma séance** (environ 20 min en parties qu’on peut faire séparément), fiche du jour, et quatre entrées : **Mon parcours**, **M’entraîner**, **Mes examens**, **Mes fiches PDF**. |
 | **Mes progrès** | Sourates travaillées, récitées sans aide, **connues à 100 % (validées par toi)**, révisions prévues, jours de pratique. Une ligne par sourate : état écrit + « x étapes sur 6 », ou barre pleine « Auto-évaluation du … » pour une sourate validée seul. |
 
 Réglages (icône en haut à droite) : ambiance (**Vert doux**, **Papier**, **Nuit**), durée, nombre de répétitions, silence pour répéter, parcours, récitateur, rappel, texte hors ligne, audio téléchargé, enregistrements, sauvegarde, sources.
@@ -72,6 +73,18 @@ Les étapes 5 et 6 demandent une **nouvelle récitation** à la bonne date : ell
 
 Al-Fatiha (avec « Je la connais déjà » : essai de récitation complète), puis Al-Ikhlas, Al-Falaq, An-Nas, Al-Kawthar, Al-Asr, Al-Kafirun, puis le reste de Juz Amma des sourates les plus courtes aux plus longues. Le parcours ne change jamais l'ordre du lecteur. Al-Fatiha n'appartient pas à Juz Amma (référence : https://quran.com/fr/juz/30).
 
+## Lire et écrire l’arabe (onglet « Arabe », `coran/arabe.js`)
+
+- **8 niveaux** (0 Premiers repères → 7 L’autonomie), 31 unités ; chaque unité a sa notion (« Comprendre », exemples, mots du Coran avec l’audio pédagogique d’Al-Husary, jamais attribué à une autre voix).
+- **Séance** : je révise (erreurs récentes et compétence la plus fragile) → je découvre (notion) → je m’exerce → j’écris → je lis à voix haute. On peut s’arrêter après chaque partie ; la séance en cours reste sur l’appareil.
+- **7 compétences suivies** (lettres, formes liées, voyelles et signes, écriture, mots nouveaux, passages, fluidité) : réussite récente sur les 20 dernières réponses ; **journal des erreurs** (confusion, point, liaison, voyelle, signe, hésitation, forme, ordre) ; les éléments manqués reviennent en priorité.
+- **Exercices** : une consigne par écran, toujours étiquetés « Corrigé par l’appli » ou « Auto-évaluation ». Lettres (nom, son, formes produites par la police), première lettre, points, syllabes, lecture de mots, écoute, signes, article lunaire / solaire, formes particulières, signes du mushaf et de pause (exemples réels du texte), composer un mot entendu (lettres à toucher), écrire à l’écran (modèle de la police, statique : l’ordre des traits n’est pas montré), lire à voix haute, passages, **cycle de fluidité** (petits groupes → réécoute → lecture d’une traite chronométrée → bilan).
+- **Examens** : grille annoncée avant de commencer ; **examen blanc** (correction visible, ne compte pas) ; **examen de niveau** sans correction pendant l’examen ; un niveau est **validé** seulement si chaque compétence obligatoire atteint **16/20**, puis **confirmée un autre jour sur une autre série** ; chaque tentative a son propre tirage (un examen interrompu puis recommencé n’a pas les mêmes questions). Finir des exercices ou toucher « Terminé » ne valide rien.
+- **Fiches PDF** (`coran/fiches/`) : 27 fiches A4 (une par notion ; deux notions très proches partagent parfois la même fiche) en **couleur** et en version **économique**, plus 6 cahiers (niveaux 0 à 5 : toutes les fiches du niveau dans un seul PDF) ; boutons **Voir**, **Télécharger le PDF**, **Télécharger en image**, **Imprimer** (sur iPhone, Android et Safari, la fiche s’ouvre et s’imprime depuis le lecteur PDF). Construites par `coran/sources/arabe/build_fiches.py` (chaque fiche contrôlée : une seule page, rien de coupé, police arabe intégrée ; inspectées visuellement). Aucun QR code ni lien.
+- **Sur l’appareil seulement** : écriture à l’écran, photos de feuilles, enregistrements de sa voix (micro demandé par le navigateur) ; rien n’est envoyé, tout est supprimable (Mes fiches → Mes écrits, photos et enregistrements).
+- **Contenu** : `coran/data/arabe/banque.json` (construit par `coran/sources/arabe/build_bank.py` depuis `lettres.py`, `programme.py` et le texte Tanzil, avec tests de l’écriture usuelle et de la transcription). Aucune forme arabe ni aucun verset n’est inventé ; aucun contenu n’a été relu par un enseignant et l’appli ne le prétend pas.
+- **Données** (compte) : natures `ar_state` (niveau, unité en cours, notions vues, niveaux réussis / confirmés), `ar_att` (réponses), `ar_exam` (examens) dans `qr_items` ; la séance en cours reste sur l’appareil.
+
 ## Sources et droits
 
 Fichiers d'origine copiés tels quels dans `coran/sources/raw/` ; empreintes SHA-256, adresses et licences dans `coran/sources/SOURCES.json`. `coran/sources/build.py` vérifie les empreintes, contrôle tout et produit `coran/data/`.
@@ -85,6 +98,7 @@ Fichiers d'origine copiés tels quels dans `coran/sources/raw/` ; empreintes SHA
 | Noms français des sourates | Wikipédia FR, *Modèle:Palette Sourate/liste* (révision 225651281) | CC BY-SA 4.0 |
 | Audio | **MP3Quran.net**, un fichier par sourate : Mohamed Al-Luhaidan (voix principale), Yasser Al-Dossari. **EveryAyah.com**, verset par verset : Mahmoud Khalil Al-Husary (murattal et pédagogique), Mohamed Siddiq Al-Minshawi, Mishary Rashid Alafasy — Hafs | Pas de licence de redistribution publiée : rien n'est copié dans ce dépôt ; lecture en ligne, et téléchargement **sourate par sourate, sur demande**, pour un usage personnel |
 | Repères | Mot à mot : **quran-align** (Collin Fair, CC BY 4.0) pour les fichiers EveryAyah. Par verset : publiés par MP3Quran (Al-Dossari) ; calculés et contrôlés ici (Al-Luhaidan, voir plus haut) | Attribution CC BY 4.0 dans Sources et droits |
+| « Lire et écrire l’arabe » | Formes et liaisons : **Unicode** (chapitre 9.2 « Arabic », `ArabicShaping.txt`) ; alphabet : **Northwestern University** (MENA Languages) ; sons : **Handbook of the IPA** (1999, « Arabic ») ; signes et pauses : conventions du **Mushaf de Médine** ; mots et passages : texte **Tanzil** ; audio des mots : **Al-Husary « Al-Mu’allim »** (EveryAyah) découpé avec **quran-align** | Détail dans `coran/data/arabe/banque.json` (`sources`) et dans Sources et droits de l’appli |
 | Police arabe | **Amiri Quran** (sous-ensemble arabe, 45 Ko) | SIL OFL 1.1 (`coran/fonts/OFL-Amiri.txt`) |
 | Police latine | **Rubik** | SIL OFL 1.1 (`coran/fonts/OFL-Rubik.txt`) |
 | Illustration | Livre vert fermé sur un pupitre en bois, générée une seule fois pour l'appli, sans texte | — |
@@ -96,7 +110,7 @@ Contrôles faits à la construction : 114 sourates, 6 236 versets, numérotation
 ## Installation (une seule fois)
 
 1. **Base de données** : Supabase → SQL Editor → colle [`supabase/mon-coran.sql`](supabase/mon-coran.sql) → **Run**. Il crée seulement la table `qr_items` (RLS : chaque compte ne voit que ses lignes). On peut le relancer sans risque. Sans cette étape, Mon Coran fonctionne quand même, mais **sur ce téléphone seulement** (c'est écrit dans Mes progrès et les réglages) ; l'export / import JSON reste possible.
-2. **Mise en ligne** : publier sur `main` → GitHub Pages. Le service worker passe en v39.
+2. **Mise en ligne** : publier sur `main` → GitHub Pages. Le service worker passe en v40.
 3. Sur l'iPhone : ouvre StayClean Agenda **depuis l'icône** → MON CORAN.
 
 ## Comment c'est construit
@@ -118,6 +132,7 @@ Contrôles faits à la construction : 114 sourates, 6 236 versets, numérotation
 - **Versets longs** : le texte est découpé seulement aux marques de pause du texte source (jamais au milieu d'un mot) ; l'audio lit le verset entier.
 - **Suivi mot à mot** : seulement avec Al-Husary, Al-Minshawi et Alafasy (quran-align). Avec Al-Luhaidan et Al-Dossari, suivi par verset (aucun repère mot à mot publié pour ces enregistrements).
 - **Limites incertaines (Al-Luhaidan)** : versets surlignés ensemble ; un verset concerné, joué seul, est lu par Al-Husary (annoncé).
+- **Lire et écrire l’arabe** : l’écriture à l’écran et la lecture à voix haute sont des **auto-évaluations** (aucune correction automatique de l’écriture ni de la voix) ; le nom des lettres n’a un audio vérifié que pour les trois lettres récitées seules en tête de sourate (ق, ن, ص), les autres ont leur nom et leur son écrits ; contenus non relus par un enseignant.
 - **Rappel** : par événement de calendrier (fichier `.ics` ou Google Agenda), activé explicitement ; pas de notification poussée.
 - **Hors ligne** : le texte d'une sourate déjà ouverte reste lisible ; « Garder le texte hors ligne » prépare les 114. L'audio hors ligne se télécharge sourate par sourate.
 
@@ -133,6 +148,7 @@ Contrôles faits à la construction : 114 sourates, 6 236 versets, numérotation
 python3 -m http.server 8765 --bind 127.0.0.1   # depuis la racine du dépôt
 cd tests/coran && python3 session.py && python3 reviews.py && python3 reader.py && python3 content.py && python3 agenda.py
 python3 luhaidan.py && python3 autodidacte.py   # voix principale, suivi, versets regroupés ; « Je la connais à 100 % »
+python3 arabe.py && python3 arabe_niveaux.py && python3 arabe_contenu.py   # « Lire et écrire l'arabe » (séances, examens, fiches, contenus)
 npm install @supabase/supabase-js@2.117.1 && python3 sync.py   # sauvegarde sur le compte, avec un faux serveur
 ```
 

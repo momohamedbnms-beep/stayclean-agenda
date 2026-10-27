@@ -24,8 +24,11 @@ def fulfill_media(route, body, ctype='audio/wav'):
     route.fulfill(status=200, body=body, headers=h)
 
 class Env:
-    def __init__(self, p, viewport=(390, 844), dark=False, audio_ok=True, supabase=None, offline_audio=False, reduced=False):
-        self.browser = p.chromium.launch(args=['--autoplay-policy=no-user-gesture-required'])
+    def __init__(self, p, viewport=(390, 844), dark=False, audio_ok=True, supabase=None, offline_audio=False, reduced=False, fake_mic=False):
+        args = ['--autoplay-policy=no-user-gesture-required']
+        if fake_mic:
+            args += ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream']
+        self.browser = p.chromium.launch(args=args)
         self.ctx = self.browser.new_context(viewport={'width': viewport[0], 'height': viewport[1]}, device_scale_factor=2,
                                             color_scheme='dark' if dark else 'light', locale='fr-BE', timezone_id='Europe/Brussels',
                                             reduced_motion='reduce' if reduced else 'no-preference')
