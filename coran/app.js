@@ -1511,18 +1511,24 @@ PAGES.reader = {
   // (ligne de lecture juste sous la barre du haut ; on retient le verset qu'elle traverse et à quelle hauteur)
   snapshot(el, props) {
     if (props.mode === 'page') return null;
+    if (el.scrollTop < 8) return { top: true }; // en haut de la sourate : on y reste
     const line = el.getBoundingClientRect().top + 84;
     for (const v of el.querySelectorAll('.verse')) {
       const r = v.getBoundingClientRect();
-      if (r.bottom > line) return { s: Number(v.dataset.s), a: Number(v.dataset.a), frac: r.height ? clamp((line - r.top) / r.height, 0, 1) : 0 };
+      if (r.bottom <= line) continue;
+      const base = { s: Number(v.dataset.s), a: Number(v.dataset.a) };
+      // verset coupé par la ligne de lecture : on retient la proportion ; sinon, sa distance à cette ligne
+      return r.top < line ? Object.assign(base, { frac: r.height ? (line - r.top) / r.height : 0 }) : Object.assign(base, { below: r.top - line });
     }
     return null;
   },
   restore(el, snap, props) {
-    if (props.mode === 'page' || snap.s !== props.s) return;
+    if (props.mode === 'page') return;
+    if (snap.top) { el.scrollTop = 0; return; }
+    if (snap.s !== props.s) return;
     const v = el.querySelector(`#v-${snap.s}-${snap.a}`); if (!v) return;
     const r = v.getBoundingClientRect(); const line = el.getBoundingClientRect().top + 84;
-    el.scrollTop += (r.top + snap.frac * r.height) - line;
+    el.scrollTop += isNum(snap.below) ? (r.top - line - snap.below) : (r.top + snap.frac * r.height) - line;
   },
 };
 /* Dernière position : le verset en haut de l'écran (sauvegarde discrète) */

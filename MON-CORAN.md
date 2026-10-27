@@ -107,7 +107,8 @@ Contrôles faits à la construction : 114 sourates, 6 236 versets, numérotation
 
 ```
 python3 -m http.server 8765 --bind 127.0.0.1   # depuis la racine du dépôt
-cd tests/coran && python3 session.py && python3 reviews.py && python3 reader.py && python3 agenda.py
+cd tests/coran && python3 session.py && python3 reviews.py && python3 reader.py && python3 content.py && python3 agenda.py
+npm install @supabase/supabase-js@2.117.1 && python3 sync.py   # sauvegarde sur le compte, avec un faux serveur
 ```
 
-Audio remplacé par un bip local, données fictives, dates simulées : aucun service réel n'est appelé.
+Audio remplacé par un bip local, faux serveur Supabase en mémoire, données fictives, dates simulées : aucun service réel n'est appelé.
