@@ -14,10 +14,12 @@ Application web installable (PWA), en JavaScript sans framework, hébergée sur 
 | `reserver.html` | Redirige vers stayclean.be. L'ancienne page de réservation est retirée ; elle reste dans l'historique Git. |
 | `paperasse.html` + `paperasse/` | **Ma Paperasse** (remplace « Ma Vie » sur l'accueil) : papiers perso, rappels, preuves. Même session et même clé IA que l'agenda. Voir `MA-PAPERASSE.md`. |
 | `calories.html` + `calories/` | **Mes Calories** (4e carte de l'accueil) : repas dictés, calories, pesées et évolution. Même session et même clé IA que l'agenda. Voir `MES-CALORIES.md`. |
-| `sw.js` | Service worker : le réseau d'abord, le cache seulement hors ligne. Reçoit aussi les notifications de Ma Paperasse (v36 ; v37 pour Mes Calories). |
+| `coran.html` + `coran/` | **Mon Coran** (5e carte de l'accueil) : apprendre, lire et réviser le Coran (lecteur 114 sourates, séances en 4 étapes, révisions espacées, progrès). Même session que l'agenda, données privées à part. Voir `MON-CORAN.md`. |
+| `sw.js` | Service worker : le réseau d'abord, le cache seulement hors ligne. Reçoit aussi les notifications de Ma Paperasse (v36 ; v37 pour Mes Calories ; v38 pour Mon Coran). |
 | `supabase/ma-paperasse.sql`, `supabase/functions/mp-push/` | Côté serveur de Ma Paperasse : tables `mp_*` (RLS), bucket privé `mp-files`, tâche horaire, envoi des notifications. |
 | `supabase/mes-calories.sql` | Côté serveur de Mes Calories : table `cal_items` (RLS). |
-| `tests/` | Banc d'essai automatisé. Il utilise un faux Supabase et des données fictives, jamais la production. |
+| `supabase/mon-coran.sql` | Côté serveur de Mon Coran : table `qr_items` (RLS). |
+| `tests/` | Banc d'essai automatisé. Il utilise un faux Supabase et des données fictives, jamais la production. `tests/coran/` : séances, révisions, lecteur et aller-retour avec l'agenda (audio remplacé par un bip local). |
 
 `business.js` et `finance.js` sont chargés après le script principal. Ils utilisent ses fonctions globales (`DB`, `save`, `renderAll`, `esc`, `todayStr`…).
 
@@ -49,6 +51,13 @@ Application web installable (PWA), en JavaScript sans framework, hébergée sur 
 - Mes Calories lit sur l'appareil, sans les modifier : `DB.settings.sync` (serveur), `DB.settings.provider/apiKey/geminiKey` (IA) et `DB.cpt.profil` (prénom).
 - Elle écrit `ct.summary.v1` dans localStorage (kcal du jour, objectif, dernier poids) : le résumé de la carte de l'accueil.
 - Ses données vivent dans Supabase (`cal_items`), jamais dans `agenda_state`.
+
+## Mon Coran (27/10/2026)
+
+- L'accueil affiche une 5e carte **MON CORAN** ; le bouton ouvre `coran.html` (même appli installée, retour par l'historique).
+- Mon Coran lit sur l'appareil, sans les modifier : `DB.settings.sync` (serveur) et la session Supabase de l'agenda.
+- Elle écrit `qr.summary.v1` dans localStorage (sourate en cours, révisions du jour, séance faite) : le résumé de la carte de l'accueil.
+- Ses données vivent dans Supabase (`qr_items`), jamais dans `agenda_state`. Le texte du Coran est un fichier statique (`coran/data/`), construit à partir de sources vérifiées (`coran/sources/`).
 
 ## Sources de vérité (une donnée = un endroit)
 

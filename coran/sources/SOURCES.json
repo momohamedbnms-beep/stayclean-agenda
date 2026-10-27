@@ -1,0 +1,66 @@
+{
+  "recupere_le": "2026-10-27T15:04:32Z",
+  "methode": "Téléchargés depuis le site de chaque fournisseur (navigateur), puis contrôlés par empreinte SHA-256 avant et après transfert.",
+  "files": {
+    "quran": {
+      "file": "tanzil-quran-uthmani.txt",
+      "url": "https://tanzil.net/pub/download/index.php?marks=true&sajdah=true&tatweel=true&quranType=uthmani&outType=txt-2&agree=true",
+      "titre": "Tanzil Quran Text (Uthmani, Version 1.1)",
+      "licence": "Creative Commons Attribution 3.0, copie verbatim uniquement (texte non modifiable), source citée avec lien vers tanzil.net, bloc de copyright conservé",
+      "conditions": "https://tanzil.net/docs/Text_License",
+      "sha256": "6933e133dd56db778c801bf738848454e43648105a151e8d84d86a7cae39ec5f",
+      "octets": 1396087
+    },
+    "meta": {
+      "file": "tanzil-quran-data.js",
+      "url": "https://tanzil.net/res/text/metadata/quran-data.js",
+      "titre": "Tanzil Quran Metadata 1.0 (sourates, juz, pages du Mushaf de Médine, prosternations)",
+      "licence": "Creative Commons Attribution 3.0",
+      "conditions": "https://tanzil.net/docs/quran_metadata",
+      "sha256": "9e9930c592aaa34b5c7a79ff4e99ffdc782263a266090bfe2c49e4ed4bac4ca4",
+      "octets": 25096
+    },
+    "translit": {
+      "file": "tanzil-en.transliteration.txt",
+      "url": "https://tanzil.net/trans/en.transliteration",
+      "titre": "Transliteration (en.transliteration), dernière mise à jour 6 septembre 2010",
+      "licence": "Traductions Tanzil : usage non commercial uniquement",
+      "conditions": "https://tanzil.net/trans/",
+      "sha256": "8c20d95e484534e921cd2e0d2546aab7f5300090c0bd76697095b3ca1db1e01d",
+      "octets": 1044894
+    },
+    "translation": {
+      "file": "quranenc-french_rashid.json",
+      "url": "https://quranenc.com/api/v1/translation/sura/french_rashid/{1..114} et https://quranenc.com/api/v1/translations/list/fr",
+      "titre": "Traduction française du sens — Rachid Maach (QuranEnc, clé french_rashid, version 1.0.3)",
+      "licence": "Conditions QuranEnc : ne rien modifier, citer QuranEnc et le traducteur, indiquer la version, mettre à jour vers la dernière version, pas de publicité inappropriée",
+      "conditions": "https://quranenc.com/fr/home/api/",
+      "sha256": "aaed40e78cf49ef07a1934cb2377f6f5b2c4eb04353ee11c0ea31a6415346cc7",
+      "octets": 3043789
+    },
+    "names": {
+      "file": "wikipedia-palette-sourate-liste.json",
+      "url": "https://fr.wikipedia.org/w/index.php?title=Mod%C3%A8le:Palette_Sourate/liste&oldid=225651281",
+      "titre": "Wikipédia — Modèle:Palette Sourate/liste (titres français des sourates)",
+      "licence": "CC BY-SA 4.0",
+      "conditions": "https://creativecommons.org/licenses/by-sa/4.0/deed.fr",
+      "sha256": "f605b80a678baa76b74413c94133223691b2ebdc150f515d3bf88a670c7b5256",
+      "octets": 27981
+    }
+  },
+  "police": {
+    "file": "../fonts/amiri-quran-arabic-400-normal.woff2",
+    "titre": "Amiri Quran (Amiri Project, via Fontsource @fontsource/amiri-quran 5.3.0, sous-ensemble arabe)",
+    "licence": "SIL Open Font License 1.1 (voir coran/fonts/OFL-Amiri.txt)"
+  },
+  "audio": {
+    "fournisseur": "EveryAyah.com (fichiers verset par verset, aussi utilisés par Quran.com)",
+    "modele_url": "https://everyayah.com/data/{dossier}/{SSS}{AAA}.mp3",
+    "recitateurs": {
+      "husary": "Husary_128kbps — Mahmoud Khalil Al-Husary, murattal, Hafs",
+      "alafasy": "Alafasy_128kbps — Mishary Rashid Alafasy, murattal, Hafs",
+      "minshawi": "Minshawy_Murattal_128kbps — Mohamed Siddiq Al-Minshawi, murattal, Hafs"
+    },
+    "droits": "Aucune licence de redistribution publiée par EveryAyah : les fichiers ne sont pas copiés dans ce dépôt. L'appli les lit depuis everyayah.com et, sur demande explicite, les garde sur l'appareil pour un usage personnel."
+  }
+}

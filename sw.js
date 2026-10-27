@@ -1,4 +1,4 @@
-var V = "stayclean-agenda-cache-v37";
+var V = "stayclean-agenda-cache-v38";
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 self.addEventListener("install", function (e) {
   self.skipWaiting();
@@ -45,6 +45,10 @@ self.addEventListener("fetch", function (e) {
   );
 });
 
+/* v38 (27/10/2026) — Mon Coran (coran.html + coran/) : nouvelle carte de l'accueil.
+   Même règle « réseau d'abord » : le texte d'une sourate reste lisible hors ligne une fois ouvert
+   (ou après « Garder le texte hors ligne » dans ses réglages). L'audio n'est jamais mis en cache ici :
+   il est téléchargé sourate par sourate, à la demande, dans le stockage de Mon Coran. */
 /* v37 (13/10/2026) — Mes Calories (calories.html) : nouvelle carte de l'accueil.
    Rien ne change ici : la page et ses fichiers passent par la même règle « réseau d'abord ». */
 /* v36 (13/10/2026) — Ma Paperasse : rappels sur le téléphone, même appli fermée.

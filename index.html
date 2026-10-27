@@ -329,6 +329,9 @@ nav button{font-size:12px;padding:10px 2px}
 .pcard.pap{background:linear-gradient(135deg,#1E1650 0%,#4B32D1 62%,#9C8BFF 130%);color:#fff}
 .pcard.cal{background:linear-gradient(135deg,#431407 0%,#C2410C 62%,#FDBA74 130%);color:#fff}
 .pcard.cal .lg{background:#FFF1E7}
+/* Mon Coran (27/10/2026) : vert forêt de la section */
+.pcard.qr{background:linear-gradient(135deg,#0B3B2C 0%,#145A43 58%,#4FAF85 130%);color:#fff}
+.pcard.qr .lg{background:#E7F4EB}
 .pcard .lg{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:14px;background:#F1EDFF;box-shadow:0 4px 12px rgba(0,0,0,.2)}
 .pcard .lg svg{width:31px;height:31px;display:block}
 .pcard .pst{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.17);font-size:12px;font-weight:700}
@@ -1976,6 +1979,21 @@ function calResume() {
     return '<span class="pst">' + (reste >= 0 ? reste.toLocaleString("fr-BE") + " kcal restantes" : Math.abs(reste).toLocaleString("fr-BE") + " kcal au-dessus") + kg + "</span>";
   } catch (e) { return ""; }
 }
+/* ---- Mon Coran : apprendre, lire et réviser (coran.html, même appli, même compte) ----
+   Le résumé de la carte est écrit par Mon Coran sur cet appareil (qr.summary.v1). */
+var QR_LOGO = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M5.5 12.6c5.6-2.3 11.8-2 17.5 1.3v24.6c-5.7-3.3-11.9-3.6-17.5-1.3z" fill="#fff" stroke="#20212B" stroke-width="2.6" stroke-linejoin="round"/><path d="M40.5 12.6c-5.6-2.3-11.8-2-17.5 1.3v24.6c5.7-3.3 11.9-3.6 17.5-1.3z" fill="#fff" stroke="#20212B" stroke-width="2.6" stroke-linejoin="round"/><circle cx="34" cy="35" r="9.5" fill="#145A43"/><path d="M31.4 30.6v8.8a.9.9 0 0 0 1.37.77l7.1-4.4a.9.9 0 0 0 0-1.54l-7.1-4.4a.9.9 0 0 0-1.37.77z" fill="#fff"/></svg>';
+function qrResume() {
+  try {
+    var r = JSON.parse(localStorage.getItem("qr.summary.v1") || "null");
+    if (!r || !r.at) return "";
+    var u = session && session.user && session.user.id;
+    if (u && r.uid && r.uid !== u) return "";
+    var auj = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Brussels", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    if (r.date === auj && r.done) return '<span class="pst">✓ Séance faite aujourd’hui</span>';
+    if (r.date === auj && r.due) return '<span class="pst">' + r.due + (r.due > 1 ? " révisions prévues" : " révision prévue") + " aujourd’hui</span>";
+    return r.name ? '<span class="pst">En cours : ' + esc(r.name) + "</span>" : "";
+  } catch (e) { return ""; }
+}
 function renderPortal() {
   return '<div class="portal">' + portalResume() +
     '<p class="pt">Où veux-tu aller ?</p>' +
@@ -1998,6 +2016,11 @@ function renderPortal() {
     '<span class="lg">' + CAL_LOGO + '</span><span class="go">›</span>' +
     '<span class="tt" style="display:block">MES CALORIES</span>' +
     '<span class="ss" style="display:block">Repas dictés, poids et évolution</span>' + calResume() +
+    "</button>" +
+    '<button class="pcard qr" data-act="go-coran" aria-label="Mon Coran : apprendre, lire et réviser">' +
+    '<span class="lg">' + QR_LOGO + '</span><span class="go">›</span>' +
+    '<span class="tt" style="display:block">MON CORAN</span>' +
+    '<span class="ss" style="display:block">Apprendre, lire et réviser</span>' + qrResume() +
     "</button>" +
     '<button class="pday" data-act="go-jour">📅 Voir ma journée complète</button>' +
     "</div>";
@@ -5388,6 +5411,14 @@ document.addEventListener("click", function (e) {
       /* une modification attend d'être envoyée au cloud : on l'envoie d'abord (2,5 s max) */
       if (pushTimer && session) { clearTimeout(pushTimer); pushTimer = null; Promise.race([pushCloud(), new Promise(function (r) { setTimeout(r, 2500); })]).then(allerCal, allerCal); }
       else allerCal();
+      break;
+    }
+    case "go-coran": {
+      try { sessionStorage.setItem("qr.from", "agenda"); } catch (e) {}
+      var allerQr = function () { location.href = "coran.html"; };
+      /* une modification attend d'être envoyée au cloud : on l'envoie d'abord (2,5 s max) */
+      if (pushTimer && session) { clearTimeout(pushTimer); pushTimer = null; Promise.race([pushCloud(), new Promise(function (r) { setTimeout(r, 2500); })]).then(allerQr, allerQr); }
+      else allerQr();
       break;
     }
     case "go-cpt": ui.space = "cpt"; ui.tab = "situation"; renderAll(); break;
