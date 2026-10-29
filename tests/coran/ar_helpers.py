@@ -1,4 +1,4 @@
-"""Aide commune aux tests « Lire et écrire l'arabe » : répondre à l'exercice affiché."""
+"""Aide commune aux tests « Lire et écrire l'arabe » : répondre à l'exercice affiché (choisir, puis valider)."""
 
 MARKS = set('ًٌٍَُِّْ')
 
@@ -34,6 +34,7 @@ def answer_current(e, right=True, self_v='1'):
     if t['ch']:
         v = t['ans'] if right else next(x for x in t['ch'] if x != t['ans'])
         pg.locator('.ar-ex [data-act="ar-pick"][data-v="%s"]' % v.replace('"', '\\"')).first.click()
+        pg.click('.ar-ex [data-act="ar-validate"]')   # attend que « Valider » soit actif (réponse choisie)
     elif t['kb']:
         if pg.locator('input[data-ar-kbin]').count():
             pg.fill('input[data-ar-kbin]', t['ans'] if right else 'ب')
@@ -67,3 +68,11 @@ def answer_current(e, right=True, self_v='1'):
         pg.click('[data-act="ar-crit-ok"]')
     pg.wait_for_timeout(150)
     return t['t']
+
+
+def advance(pg):
+    """Après une réponse : « Continuer » à l'entraînement ; en examen, l'appli passe seule à la question suivante."""
+    pg.wait_for_timeout(120)
+    if pg.locator('.ar-ex [data-act="ar-next"]').count():
+        pg.click('.ar-ex [data-act="ar-next"]')
+    pg.wait_for_timeout(120)

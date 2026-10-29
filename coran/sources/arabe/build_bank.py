@@ -424,7 +424,7 @@ def build(words, Q):
 
 MARKS = {'wasla': 'ٱ', 'dagger': 'ٰ', 'small_waw': 'ۥ', 'small_ya': 'ۦ', 'zero': '۟', 'rect_zero': '۠',
          'madd': 'ٓ', 'iqlab': 'ۭۢ'}
-BANK_VERSION = '20261028c'
+BANK_VERSION = '20261029a'
 
 
 def display_first(w):

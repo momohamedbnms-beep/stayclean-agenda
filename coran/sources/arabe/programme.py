@@ -237,8 +237,9 @@ CHAPTERS = [
                 "Lire par petits groupes de mots, réécouter, relire d’une traite."]},
 ]
 
-# Examens : 20 questions notées par l'appli (une question = 1 point ; une dictée juste sans ses voyelles quand
-# elles étaient demandées = ½ point). L'examen final : 30 questions ramenées sur 20. Partie orale à part.
+# Grilles d'examen : 20 questions (l'examen final : 30), une question = 1 point ; une dictée juste sans ses voyelles
+# quand elles étaient demandées = ½ point. L'appli ramène chaque grille à 10 ou 15 questions au choix, en gardant
+# la part de chaque partie, et note sur 20. Pas de partie orale (l'IA comprenait mal) : l'écoute se fait par dictée.
 # types « k_… » : réponse tapée au clavier arabe de l'appli. full = les voyelles comptent.
 CHAPTER_EXAMS = {
     "c1": [
@@ -309,6 +310,6 @@ for _k, _v in list(CHAPTER_EXAMS.items()):
 
 VALIDATION = {
     "seuil": 16, "sur": 20,
-    "regle": "Chaque examen compte 20 questions notées par l’appli (l’examen final : 30, ramenées sur 20). Réussi à partir de 16/20 ; en dessous, on refait un examen similaire, avec d’autres questions. La partie orale est notée à part, à titre indicatif.",
+    "regle": "Chaque examen compte 10 ou 15 questions au choix, notées par l’appli et ramenées sur 20 (chaque partie du programme garde sa part). Réussi à partir de 16/20 ; en dessous, on refait un examen similaire, avec d’autres questions.",
     "nature": "Choix de conception ajustable, pas une norme scientifique. Aucun contenu n’a été relu par un enseignant.",
 }

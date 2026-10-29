@@ -131,7 +131,6 @@
 .ar-result__note span { font-size: 24px; color: var(--ink-3); font-weight: 600; }
 .ar-result__m { font-size: 18px; font-weight: 600; }
 .ar-result.is-ok .ar-result__m { color: var(--ok-ink); }
-.ar-result__o { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--ink-2); font-size: 14.5px; text-align: left; }
 .ar-result .ar-spark { margin-top: 8px; }
 .ar-corr { display: grid; gap: 8px; }
 .ar-corr__i { padding: 12px 14px; border-radius: var(--r-sm); background: var(--surface); box-shadow: inset 4px 0 0 var(--line-strong); display: grid; gap: 6px; }
@@ -176,11 +175,6 @@
 .ar-kbn__in:focus { outline: 3px solid var(--active-line); outline-offset: 1px; }
 .ar-kb__ans { display: flex; align-items: center; gap: 8px; color: var(--ink-2); margin: 10px 0 0; }
 
-/* --- Partie orale --- */
-.ar-mic { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 12px; border-radius: var(--r-lg); background: var(--primary); color: var(--on-primary); font-weight: 600; font-size: 17px; box-shadow: 0 6px 18px rgba(20, 90, 67, .22); }
-.ar-mic.is-rec { background: var(--err); color: #fff; animation: arPulse 1.2s ease-in-out infinite; }
-@keyframes arPulse { 50% { box-shadow: 0 0 0 10px rgba(163, 52, 42, .15); } }
-.ar-oral .loading { padding: 26px 0; }
 .ar-fb--half { background: var(--hes-bg); color: var(--hes-ink); }
 .ar-choice:focus-visible, .ar-tile:focus-visible, .ar-self__b:focus-visible, .ar-word:focus-visible, .ar-chap:focus-visible, .ar-path__b:focus-visible, .ar-seg__b:focus-visible, .ar-kb__k:focus-visible { outline: 3px solid var(--active-line); outline-offset: 2px; }
 
@@ -380,3 +374,18 @@ bdi.ar-t { font-size: 1.15em; line-height: 1; }
 /* modèle en transparence : sa ligne de base sur la ligne du cadre (64 % de la hauteur) */
 .ar-canvas__model { display: block; }
 .ar-canvas__model > .ar-t { position: absolute; left: 0; right: 0; top: calc(64% - 1.0905em); text-align: center; white-space: nowrap; }
+
+/* Examen : 10 ou 15 questions, au choix */
+.ar-len__l { margin: 18px 0 8px; font-weight: 600; color: var(--ink); }
+.ar-len { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.ar-len__b { display: flex; align-items: baseline; justify-content: center; gap: 6px; min-height: 64px; padding: 10px; border: 2px solid var(--line); border-radius: var(--r-md); background: var(--surface); color: var(--ink-2); font: inherit; cursor: pointer; }
+.ar-len__b b { font-size: 28px; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ar-len__b span { font-size: 15px; }
+.ar-len__b.is-on { border-color: var(--pc); background: var(--pc-tint); color: var(--pc-ink); }
+.ar-len__b.is-on b { color: var(--pc-ink); }
+.ar-len__b:focus-visible { outline: 3px solid var(--active-line); outline-offset: 2px; }
+/* Choisir une réponse (modifiable), puis valider */
+.ar-valid { margin-top: 14px; display: grid; gap: 6px; }
+.ar-valid__h { margin: 0; text-align: center; color: var(--ink-3); font-size: 14px; }
+.ar-choice.is-on { box-shadow: inset 0 0 0 1px var(--active-line); }
+.ar-result__c { color: var(--ink-2); font-size: 15px; font-variant-numeric: tabular-nums; }

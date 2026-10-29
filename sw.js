@@ -1,4 +1,4 @@
-var V = "stayclean-agenda-cache-v42";
+var V = "stayclean-agenda-cache-v43";
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 self.addEventListener("install", function (e) {
   self.skipWaiting();
@@ -45,6 +45,9 @@ self.addEventListener("fetch", function (e) {
   );
 });
 
+/* v43 (29/10/2026) — Mon Coran : la progression suit sur tous les appareils (connexion au compte dans Mon Coran,
+   fusion téléphone/Mac sans rien effacer, activation guidée de la sauvegarde) ; examens de 10 ou 15 questions,
+   réponse choisie puis validée, enchaînement, plus d'oral par IA. Même règle « réseau d'abord ». */
 /* v42 (28/10/2026) — Mon Coran : « Mémoriser » juz par juz et groupe par groupe (coran/data/groupes.json),
    statuts déclarés seulement, « Mes progrès » en carte des 30 juz, plus de minutes. Même règle « réseau d'abord ». */
 /* v41 (28/10/2026) — Mon Coran : « Lire et écrire l'arabe » en 10 chapitres (Étudier, M'entraîner, Examens blancs,

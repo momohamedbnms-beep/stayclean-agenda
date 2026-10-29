@@ -78,17 +78,37 @@ function readAgendaDB() {
   return _agendaDB;
 }
 function refreshAgendaDB() { _agendaDB = undefined; }
+/* Compte : celui de l'agenda s'il est configuré sur cet appareil ; sinon le projet officiel de StayClean
+   (adresse et clé publique, les mêmes que la page publique dispo.html). La session est commune à l'agenda
+   (même clé de stockage « sb-<projet>-auth-token ») : se connecter ici ou dans l'agenda revient au même. */
+const QR_ACCOUNT = { url: 'https://rgfanwbyzsfjlhwwhudg.supabase.co', key: 'sb_publishable_WHb6CLrjubW_GxRGdKbPWA_B6SnRFNU' };
 function hostSyncConf() {
   const db = readAgendaDB(); const s = (db && db.settings && db.settings.sync) || {};
-  return { url: typeof s.url === 'string' ? s.url.trim().replace(/\/+$/, '') : '', key: typeof s.anonKey === 'string' ? s.anonKey.trim() : '' };
+  const url = typeof s.url === 'string' ? s.url.trim().replace(/\/+$/, '') : ''; const key = typeof s.anonKey === 'string' ? s.anonKey.trim() : '';
+  if (/^https?:\/\/[^/]+$/i.test(url) && key.length > 20) return { url, key, from: 'agenda' };
+  return { url: QR_ACCOUNT.url, key: QR_ACCOUNT.key, from: 'default' };
 }
 function hostConfigured() { const c = hostSyncConf(); return /^https?:\/\/[^/]+$/i.test(c.url) && c.key.length > 20; }
+function hostRef() { try { return new URL(hostSyncConf().url).hostname.split('.')[0]; } catch (e) { return ''; } }
 function initHost() {
   if (Host.sb) return Host.sb;
   if (!hostConfigured() || !window.supabase || typeof window.supabase.createClient !== 'function') return null;
   const c = hostSyncConf();
   try { Host.sb = window.supabase.createClient(c.url, c.key); } catch (e) { Host.sb = null; }
   return Host.sb;
+}
+/* La bibliothèque Supabase n'a pas pu se charger (appli ouverte hors connexion) : on la recharge au retour du réseau */
+function ensureSupabaseLib() {
+  if (window.supabase && typeof window.supabase.createClient === 'function') return Promise.resolve(true);
+  if (Host.libP) return Host.libP;
+  const tag = document.querySelector('script[src*="@supabase/supabase-js"]'); if (!tag) return Promise.resolve(false);
+  Host.libP = new Promise((res) => {
+    const s = document.createElement('script'); s.src = tag.src; if (tag.integrity) s.integrity = tag.integrity; s.crossOrigin = 'anonymous';
+    s.onload = () => { Host.libP = null; res(!!(window.supabase && window.supabase.createClient)); };
+    s.onerror = () => { Host.libP = null; s.remove(); res(false); };
+    document.head.appendChild(s);
+  });
+  return Host.libP;
 }
 /* Utilisateur connecté d'après la session enregistrée par l'agenda (fonctionne hors ligne) */
 function storedSessionUser() {
@@ -116,10 +136,12 @@ function isNetErr(e) {
 }
 function sbErr(error, fallback) {
   if (!error) return { code: fallback || 'unknown' };
-  if (error.code && ['network', 'not_installed', 'session_expired', 'signed_out', 'forbidden', 'too_large', 'rate_limited', 'unavailable'].includes(error.code)) return error;
+  if (error.code && ['network', 'not_installed', 'outdated', 'session_expired', 'signed_out', 'forbidden', 'too_large', 'rate_limited', 'unavailable'].includes(error.code)) return error;
   const msg = String(error.message || error.error || ''); const code = String(error.code || ''); const st = Number(error.status || error.statusCode || 0);
   if (isNetErr(error) || (!st && !code && /fetch/i.test(msg))) return { code: 'network' };
   if (code === '42P01' || code === 'PGRST205' || code === 'PGRST202' || /does not exist|could not find the (table|function)|schema cache/i.test(msg)) return { code: 'not_installed', detail: msg };
+  // table installée avec une version plus ancienne du code d'installation (natures de l'arabe pas encore acceptées)
+  if (code === '23514' || /violates check constraint/i.test(msg)) return { code: 'outdated', detail: msg };
   if (code === 'PGRST301' || code === 'PGRST303' || /jwt expired|invalid jwt|not authenticated/i.test(msg) || st === 401) return { code: 'session_expired' };
   if (code === '42501' || st === 403 || /row-level security|permission denied/i.test(msg)) return { code: 'forbidden', detail: msg };
   if (st === 413 || /payload too large|too large/i.test(msg)) return { code: 'too_large' };
@@ -482,12 +504,51 @@ async function saveSession(s) {
   try { if (s) await idbPut('kv', Store.owner + '|session', clone(s)); else await idbDel('kv', Store.owner + '|session'); } catch (e) { storageFailed(); }
 }
 
-/* ===== Synchronisation avec le compte (table Supabase qr_items) ===== */
-const Sync = { state: 'local', since: null, pulling: null, pushing: null, timer: null, pushTimer: null, lastOk: 0, refreshTried: false, error: null };
-/* state : local (pas de compte relié) | signedout | connecting | synced | pending | offline | not_installed | error */
+/* ===== Synchronisation avec le compte (table Supabase qr_items) =====
+   Chaque élément (kind, id) est envoyé tel quel. À la réception, le plus récent gagne, sauf pour les natures qui
+   savent se fusionner (MERGE) : la progression d'une sourate et les étapes de « Lire et écrire l'arabe ». Pour
+   elles, rien de ce qui a été fait sur un appareil ne disparaît parce qu'un autre appareil a écrit après lui. */
+const Sync = { state: 'connecting', since: null, pulling: null, pushing: null, timer: null, pushTimer: null, lastOk: 0, refreshTried: false, error: null, blocked: new Set() };
+/* state : local (compte injoignable) | signedout | connecting | synced | pending | offline | not_installed | outdated | error */
+const MERGE = {};   // kind → (local, remote, luLocal, luRemote) => version fusionnée
+/* Comparaison stable (l'ordre des clés ne compte pas) */
+function canon(v) {
+  if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';
+  if (v && typeof v === 'object') return '{' + Object.keys(v).filter((k) => v[k] !== undefined).sort().map((k) => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}';
+  return JSON.stringify(v === undefined ? null : v);
+}
+const sameData = (a, b) => canon(a || {}) === canon(b || {});
 function dirtyCount() { let n = 0; Store.items.forEach((it) => { if (it.dirty) n++; }); return n; }
 function setSyncState(st, err) { Sync.state = st; Sync.error = err || null; scheduleRender(); }
+const settledState = () => (Sync.blocked.size ? 'outdated' : dirtyCount() ? 'pending' : 'synced');
 function overlapISO(since) { const t = Date.parse(since); return Number.isFinite(t) ? new Date(t - 120000).toISOString() : since; }
+/* Une ligne reçue du compte, comparée à ce que l'appareil a déjà */
+function receiveRow(r) {
+  const k = itemKey(r.kind, r.id); const local = Store.items.get(k);
+  const remoteLu = (r.data && Number(r.data._lu)) || 0;
+  const rdata = r.deleted ? {} : Object.assign({}, r.data); delete rdata._lu;
+  const merge = MERGE[r.kind];
+  if (merge && local && !local.deleted && !r.deleted) {
+    if (!local.dirty && local.lu === remoteLu && sameData(local.data, rdata)) return false;   // notre propre envoi qui revient
+    let m = null; try { m = merge(clone(local.data), clone(rdata), local.lu || 0, remoteLu); } catch (e) { console.error('fusion', r.kind, e); }
+    if (m) {
+      let it;
+      if (sameData(m, rdata)) it = { kind: r.kind, id: r.id, data: rdata, deleted: false, dirty: false, lu: remoteLu };   // le compte a déjà tout
+      else if (local.dirty && sameData(m, local.data)) return false;                                                      // l'appareil a déjà tout : il partira au prochain envoi
+      else it = { kind: r.kind, id: r.id, data: m, deleted: false, dirty: true, lu: Math.max(Date.now(), remoteLu + 1, (local.lu || 0) + 1) };   // du nouveau des deux côtés
+      const changed = !sameData(it.data, local.data);
+      Store.items.set(k, it); if (changed) applyToMem(r.kind, r.id, it.data, false);
+      idbPut('items', idbItemKey(r.kind, r.id), it).catch(() => {});
+      return changed;
+    }
+  }
+  if (local && local.dirty && local.lu >= remoteLu) return false; // la version de l'appareil est plus récente : elle partira au prochain envoi
+  if (local && !local.dirty && local.lu === remoteLu && !!local.deleted === !!r.deleted) return false;
+  const it = { kind: r.kind, id: r.id, data: rdata, deleted: !!r.deleted, dirty: false, lu: remoteLu };
+  Store.items.set(k, it); applyToMem(r.kind, r.id, rdata, !!r.deleted);
+  idbPut('items', idbItemKey(r.kind, r.id), it).catch(() => {});
+  return true;
+}
 async function pullNow() {
   if (!Host.sb || !Store.uid) return;
   if (Sync.pulling) return Sync.pulling;
@@ -506,18 +567,11 @@ async function pullNow() {
       for (const r of all) {
         if (r.updated_at && (!Sync.since || Date.parse(r.updated_at) > Date.parse(Sync.since))) Sync.since = r.updated_at;
         if (!KINDS.includes(r.kind)) continue;
-        const k = itemKey(r.kind, r.id); const local = Store.items.get(k);
-        const remoteLu = (r.data && Number(r.data._lu)) || 0;
-        if (local && local.dirty && local.lu >= remoteLu) continue; // la version de l'appareil est plus récente : elle partira au prochain envoi
-        if (local && !local.dirty && local.lu === remoteLu && !!local.deleted === !!r.deleted) continue;
-        const data = r.deleted ? {} : Object.assign({}, r.data); delete data._lu;
-        const it = { kind: r.kind, id: r.id, data, deleted: !!r.deleted, dirty: false, lu: remoteLu };
-        Store.items.set(k, it); applyToMem(r.kind, r.id, data, !!r.deleted); changed = true;
-        idbPut('items', idbItemKey(r.kind, r.id), it).catch(() => {});
+        if (receiveRow(r)) changed = true;
       }
       idbPut('kv', Store.owner + '|since', Sync.since).catch(() => {});
       Sync.lastOk = Date.now(); Sync.refreshTried = false; Host.online = true;
-      setSyncState(dirtyCount() ? 'pending' : 'synced');
+      setSyncState(settledState());
       if (changed) emitChange();
     } catch (e) {
       const err = sbErr(e, 'unavailable');
@@ -540,26 +594,31 @@ function schedulePush() {
   Sync.pushTimer = setTimeout(pushNow, 900);
   if (Sync.state === 'synced') setSyncState('pending');
 }
+/* Envoi nature par nature : si le compte refuse une nature (installation ancienne), les autres partent quand même */
 async function pushNow() {
-  if (!Host.sb || !Store.uid || ['not_installed', 'signedout'].includes(Sync.state)) return;
+  if (!Host.sb || !Store.uid || ['not_installed', 'signedout', 'local'].includes(Sync.state)) return;
   if (Sync.pushing) { schedulePush(); return Sync.pushing; }
-  const dirty = []; Store.items.forEach((it) => { if (it.dirty) dirty.push(it); });
-  if (!dirty.length) { if (Sync.state === 'pending') setSyncState('synced'); return; }
+  const dirty = []; Store.items.forEach((it) => { if (it.dirty && !Sync.blocked.has(it.kind)) dirty.push(it); });
+  if (!dirty.length) { if (Sync.state === 'pending' || Sync.state === 'connecting') setSyncState(settledState()); return; }
   if (navigator.onLine === false) { setSyncState('offline'); return; }
   Sync.pushing = (async () => {
     try {
-      for (let i = 0; i < dirty.length; i += 200) {
-        const batch = dirty.slice(i, i + 200);
-        const rows = batch.map((it) => ({ user_id: Store.uid, kind: it.kind, id: it.id, data: it.deleted ? { _lu: it.lu } : Object.assign({}, it.data, { _lu: it.lu }), deleted: !!it.deleted }));
-        const { error } = await Host.sb.from(QR_TABLE).upsert(rows, { onConflict: 'user_id,kind,id' });
-        if (error) throw sbErr(error, 'unavailable');
-        for (const it of batch) {
-          const cur = Store.items.get(itemKey(it.kind, it.id));
-          if (cur && cur.lu === it.lu) { cur.dirty = false; idbPut('items', idbItemKey(it.kind, it.id), cur).catch(() => {}); }
+      const byKind = new Map();
+      for (const it of dirty) { if (!byKind.has(it.kind)) byKind.set(it.kind, []); byKind.get(it.kind).push(it); }
+      for (const [kind, list] of byKind) {
+        for (let i = 0; i < list.length; i += 200) {
+          const batch = list.slice(i, i + 200);
+          const rows = batch.map((it) => ({ user_id: Store.uid, kind: it.kind, id: it.id, data: it.deleted ? { _lu: it.lu } : Object.assign({}, it.data, { _lu: it.lu }), deleted: !!it.deleted }));
+          const { error } = await Host.sb.from(QR_TABLE).upsert(rows, { onConflict: 'user_id,kind,id' });
+          if (error) { const err = sbErr(error, 'unavailable'); if (err.code === 'outdated') { Sync.blocked.add(kind); break; } throw err; }
+          for (const it of batch) {
+            const cur = Store.items.get(itemKey(it.kind, it.id));
+            if (cur && cur.lu === it.lu) { cur.dirty = false; idbPut('items', idbItemKey(it.kind, it.id), cur).catch(() => {}); }
+          }
         }
       }
       Host.online = true; Sync.lastOk = Date.now();
-      setSyncState(dirtyCount() ? 'pending' : 'synced');
+      setSyncState(settledState());
     } catch (e) {
       const err = sbErr(e, 'unavailable');
       if (err.code === 'network') { Host.online = false; setSyncState('offline'); }
@@ -589,14 +648,31 @@ async function adoptLocalData(uidv) {
 function syncLabel() {
   switch (Sync.state) {
     case 'synced': return { tone: 'ok', text: 'Sauvegardé sur ton compte : tu retrouves ta progression sur tes autres appareils.' };
-    case 'pending': return { tone: 'ok', text: 'Enregistré sur ce téléphone, envoi vers ton compte en cours.' };
-    case 'offline': return { tone: 'warn', text: `Hors connexion : ${dirtyCount()} changement(s) enregistré(s) sur ce téléphone, envoyés dès le retour du réseau.` };
-    case 'not_installed': return { tone: 'warn', text: 'La sauvegarde en ligne n’est pas encore installée sur ton serveur : ta progression reste sur ce téléphone. Exporte-la pour la garder ailleurs.' };
-    case 'signedout': return { tone: 'warn', text: 'Tu n’es pas connecté dans l’agenda : ta progression reste sur ce téléphone.' };
-    case 'error': return { tone: 'warn', text: 'L’envoi vers ton compte a échoué. Tout reste enregistré sur ce téléphone ; nouvel essai automatique.' };
+    case 'pending': return { tone: 'ok', text: 'Enregistré sur cet appareil, envoi vers ton compte en cours.' };
+    case 'offline': { const n = dirtyCount(); return { tone: 'warn', text: n ? `Hors connexion : ${n} ${plural(n, 'changement enregistré', 'changements enregistrés')} sur cet appareil, ${plural(n, 'envoyé', 'envoyés')} dès le retour du réseau.` : 'Hors connexion : tout est enregistré sur cet appareil ; la synchronisation reprend au retour du réseau.' }; }
+    case 'not_installed': return { tone: 'warn', text: 'Ta progression reste sur cet appareil : la sauvegarde en ligne n’est pas encore activée sur ton compte (une étape, une seule fois).' };
+    case 'outdated': return { tone: 'warn', text: 'Ta progression en arabe reste sur cet appareil : la sauvegarde en ligne doit être mise à jour (une étape, une seule fois). Le reste est sauvegardé sur ton compte.' };
+    case 'signedout': return { tone: 'warn', text: 'Ta progression reste sur cet appareil. Connecte-toi pour la retrouver sur tes autres appareils.' };
+    case 'error': return { tone: 'warn', text: 'L’envoi vers ton compte a échoué. Tout reste enregistré sur cet appareil ; nouvel essai automatique.' };
     case 'connecting': return { tone: 'ok', text: 'Connexion à ton compte…' };
-    default: return { tone: 'warn', text: 'Sauvegarde sur ce téléphone uniquement (agenda non relié à un compte). Exporte ta progression pour la garder ailleurs.' };
+    default: return { tone: 'warn', text: 'Ta progression reste sur cet appareil : le compte est injoignable pour l’instant (réseau). Nouvel essai au retour de la connexion.' };
   }
+}
+/* Bandeau en haut de Mémoriser, de l'arabe et de Mes progrès, tant que la progression ne suit pas sur tes autres appareils */
+const BANNER = {
+  signedout: { t: 'Ta progression reste sur cet appareil', s: 'Connecte-toi avec le compte de ton agenda : tu retrouves tout sur ton téléphone et ton Mac.', b: 'Me connecter', ic: 'user-check', a: 'data-act="sheet" data-sheet="account"' },
+  not_installed: { t: 'Ta progression reste sur cet appareil', s: 'La sauvegarde en ligne n’est pas encore activée sur ton compte : une étape, une seule fois.', b: 'L’activer', ic: 'cloud', a: 'data-act="sheet" data-sheet="sync-install"' },
+  outdated: { t: 'Ta progression en arabe reste sur cet appareil', s: 'La sauvegarde en ligne doit être mise à jour : une étape, une seule fois.', b: 'Mettre à jour', ic: 'cloud', a: 'data-act="sheet" data-sheet="sync-install"' },
+  error: { t: 'L’envoi vers ton compte a échoué', s: 'Tout reste enregistré sur cet appareil ; nouvel essai automatique.', b: 'Réessayer', ic: 'refresh', a: 'data-act="sync-retry"' },
+  local: { t: 'Ta progression reste sur cet appareil', s: 'Le compte est injoignable pour l’instant (réseau).', b: 'Réessayer', ic: 'refresh', a: 'data-act="sync-retry"' },
+};
+function syncBanner() {
+  const B0 = BANNER[Sync.state]; if (!B0) return '';
+  return `<section class="sync-banner" data-anchor="sync">
+      <span class="sync-banner__ic" aria-hidden="true">${icon('smartphone')}</span>
+      <p class="sync-banner__t"><b>${esc(B0.t)}</b><small>${esc(B0.s)}</small></p>
+      <button type="button" class="btn btn--primary btn--sm sync-banner__b" ${B0.a}>${icon(B0.ic, 'sm')}${esc(B0.b)}</button>
+    </section>`;
 }
 
 /* ===== Audio : un seul lecteur pour toute l'appli =====
@@ -1238,6 +1314,35 @@ function refreshMilestones(p) {
 }
 function milestoneCount(p) { return [1, 2, 3, 4, 5, 6].filter((k) => p.m && p.m[k]).length; }
 async function saveProgress(p) { refreshMilestones(p); p.lastAt = nowStamp(); return put('progress', 's' + p.s, p); }
+/* Union de deux tables { clé: date } : on garde chaque clé, avec sa date la plus ancienne */
+function mergeDates(x, y) { const o = Object.assign({}, x || {}); for (const [k, d] of Object.entries(y || {})) if (d && (!o[k] || String(d) < String(o[k]))) o[k] = d; return o; }
+/* Une même sourate sur deux appareils (téléphone et Mac) : tout ce qui a été fait d'un côté ou de l'autre est gardé
+   (versets écoutés, travaillés, récités sans aide, jalons). Pour le statut que tu as déclaré (Pas encore, J'apprends,
+   Je connais), ton choix le plus récent compte ; une version qui n'a jamais reçu de statut n'efface pas celui de
+   l'autre. Le reste (où reprendre la séance guidée, niveau, mention de l'enseignant) vient de la version la plus récente. */
+const ST_KEYS = ['kv', 'lr', 'kvAt', 'stAt', 'self'];
+const hasStatus = (p) => Array.isArray(p.kv) || Array.isArray(p.lr) || !!p.self;
+MERGE.progress = (a, b, la, lb) => {
+  const ta = String(a.lastAt || ''); const tb = String(b.lastAt || '');
+  const newer = ta > tb || (ta === tb && la > lb) ? a : b;
+  const out = clone(newer);
+  const sa = Number(a.stAt) || 0; const sb = Number(b.stAt) || 0;
+  let src;
+  if (sa !== sb) src = sa > sb ? a : b;
+  else if (hasStatus(a) !== hasStatus(b)) src = hasStatus(a) ? a : b;
+  else if (String(a.kvAt || '') !== String(b.kvAt || '')) src = String(a.kvAt || '') > String(b.kvAt || '') ? a : b;
+  else src = newer;
+  for (const k of ST_KEYS) { if (src[k] === undefined) delete out[k]; else out[k] = clone(src[k]); }
+  for (const k of ['listened', 'worked', 'solo']) out[k] = uniqSorted([...(a[k] || []), ...(b[k] || [])]);
+  for (const k of ['chunkSolo', 'chunkWorked']) {
+    const o = {};
+    for (const x of [a[k] || {}, b[k] || {}]) for (const [v, cs] of Object.entries(x)) o[v] = uniqSorted([...(o[v] || []), ...(Array.isArray(cs) ? cs : [])]);
+    out[k] = o;
+  }
+  out.m = mergeDates(a.m, b.m);
+  out.startedAt = [a.startedAt, b.startedAt].filter(Boolean).sort()[0] || null;
+  return out;
+};
 function markListened(s, a) {
   const p = progressOf(s);
   if (p.listened.includes(a)) return;
@@ -1790,7 +1895,7 @@ async function setStatus(parts, st) {
         else { let add = [[a1, a2]]; for (const [x, y] of kv) add = add.flatMap((r) => rgSub([r], x, y)); for (const [u, v] of add) lr = rgAdd(lr, u, v); }
       } else { kv = rgSub(kv, a1, a2); lr = rgSub(lr, a1, a2); }
     }
-    p.kv = kv; p.lr = lr; p.kvAt = today;
+    p.kv = kv; p.lr = lr; p.kvAt = today; p.stAt = Date.now();   // stAt : moment exact du choix (fusion entre appareils)
     const full = rgCount(kv, 1, N) === N;
     if (full && !p.self) p.self = { date: today, pct: 100 };
     if (!full && p.self) delete p.self;
@@ -1799,7 +1904,8 @@ async function setStatus(parts, st) {
   return before;
 }
 async function undoStatus(before) {
-  for (const [s, data] of before) { if (data) await put('progress', 's' + s, data); else await del('progress', 's' + s); }
+  // l'annulation est elle-même un choix : elle porte l'heure d'aujourd'hui, pour l'emporter aussi sur tes autres appareils
+  for (const [s, data] of before) { if (data) await put('progress', 's' + s, Object.assign({}, data, { stAt: Date.now() })); else await del('progress', 's' + s); }
 }
 async function applyStatus(parts, st, name) {
   const before = await setStatus(parts, st);
@@ -1908,6 +2014,7 @@ function renderLearn() {
       <div class="hero__text"><h1 class="hero__title">Mémoriser le Coran</h1><p class="hero__note">Juz par juz, groupe par groupe. C’est toi qui dis ce que tu connais : rien ne change tout seul.</p></div>
       <img class="hero__art" src="coran/livre-sur-pupitre.webp" alt="" width="768" height="768" decoding="async">
     </section>
+    ${syncBanner()}
     ${nowCard(w)}
     ${!Store.idbOk ? `<p class="notice notice--warn">${icon('alert')}<span>Ce navigateur n’enregistre pas ta progression (navigation privée ou stockage plein). Ouvre l’appli depuis son icône, ou exporte une sauvegarde dans les réglages.</span></p>` : ''}
     ${methodHTML(!anyMarked)}
@@ -2107,6 +2214,7 @@ function renderProgress() {
   const sl = syncLabel();
   swapHTML(root, `${topbarMain()}
     <h1 class="screen-title">Mes progrès</h1>
+    ${syncBanner()}
     <section class="mz-total" data-anchor="total">
       <p class="mz-total__k">Ce que tu connais du Coran</p>
       <p class="mz-total__n"><b>${esc(pctTxt(T.pct))}</b><span>%</span></p>
@@ -2970,7 +3078,10 @@ PAGES.settings = {
         <h2 class="set__h">Sauvegarde</h2>
         <p class="sync-line sync-line--${sl.tone}">${icon(sl.tone === 'ok' ? 'cloud' : 'phone', 'sm')}<span>${esc(sl.text)}</span></p>
         ${!Store.idbOk ? `<p class="notice notice--warn">${icon('alert')}<span>Ce navigateur refuse le stockage local : ta progression risque de ne pas être gardée après fermeture. Ouvre l’appli depuis son icône, hors navigation privée.</span></p>` : ''}
+        ${Store.uid && Host.email && ['synced', 'pending', 'offline'].includes(Sync.state) ? `<p class="fine">Compte : ${esc(Host.email)}</p>` : ''}
         <div class="row-btns">
+          ${Sync.state === 'signedout' ? `<button type="button" class="btn btn--primary btn--sm" data-act="sheet" data-sheet="account">${icon('user-check', 'sm')}Me connecter</button>` : ''}
+          ${['not_installed', 'outdated'].includes(Sync.state) ? `<button type="button" class="btn btn--primary btn--sm" data-act="sheet" data-sheet="sync-install">${icon('cloud', 'sm')}${Sync.state === 'outdated' ? 'Mettre à jour la sauvegarde' : 'Activer la sauvegarde en ligne'}</button>` : ''}
           <button type="button" class="btn btn--soft btn--sm" data-act="export">${icon('download', 'sm')}Exporter ma progression</button>
           <button type="button" class="btn btn--ghost btn--sm" data-act="import">${icon('upload', 'sm')}Importer</button>
           ${Host.sb && Store.uid ? `<button type="button" class="btn btn--ghost btn--sm" data-act="sync-now">${icon('refresh', 'sm')}Synchroniser</button>` : ''}
@@ -3578,6 +3689,11 @@ async function importFile(file) {
   for (const it of data.items) {
     if (!KINDS.includes(it.kind) || typeof it.id !== 'string' || !it.data || typeof it.data !== 'object') continue;
     const local = Store.items.get(itemKey(it.kind, it.id));
+    if (MERGE[it.kind] && local && !local.deleted) {   // progression d'une sourate, étapes de l'arabe : on fusionne
+      let m = null; try { m = MERGE[it.kind](clone(local.data), clone(it.data), local.lu || 0, it.lu || 0); } catch (e) { m = null; }
+      if (m && !sameData(m, local.data)) { await put(it.kind, it.id, m); n++; }
+      continue;
+    }
     if (local && !local.deleted && (local.lu || 0) >= (it.lu || 0)) continue;
     await put(it.kind, it.id, it.data); n++;
   }
@@ -3585,6 +3701,31 @@ async function importFile(file) {
   renderAll();
 }
 ACT['sync-now'] = async (el) => { const done = busy(el, 'Synchronisation…'); await syncNow(); done(); toast(syncLabel().text, Sync.state !== 'synced'); renderPage(false); };
+ACT['sync-retry'] = async (el) => {
+  const done = busy(el, 'Un instant…');
+  if (Host.sb && Store.uid) await syncNow(); else await connectAccount();
+  done(); toast(syncLabel().text, !['synced', 'pending'].includes(Sync.state)); renderAll();
+};
+ACT['sync-copy-sql'] = async () => {
+  if (!Install.sql) return;
+  let ok = false;
+  try { await navigator.clipboard.writeText(Install.sql); ok = true; } catch (e) { ok = false; }
+  if (ok) { Install.copied = true; toast('Code copié. Colle-le dans l’éditeur SQL de Supabase.'); }
+  else { Install.show = true; toast('Copie automatique refusée par le navigateur : sélectionne le code affiché et copie-le.', true); }
+  refreshSheet();
+};
+ACT['sync-check'] = async (el) => {
+  const done = busy(el, 'Vérification…');
+  Sync.blocked.clear();
+  if (Host.sb && Store.uid) { setSyncState('connecting'); await syncNow(); } else await connectAccount();
+  done();
+  if (Sync.state === 'synced' || Sync.state === 'pending') { closeAllSheets(); toast('C’est activé : ta progression est envoyée sur ton compte et te suit sur tous tes appareils.'); }
+  else if (Sync.state === 'not_installed') toast('Pas encore : le tableau n’est pas trouvé. Vérifie que « Run » a affiché « Success », puis réessaie.', true);
+  else if (Sync.state === 'outdated') toast('Pas encore à jour : relance le code dans Supabase (Run), puis réessaie.', true);
+  else if (Sync.state === 'signedout') { closeAllSheets(); openSheet('account'); }
+  else toast(syncLabel().text, true);
+  renderAll();
+};
 ACT['teacher-save'] = async (el) => {
   const s = Number(el.dataset.s); const date = ($('#tDate') || {}).value; const name = (($('#tName') || {}).value || '').trim().slice(0, 60);
   if (!validISO(date) || date > todayISO()) { toast('Choisis une date valide (aujourd’hui ou avant).', true); return; }
@@ -3617,6 +3758,13 @@ function wire() {
   });
   document.addEventListener('submit', (e) => {
     const f = e.target.closest('[data-form]'); if (!f) return; e.preventDefault();
+    if (f.dataset.form === 'sign-in') {
+      const email = (($('#accEmail') || {}).value || '').trim(); const pass = ($('#accPass') || {}).value || '';
+      Account.email = email;
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !pass) { Account.err = 'Entre ton e-mail et ton mot de passe.'; refreshSheet(); return; }
+      signIn(email, pass);
+      return;
+    }
     const kind = f.dataset.form; const inp = f.querySelector('input'); const v = Number(inp && inp.value);
     if (kind === 'page-go') { if (!(v >= 1 && v <= 604)) { toast('Les pages vont de 1 à 604.', true); return; } const top = topPage(); if (top && top.name === 'reader' && top.props.mode === 'page') { closeAllSheets(); goPage(v); } else { const vv = versesOfPage(v)[0]; closeAllSheets(); openReader(vv.s, vv.a, { mode: 'page', p: v }); } }
     if (kind === 'verse-go') {
@@ -3635,9 +3783,9 @@ function wire() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') { saveSummary(); if (cur()) persistSession(); if (Rec.mr) stopRecording(false); return; }
     refreshAgendaDB(); scheduleRender();
-    if (Host.sb && Store.uid) syncNow();
+    resumeSync();
   });
-  window.addEventListener('online', () => { Host.online = true; if (Host.sb && Store.uid) syncNow(); scheduleRender(); });
+  window.addEventListener('online', () => { Host.online = true; resumeSync(); scheduleRender(); });
   window.addEventListener('offline', () => { Host.online = false; if (Sync.state === 'synced' || Sync.state === 'pending') setSyncState('offline'); });
   document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('is-immersive') && !/iPhone|iPad|iPod/.test(navigator.userAgent)) document.body.classList.remove('is-immersive'); });
   if ('mediaSession' in navigator) {
@@ -3664,6 +3812,9 @@ function initModules() {
     openPage, backPage, topPage, renderPage, renderAll, scheduleRender, swapHTML, pageHead, toast, openSheet, closeSheet, refreshSheet,
     runSequence, stopAudio, pauseAudio, resumeAudio, wordTimings, arHTML, playerNotify,
     addKinds(list) { for (const k of list) if (!KINDS.includes(k)) { KINDS.push(k); if (!Store.mem[k]) Store.mem[k] = new Map(); } },
+    /* fusion d'une nature entre appareils (au lieu de « le plus récent écrase ») */
+    setMerge(kind, fn) { MERGE[kind] = fn; },
+    mergeDates, syncBanner,
     registerTab(name, fn) { MODULE_TABS[name] = fn; },
     /* réglages de l'agenda sur cet appareil (lecture seule) : clé Gemini pour la partie orale, par exemple */
     agendaSettings() { refreshAgendaDB(); const db = readAgendaDB(); return (db && db.settings) || {}; },
@@ -3679,28 +3830,113 @@ function hideSplash() {
   const s = $('#splash'); if (!s || UI.splashGone) return;
   UI.splashGone = true; s.classList.add('is-gone'); setTimeout(() => s.remove(), 450);
 }
-async function connectAccount() {
-  if (!hostConfigured()) { setSyncState('local'); return; }
-  initHost();
-  if (!Host.sb) { setSyncState('local'); return; }
-  Host.sb.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_OUT') { Store.uid = null; setSyncState('signedout'); } });
-  const stored = storedSessionUser();
-  const user = stored || await hostSessionUser();
-  if (!user) { setSyncState('signedout'); return; }
-  if (Store.owner !== user.id) {
-    await adoptLocalData(user.id);
-    await loadLocal(user.id);
-    emitChange();
-  }
-  Store.uid = user.id; Host.uid = user.id; Host.email = user.email || '';
-  setSyncState('connecting');
-  await syncNow();
-  clearInterval(Sync.timer);
-  // toutes les minutes quand l'appli est affichée ; pas de relance en boucle si la table n'est pas installée (on réessaie à la réouverture)
-  Sync.timer = setInterval(() => { if (document.visibilityState === 'visible' && Sync.state !== 'not_installed') syncNow(); }, 60000);
-  const confirmed = await hostSessionUser();
-  if (confirmed && confirmed.id !== user.id) location.reload(); // autre compte connecté entre-temps
+/* Relie l'appli au compte. Rappelé après « Me connecter », au retour sur l'appli et au retour du réseau
+   tant que le compte n'est pas relié (connexion faite entre-temps dans l'agenda, bibliothèque rechargée…). */
+function connectAccount() {
+  if (Host.connecting) return Host.connecting;
+  Host.connecting = (async () => {
+    if (!hostConfigured()) { setSyncState('local'); return; }
+    await ensureSupabaseLib();
+    initHost();
+    // bibliothèque du compte injoignable (hors connexion) : si tu es connecté, tout partira au retour du réseau
+    if (!Host.sb) { setSyncState(storedSessionUser() ? 'offline' : 'local'); return; }
+    if (!Host.authWired) { Host.authWired = true; Host.sb.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_OUT') { Store.uid = null; setSyncState('signedout'); } }); }
+    const stored = storedSessionUser();
+    const user = stored || await hostSessionUser();
+    if (!user) { setSyncState('signedout'); return; }
+    if (Store.owner !== user.id) {
+      await adoptLocalData(user.id);
+      await loadLocal(user.id);
+      emitChange();
+    }
+    Store.uid = user.id; Host.uid = user.id; Host.email = user.email || '';
+    Sync.blocked.clear(); Sync.refreshTried = false;
+    setSyncState('connecting');
+    await syncNow();
+    clearInterval(Sync.timer);
+    // toutes les minutes quand l'appli est affichée ; pas de relance en boucle tant que la sauvegarde n'est pas activée (on réessaie au retour sur l'appli)
+    Sync.timer = setInterval(() => { if (document.visibilityState === 'visible' && !['not_installed', 'signedout', 'local'].includes(Sync.state)) syncNow(); }, 60000);
+    const confirmed = await hostSessionUser();
+    if (confirmed && confirmed.id !== user.id) location.reload(); // autre compte connecté entre-temps
+  })().catch(() => setSyncState('error')).finally(() => { Host.connecting = null; });
+  return Host.connecting;
 }
+/* Retour sur l'appli : compte pas encore relié → on réessaie ; relié → on synchronise */
+function resumeSync() {
+  if (Host.sb && Store.uid && Sync.state !== 'signedout') { syncNow(); return; }
+  connectAccount();
+}
+/* « Me connecter » : e-mail et mot de passe tapés par toi, envoyés seulement au service de connexion du compte */
+const Account = { busy: false, err: '', email: '' };
+async function signIn(email, password) {
+  if (Account.busy) return;
+  Account.err = ''; Account.busy = true; refreshSheet();
+  try {
+    await ensureSupabaseLib(); initHost();
+    if (!Host.sb) throw new Error('lib');
+    const { data, error } = await Host.sb.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    if (!data || !data.session) throw new Error('session');
+    try { localStorage.setItem('qr-email', email); } catch (e) { /* rien */ }
+    Account.busy = false; closeAllSheets();
+    await connectAccount();
+    toast(Sync.state === 'synced' ? 'Connecté : ta progression est la même sur tous tes appareils.' : Sync.state === 'not_installed' ? 'Connecté. Il reste à activer la sauvegarde en ligne (une seule fois).' : 'Connecté à ton compte.', false);
+    renderAll();
+  } catch (e) {
+    const m = String((e && e.message) || ''); const st = Number(e && e.status) || 0;
+    Account.err = m === 'lib' || isNetErr(e) ? 'Pas de connexion au compte pour l’instant (réseau). Réessaie dans un instant.'
+      : /invalid login|invalid credentials|invalid grant/i.test(m) || st === 400 ? 'E-mail ou mot de passe incorrect.'
+      : /not confirmed/i.test(m) ? 'Ce compte n’est pas encore confirmé (lien envoyé par e-mail à la création).'
+      : st === 429 ? 'Trop d’essais d’affilée : attends une minute, puis réessaie.'
+      : 'La connexion a échoué. Réessaie, ou connecte-toi dans l’agenda (Réglages).';
+    Account.busy = false; refreshSheet();
+  }
+}
+SHEETS.account = {
+  render() {
+    let email = Account.email;
+    if (!email) { try { email = localStorage.getItem('qr-email') || ''; } catch (e) { /* rien */ } }
+    if (!email) { const db = readAgendaDB(); email = (db && db.settings && db.settings.syncEmail) || ''; }
+    return { title: 'Retrouver ta progression partout', body: `
+      <p class="lede">Connecte-toi avec le compte de ton agenda StayClean. Mémoriser, Lire et écrire l’arabe (étapes, examens, notes, entraînement) : tout sera pareil sur ton téléphone et ton Mac.</p>
+      <form class="acc-form" data-form="sign-in" novalidate>
+        <label class="field"><span>E-mail</span><input id="accEmail" type="email" name="email" autocomplete="username" inputmode="email" required value="${esc(email)}"${email ? '' : ' autofocus'}></label>
+        <label class="field"><span>Mot de passe</span><input id="accPass" type="password" name="password" autocomplete="current-password" required${email ? ' autofocus' : ''}></label>
+        ${Account.err ? `<p class="notice notice--warn" role="alert">${icon('alert-circle')}<span>${esc(Account.err)}</span></p>` : ''}
+        <button type="submit" class="btn btn--primary btn--block"${Account.busy ? ' disabled' : ''}>${Account.busy ? '<span class="spin" aria-hidden="true"></span>Connexion…' : `${icon('user-check', 'sm')}Me connecter`}</button>
+      </form>
+      <p class="fine">C’est le même compte que ton agenda StayClean. Ce que tu as fait ici sans compte est ajouté à ta progression ; rien n’est effacé.</p>` };
+  },
+  onClose() { Account.err = ''; Account.busy = false; },
+};
+/* Activer (ou mettre à jour) la sauvegarde en ligne : le code d'installation se lance une fois dans Supabase */
+const Install = { sql: null, err: false, copied: false, show: false };
+function loadInstallSQL() {
+  if (Install.sql || Install.p) return Install.p;
+  Install.p = fetch('supabase/mon-coran.sql?v=' + DATA_V, { cache: 'no-cache' }).then((r) => (r.ok ? r.text() : Promise.reject(new Error('sql')))).then((t) => { Install.sql = t; Install.err = false; refreshSheet(); return t; }, () => { Install.err = true; Install.p = null; refreshSheet(); });
+  return Install.p;
+}
+SHEETS['sync-install'] = {
+  render() {
+    loadInstallSQL();
+    const upd = Sync.state === 'outdated'; const ref = hostRef();
+    const link = ref ? `https://supabase.com/dashboard/project/${encodeURIComponent(ref)}/sql/new` : 'https://supabase.com/dashboard';
+    return { title: upd ? 'Mettre à jour la sauvegarde en ligne' : 'Activer la sauvegarde en ligne', body: `
+      <p class="lede">${upd ? 'Ton compte garde déjà ta progression du Coran, mais pas encore celle de « Lire et écrire l’arabe ». Le même code d’installation, relancé une fois, l’ajoute.' : 'Une seule fois : ton compte a besoin d’un tableau pour garder ta progression de Mon Coran. Ça prend une minute, de préférence sur ton Mac.'}</p>
+      <ol class="inst">
+        <li><b>Copie le code d’installation</b>
+          <button type="button" class="btn btn--soft btn--sm" data-act="sync-copy-sql"${Install.sql ? '' : ' disabled'}>${icon(Install.copied ? 'check' : 'copy', 'sm')}${Install.copied ? 'Code copié' : Install.err ? 'Code indisponible (réseau)' : Install.sql ? 'Copier le code' : 'Chargement…'}</button>
+          ${Install.show && Install.sql ? `<textarea class="inst__sql" readonly rows="6" aria-label="Code d’installation">${esc(Install.sql)}</textarea><small>Sélectionne tout le texte ci-dessus et copie-le.</small>` : ''}</li>
+        <li><b>Ouvre l’éditeur SQL de ton projet Supabase</b>
+          <a class="btn btn--soft btn--sm" href="${esc(link)}" target="_blank" rel="noopener">${icon('link', 'sm')}Ouvrir Supabase</a></li>
+        <li><b>Colle le code, puis appuie sur « Run »</b><small>Il crée seulement ce tableau (chaque compte ne voit que ses propres lignes) et ne touche à rien d’autre. On peut le relancer sans risque.</small></li>
+        <li><b>Reviens ici</b>
+          <button type="button" class="btn btn--primary btn--sm" data-act="sync-check">${icon('refresh', 'sm')}C’est fait, vérifier</button></li>
+      </ol>
+      <p class="fine">En attendant, rien n’est perdu : ta progression reste enregistrée sur cet appareil et partira sur ton compte dès que ce sera fait.</p>` };
+  },
+  onClose() { Install.copied = false; Install.show = false; },
+};
 async function boot() {
   try { NAV.fromAgenda = sessionStorage.getItem('qr.from') === 'agenda'; sessionStorage.removeItem('qr.from'); } catch (e) { NAV.fromAgenda = false; }
   loadUIState();
@@ -3716,12 +3952,12 @@ async function boot() {
   setTimeout(hideSplash, 250);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   if (Content.index) loadGroups().catch(() => {});
-  connectAccount().catch(() => setSyncState('error'));
+  connectAccount();
 }
 /* Retour sur la page depuis l'historique : on rafraîchit */
-window.addEventListener('pageshow', (e) => { if (!e.persisted) return; refreshAgendaDB(); scheduleRender(); if (Host.sb && Store.uid) syncNow(); });
+window.addEventListener('pageshow', (e) => { if (!e.persisted) return; refreshAgendaDB(); scheduleRender(); resumeSync(); });
 /* Accès pour le banc d'essai automatisé (aucune donnée réelle) */
-window.__QR = { Store, Content, Player, Sync, UI, prefs, put, reciterId, selfKnown, dueReviews, buildSession, scheduleAfter, refreshMilestones, progressOf, verseChunks, searchSuras, versesOfPage, pageOfVerse, surahState, milestoneCount, stopAudio, Groups, loadGroups, unitStat, setStatus, whereAmI, suraKnown, juzParts, suraParts, allParts, setToday: (iso) => { _todayOverride = iso; scheduleRender(); }, renderAll };
+window.__QR = { Store, Content, Player, Sync, UI, prefs, put, MERGE, syncNow, connectAccount, sameData, reciterId, selfKnown, dueReviews, buildSession, scheduleAfter, refreshMilestones, progressOf, verseChunks, searchSuras, versesOfPage, pageOfVerse, surahState, milestoneCount, stopAudio, Groups, loadGroups, unitStat, setStatus, whereAmI, suraKnown, juzParts, suraParts, allParts, setToday: (iso) => { _todayOverride = iso; scheduleRender(); }, renderAll };
 boot();
 
 })();

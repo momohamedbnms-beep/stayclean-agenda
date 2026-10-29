@@ -694,3 +694,21 @@ body.has-player .toasts { bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 @media (min-width: 700px) { .mz-map { grid-template-columns: repeat(6, 1fr); } }
 .self-card .mz-seg { align-self: stretch; }
 .self-card .linkish { text-align: left; }
+
+/* Sauvegarde sur le compte : bandeau « ta progression reste sur cet appareil », connexion, activation (une fois) */
+.sync-banner { display: grid; grid-template-columns: auto 1fr; gap: 10px 12px; align-items: start; margin: 14px 0; padding: 14px; border-radius: var(--r-md); background: var(--warn-bg); color: var(--warn-ink); }
+.sync-banner__ic { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: rgba(255, 255, 255, .6); }
+:root[data-ambiance="nuit"] .sync-banner__ic { background: rgba(0, 0, 0, .2); }
+.sync-banner__t { margin: 0; display: flex; flex-direction: column; gap: 3px; line-height: 1.4; }
+.sync-banner__t b { font-size: 15.5px; font-weight: 600; }
+.sync-banner__t small { font-size: 14px; }
+.sync-banner__b { grid-column: 2; justify-self: start; }
+@media (min-width: 560px) { .sync-banner { grid-template-columns: auto 1fr auto; align-items: center; } .sync-banner__b { grid-column: auto; } }
+.acc-form { display: flex; flex-direction: column; gap: 12px; margin: 14px 0 10px; }
+.acc-form .field input { width: 100%; color: var(--ink); font-family: inherit; }
+.inst { list-style: none; counter-reset: inst; margin: 14px 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.inst > li { counter-increment: inst; position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 14px 12px 52px; border-radius: var(--r-md); background: var(--surface-2); line-height: 1.4; }
+.inst > li::before { content: counter(inst); position: absolute; left: 14px; top: 11px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--primary); color: var(--on-primary); font-weight: 700; font-size: 14px; }
+.inst > li small { color: var(--ink-3); font-size: 14px; line-height: 1.45; }
+.inst__sql { width: 100%; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; border-radius: var(--r-sm); border: 1.5px solid var(--line-strong); background: var(--surface); color: var(--ink); padding: 8px; resize: vertical; }
+a.btn { text-decoration: none; }

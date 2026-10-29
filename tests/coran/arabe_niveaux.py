@@ -1,10 +1,10 @@
 """« Lire et écrire l'arabe », chapitres 6 à 10 et à-côtés : entraînement (lecture, écoute, signes, mushaf, passages,
 fluidité), enregistrer sa lecture (gardé sur l'appareil), fiches PDF par chapitre (servies, version économique,
-impression), photos de feuilles supprimables, et partie orale des examens avec une IA simulée (accord demandé,
-retrait possible, clé refusée → oral passé, examen quand même noté). Aucun service réel."""
+impression), photos de feuilles supprimables, et examens sans partie orale : même avec une clé Gemini dans l'agenda,
+aucune voix n'est demandée ni envoyée ; l'écoute se fait par dictée (l'appli dit le mot, on l'écrit). Aucun service réel."""
 from qa import *
 import sys, json, re, struct, zlib
-from ar_helpers import answer_current
+from ar_helpers import answer_current, advance
 
 checks = []
 def check(name, cond, extra=''):
@@ -24,7 +24,7 @@ def run_items(e, limit=40, wrong_at=()):
     while pg.locator('.ar-ex').count() and n < limit:
         if pg.locator('.ar-ex .loading').count(): pg.wait_for_timeout(400)
         t = answer_current(e, right=(n not in wrong_at)); seen.append(t)
-        pg.click('[data-act="ar-next"]'); pg.wait_for_timeout(180); n += 1
+        advance(pg); n += 1
     return seen
 
 def forced(e, lv, unit, types, title='Test'):
@@ -45,28 +45,17 @@ def gemini(route):
     res = {'entendu': heard, 'juste': True, 'remarque': 'Bien prononcé.'}
     route.fulfill(status=200, body=json.dumps({'candidates': [{'content': {'parts': [{'text': json.dumps(res, ensure_ascii=False)}]}, 'finishReason': 'STOP'}]}), headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
 
-def exam_written(e, ch):
-    """Ouvre l'examen d'un chapitre depuis « Examens blancs » et répond aux 20 questions (toutes justes)."""
+def exam_written(e, ch, length=None):
+    """Ouvre l'examen d'un chapitre depuis « Examens blancs » (10 questions par défaut, ou length) et répond à tout (juste)."""
     pg = e.page
     pg.locator('[data-act="ar-exam"][data-x="%s"]' % ch).first.click(); pg.wait_for_timeout(600)
+    if length: pg.click('[data-act="ar-exam-len"][data-n="%d"]' % length); pg.wait_for_timeout(300)
     pg.click('[data-act="ar-exam-go"]'); pg.wait_for_timeout(300)
     n = 0
     while pg.locator('.ar-ex').count() and not pg.locator('.ar-oral').count() and n < 25:
-        answer_current(e); pg.click('[data-act="ar-next"]'); pg.wait_for_timeout(180); n += 1
+        answer_current(e); advance(pg); n += 1
     pg.wait_for_timeout(600)
     return n
-
-def oral_all(e, k_max=6):
-    pg = e.page; k = 0
-    while pg.locator('.ar-oral').count() and k < k_max:
-        pg.click('[data-act="ar-oral-rec"]'); pg.wait_for_timeout(1300)
-        pg.click('[data-act="ar-oral-rec"]'); pg.wait_for_timeout(1600)
-        if k == 0: e.shot('AN-oral-resultat')
-        if pg.locator('[data-act="ar-oral-next"]').count(): pg.click('[data-act="ar-oral-next"]')
-        else: break
-        pg.wait_for_timeout(500); k += 1
-    pg.wait_for_timeout(700)
-    return k
 
 with sync_playwright() as p:
     e = Env(p, fake_mic=True)
@@ -158,62 +147,25 @@ with sync_playwright() as p:
     pg.click('[data-act="ar-kept-clear"]'); pg.wait_for_timeout(800)
     check('tout supprimer : plus rien sur l’appareil', pg.locator('.ar-kept li').count() == 0)
     pg.click('[data-act="back"]'); pg.wait_for_timeout(300)
-    # --- examens sans clé Gemini : pas d'oral, l'examen est noté sur l'écrit ---
-    pg.click('[data-act="ar-view"][data-v="exams"]'); pg.wait_for_timeout(500)
-    check('sans clé Gemini : l’oral est annoncé comme indisponible', 'clé Gemini est enregistrée dans les réglages' in pg.locator('#tab-arabe').inner_text())
-    pg.locator('[data-act="ar-exam"][data-x="c6"]').first.click(); pg.wait_for_timeout(500)
-    check('annonce sans clé : partie orale « — »', pg.locator('.ar-grid tbody tr').last.inner_text().strip().endswith('—'))
-    pg.click('[data-act="back"]'); pg.wait_for_timeout(300)
-    exam_written(e, 'c6')
-    check('sans clé : pas d’oral, résultat direct', pg.locator('.ar-result').count() == 1 and pg.locator('.ar-oral').count() == 0 and not gem['calls'])
-    pg.click('[data-act="ar-exam-close"]'); pg.wait_for_timeout(300)
-    # --- avec la clé de l'agenda : accord, oral, note à part ---
+    # --- examens : plus de partie orale (même avec une clé Gemini dans l'agenda) ; l'écoute se fait par dictée ---
     e.js("() => { localStorage.setItem('stayclean-agenda-v1', JSON.stringify({ settings: { geminiKey: 'cle-de-test' } })); }")
     pg.click('[data-act="ar-view"][data-v="study"]'); pg.wait_for_timeout(200)
     pg.click('[data-act="ar-view"][data-v="exams"]'); pg.wait_for_timeout(500)
-    check('avec la clé : « Partie orale à la fin de chaque examen »', 'Partie orale à la fin de chaque examen' in pg.locator('#tab-arabe').inner_text())
-    n = exam_written(e, 'c7')
-    check('après les 20 questions écrites : demande d’accord pour l’oral', n == 20 and pg.locator('[data-act="ar-oral-ok"]').count() == 1 and 'Google' in pg.locator('.page').inner_text())
-    e.shot('AN-oral-accord')
-    pg.click('[data-act="ar-oral-ok"]'); pg.wait_for_timeout(500)
-    check('oral : mot affiché et bouton micro', pg.locator('.ar-oral .ar-ex__show').count() == 1 and pg.locator('[data-act="ar-oral-rec"]').count() == 1)
-    e.shot('AN-oral')
-    k = oral_all(e)
+    tab = norm(pg.locator('#tab-arabe').inner_text())
+    check('Examens blancs : plus aucune partie orale annoncée', 'oral' not in tab.lower() and 'Gemini' not in tab, tab[:200])
+    pg.locator('[data-act="ar-exam"][data-x="c7"]').first.click(); pg.wait_for_timeout(500)
+    intro = norm(pg.locator('.page').inner_text())
+    check('annonce : pas de ligne « Partie orale », dictée au programme', 'oral' not in intro.lower() and 'Dictée' in intro, intro[:240].replace('\n', ' | '))
+    pg.click('[data-act="back"]'); pg.wait_for_timeout(300)
+    n = exam_written(e, 'c7', 15)
+    check('après les 15 questions écrites : le résultat, directement (aucun oral)', n == 15 and pg.locator('.ar-result').count() == 1 and pg.locator('[data-act="ar-oral-ok"]').count() == 0 and pg.locator('.ar-oral').count() == 0)
     rec = e.js("() => [...window.__QR.Store.mem.ar_exam.values()].filter((x) => x && x.exam === 'c7')")
-    check('oral : 5 mots, chacun envoyé en WAV (audio seulement)', k == 5 and len(gem['calls']) == 5 and all(c['mime'] == 'audio/wav' and c['n'] > 1000 for c in gem['calls']), [(c['mime'], c['n']) for c in gem['calls']][:2])
-    check('résultat : note écrite sur 20 et oral à part (5 sur 5)', 'Oral : 5 sur 5' in norm(pg.locator('.ar-result').inner_text()) and rec and rec[0]['oral'] == {'ok': 5, 'n': 5}, norm(pg.locator('.ar-result').inner_text()).replace('\n', ' | '))
-    check('rien n’est gardé de la voix sur l’appareil ni dans le compte', not e.js("async () => { const db = await new Promise((r) => { const q = indexedDB.open('mon-coran'); q.onsuccess = () => r(q.result); }); return await new Promise((r) => { let n = 0; const c = db.transaction('kv').objectStore('kv').openCursor(); c.onsuccess = () => { const x = c.result; if (x) { if (String(x.key).includes('|ar-keep|')) n++; x.continue(); } else r(n); }; }); }") and 'blob' not in json.dumps(rec))
-    e.shot('AN-oral-note')
-    pg.click('[data-act="ar-exam-close"]'); pg.wait_for_timeout(400)
-    # accord gardé → pas redemandé ; retrait possible
-    check('Examens blancs : « Retirer mon accord pour l’oral »', pg.locator('[data-act="ar-oral-revoke"]').count() == 1)
-    pg.click('[data-act="ar-oral-revoke"]'); pg.wait_for_timeout(500)
-    check('accord retiré : bouton disparu, accord effacé de l’appareil', pg.locator('[data-act="ar-oral-revoke"]').count() == 0 and not e.js("() => window.__AR.Oral.consent"))
-    # clé refusée : l'oral est passé, l'examen est quand même noté
-    gem['mode'] = 'key'; before = len(gem['calls'])
-    exam_written(e, 'c8')
-    check('après retrait : l’accord est redemandé', pg.locator('[data-act="ar-oral-ok"]').count() == 1)
-    pg.click('[data-act="ar-oral-ok"]'); pg.wait_for_timeout(400)
-    pg.click('[data-act="ar-oral-rec"]'); pg.wait_for_timeout(1300); pg.click('[data-act="ar-oral-rec"]'); pg.wait_for_timeout(1800)
-    rec8 = e.js("() => [...window.__QR.Store.mem.ar_exam.values()].filter((x) => x && x.exam === 'c8')")
-    check('clé refusée : oral arrêté, examen noté sur l’écrit', pg.locator('.ar-result').count() == 1 and len(gem['calls']) == before + 1 and rec8 and rec8[0]['oral'] is None and rec8[0]['score'] == 20, rec8[:1])
-    # passer l'oral
-    gem['mode'] = 'ok'
-    pg.click('[data-act="ar-exam-again"]'); pg.wait_for_timeout(400)
-    pg.click('[data-act="ar-exam-go"]'); pg.wait_for_timeout(300)
-    n = 0
-    while pg.locator('.ar-ex').count() and not pg.locator('.ar-oral').count() and n < 25:
-        answer_current(e); pg.click('[data-act="ar-next"]'); pg.wait_for_timeout(150); n += 1
-    pg.wait_for_timeout(400)
-    if pg.locator('[data-act="ar-oral-skip"]').count():
-        for _ in range(5):
-            if not pg.locator('[data-act="ar-oral-skip"]').count(): break
-            pg.click('[data-act="ar-oral-skip"]'); pg.wait_for_timeout(300)
-    pg.wait_for_timeout(500)
-    rec8 = e.js("() => [...window.__QR.Store.mem.ar_exam.values()].filter((x) => x && x.exam === 'c8').sort((a, b) => String(b.at).localeCompare(String(a.at)))")
-    check('passer tous les mots de l’oral : examen noté sur l’écrit, oral non compté', pg.locator('.ar-result').count() == 1 and 'Oral' not in pg.locator('.ar-result').inner_text() and len(rec8) == 2 and rec8[0]['oral'] is None, [r['oral'] for r in rec8])
-    urls = set(c['url'].split('?')[0] for c in gem['calls'])
-    check('un seul service extérieur appelé : Gemini (modèle de l’agenda)', urls == {'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'}, urls)
+    check('note enregistrée sans oral, 15 questions', rec and rec[0]['n'] == 15 and 'oral' not in rec[0] and rec[0]['score'] == 20, rec[:1])
+    e.shot('AN-examen-sans-oral')
+    pg.click('[data-act="ar-exam-close"]'); pg.wait_for_timeout(300)
+    n8 = exam_written(e, 'c8', 10)
+    check('examen de 10 questions : résultat direct', n8 == 10 and pg.locator('.ar-result').count() == 1)
+    check('aucune voix envoyée, aucun service extérieur appelé (Gemini jamais appelé)', not gem['calls'], len(gem['calls']))
     print('ERRORS', real_errors(e.errors))
     check('aucune erreur JavaScript', not real_errors(e.errors), real_errors(e.errors)[:3])
     e.close()

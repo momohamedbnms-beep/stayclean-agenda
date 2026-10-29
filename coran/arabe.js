@@ -10,11 +10,11 @@
    pédagogique d'Al-Husary (EveryAyah, « Al-Mu'allim »), découpée avec les repères quran-align (CC BY 4.0) ; il n'est
    jamais attribué à une autre voix.
 
-   Examens : 20 questions notées par l'appli (l'examen final : 30, ramenées sur 20), réponses tapées au clavier arabe de
-   l'appli pour l'écriture ; réussi à partir de 16/20, sinon un examen similaire (autres questions). Partie orale
-   facultative : la voix est envoyée à Google (Gemini, avec la clé de l'agenda) seulement après accord ; notée à part,
-   à titre indicatif. Écriture à l'écran, photos de feuilles et enregistrements de voix restent sur l'appareil
-   (supprimables). Aucun contenu n'a été relu par un enseignant et l'appli ne le prétend pas. */
+   Examens : 10 ou 15 questions au choix, notées par l'appli et ramenées sur 20, réponses tapées au clavier arabe de
+   l'appli pour l'écriture ; réussi à partir de 16/20, sinon un examen similaire (autres questions). Pour chaque question,
+   tu choisis ta réponse (modifiable), puis tu valides. Pas de partie orale notée par une IA (elle comprenait mal) : pour
+   l'écoute, l'appli dit le mot et tu l'écris (dictée). Écriture à l'écran, photos de feuilles et enregistrements de voix
+   restent sur l'appareil (supprimables). Aucun contenu n'a été relu par un enseignant et l'appli ne le prétend pas. */
 (function () {
   'use strict';
   (window.QR_MODULES = window.QR_MODULES || []).push(function (api) {
@@ -23,7 +23,7 @@
       pageHead, toast, stopAudio, loadSura, suraTitle } = api;
     api.addKinds(['ar_state', 'ar_att', 'ar_exam']);
 
-    const BANK_V = '20261028c';
+    const BANK_V = '20261029a';
     const FICHES_V = '20261028c';
     const SEUIL = 16;
     /* Typographie française : espace insécable avant ; : ! ? » et après « (texte entre les balises seulement) */
@@ -99,6 +99,9 @@
     const DEF = { v: 2, done: {}, seen: {} };
     function st() { const m = Store.mem.ar_state; const v = m && m.get('main'); return Object.assign({}, DEF, v || {}); }
     function saveSt(patch) { return put('ar_state', 'main', Object.assign(st(), patch)); }
+    /* Téléphone et Mac : les étapes faites et les notions vues s'additionnent (date la plus ancienne gardée) ;
+       aucun appareil n'efface ce que l'autre a fait. Examens et réponses sont des lignes séparées : rien à fusionner. */
+    api.setMerge('ar_state', (a, b) => Object.assign({}, DEF, b, a, { v: 2, done: api.mergeDates(a.done, b.done), seen: api.mergeDates(a.seen, b.seen) }));
     function atts() { const m = Store.mem.ar_att; return m ? [...m.values()].filter(Boolean).sort((a, b) => String(a.at).localeCompare(String(b.at))) : []; }
     function exams() { const m = Store.mem.ar_exam; return m ? [...m.values()].filter((e) => e && e.exam).sort((a, b) => String(b.at).localeCompare(String(a.at))) : []; }
     function logAtt(it, score, extra) {
@@ -436,11 +439,27 @@
       return shuffle(items, R).slice(0, n);
     }
 
-    /* ===== Examens : 20 questions notées par l'appli (examen final : 30, ramenées sur 20) ===== */
-    const EXAM_N = (id) => (id === 'final' ? 30 : 20);
+    /* ===== Examens : 10 ou 15 questions au choix (choix gardé sur l'appareil), notées par l'appli, ramenées sur 20 ===== */
+    const EXAM_LENS = [10, 15];
+    const examLen = () => { const n = Number(lsGet('qr-ar-exam-n', '10')); return EXAM_LENS.includes(n) ? n : 10; };
+    const needFor = (n) => Math.ceil((SEUIL / 20) * n - 1e-9);   // bonnes réponses pour réussir : 8 sur 10, 12 sur 15
+    /* La grille de l'examen (20 questions, final : 30) ramenée à n questions : chaque partie garde sa part
+       (plus forts restes) et au moins une question */
+    function scaleGrid(secs, n) {
+      const tot = secs.reduce((a, x) => a + x.n, 0) || 1;
+      const raw = secs.map((x) => (x.n * n) / tot);
+      const out = raw.map((x) => Math.max(1, Math.floor(x)));
+      let diff = n - out.reduce((a, x) => a + x, 0);
+      const order = raw.map((x, i) => [x - Math.floor(x), i]).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+      for (let k = 0; diff > 0 && order.length; k = (k + 1) % order.length) { out[order[k][1]]++; diff--; }
+      while (diff < 0) { let j = 0; out.forEach((x, i) => { if (x > out[j]) j = i; }); if (out[j] <= 1) break; out[j]--; diff++; }
+      return out;
+    }
     function examTitle(id) { const c = chOf(id); return c ? `Examen du chapitre ${c.n}` : 'Examen final'; }
-    function buildExam(id) {
-      const c = chOf(id); const secs = (B.d.chExams || {})[id] || []; const draw = uid();
+    function buildExam(id, len) {
+      const n = EXAM_LENS.includes(len) ? len : examLen();
+      const c = chOf(id); const grid = (B.d.chExams || {})[id] || []; const counts = scaleGrid(grid, n); const draw = uid();
+      const secs = grid.map((sec, i) => Object.assign({}, sec, { n: counts[i] }));
       const lastUnit = c ? B.units.get(c.units[c.units.length - 1]) : null;
       const out = secs.map((sec, i) => {
         const lv = sec.lv != null ? sec.lv : c.lv;
@@ -455,21 +474,27 @@
         items.forEach((it) => { it.sec = i; it.grade = 'auto'; });
         return { i, titre: sec.titre, items };
       });
-      return { id: uid('ex'), exam: id, draw, date: todayISO(), at: new Date().toISOString(), secs: out, i: 0, step: 'intro', oral: oralItems(id, c, draw), oi: 0 };
+      const kept = out.filter((x) => x.items.length); kept.forEach((x, k) => { x.i = k; x.items.forEach((it) => { it.sec = k; }); });
+      return { id: uid('ex'), exam: id, n, draw, date: todayISO(), at: new Date().toISOString(), secs: kept, i: 0, step: 'intro' };
     }
     const examItems = (e) => e.secs.flatMap((s) => s.items);
+    /* Enchaîner : réussi → l'examen du chapitre suivant pas encore réussi (puis l'examen final) ; sinon le même, autres questions */
+    function nextExamId(e, out) {
+      const c = chOf(e.exam);
+      if (out.passed && c) { const nx = CHS().find((x) => x.n > c.n && !examState(x.id).passed); if (nx) return nx.id; if (!examState('final').passed) return 'final'; }
+      return e.exam;
+    }
+    const examWrong = (e) => examItems(e).filter((it) => !it.done || Number(it.done.ok) < 1);
     function examResult(e) {
       const items = examItems(e); const n = items.length || 1; const pts = items.reduce((a, it) => a + (it.done ? Number(it.done.ok) || 0 : 0), 0);
       const score = Math.round((pts / n) * 20 * 2) / 2;
       const parts = e.secs.map((s) => ({ titre: s.titre, n: s.items.length, ok: s.items.reduce((a, it) => a + (it.done ? Number(it.done.ok) || 0 : 0), 0) }));
-      const oralDone = e.oral.filter((o) => o.res);
-      const oral = oralDone.length ? { n: oralDone.length, ok: oralDone.reduce((a, o) => a + (o.res.ok || 0), 0) } : null;
-      return { score, pts, n: items.length, parts, oral, passed: score >= SEUIL };
+      return { score, pts, n: items.length, parts, passed: score >= SEUIL };
     }
     async function finishExam(e) {
       const out = examResult(e);
       const wrong = examItems(e).filter((it) => !it.done || it.done.ok < 1).map((it) => it.key);
-      const rec = { at: new Date().toISOString(), d: todayISO(), exam: e.exam, draw: e.draw, score: out.score, pts: out.pts, n: out.n, parts: out.parts, oral: out.oral, passed: out.passed, wrong: wrong.slice(0, 40) };
+      const rec = { at: new Date().toISOString(), d: todayISO(), exam: e.exam, draw: e.draw, score: out.score, pts: out.pts, n: out.n, parts: out.parts, passed: out.passed, wrong: wrong.slice(0, 40) };
       try { await put('ar_exam', e.id, rec); } catch (er) { toast('Ta note n’a pas pu être enregistrée sur ce téléphone (stockage refusé ou plein).', true); }
       return out;
     }
@@ -532,87 +557,8 @@
       const ok = root.querySelector('[data-kbok]'); if (ok) ok.disabled = !(it.kb && it.kb !== 1 && String(it.kb).trim());
     }
 
-    /* ===== Partie orale (facultative) : la voix part chez Google (Gemini, clé de l'agenda) seulement après accord ===== */
-    const ORAL_KEY = () => (Store.owner || 'local') + '|ar-oral-ok';
-    const Oral = { consent: null, mr: null, stream: null, chunks: [], state: 'idle', timer: 0, busy: false };
-    const geminiKey = () => { try { return String((api.agendaSettings() || {}).geminiKey || '').trim(); } catch (e) { return ''; } };
+    /* Micro disponible : pour s'enregistrer à l'entraînement (lecture à voix haute, auto-évaluée ; rien n'est envoyé) */
     const canRec = () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
-    const oralPossible = () => !!geminiKey() && canRec();
-    async function loadOralConsent() { if (Oral.consent == null) { try { Oral.consent = !!(await idbGet('kv', ORAL_KEY())); } catch (e) { Oral.consent = false; } } return Oral.consent; }
-    function oralItems(id, c, draw) {
-      if (c && c.n === 1) return [];
-      const R = rng('oral:' + id + ':' + draw);
-      if (c && c.lv === 1) {
-        const ls = sample(c.units.flatMap((u) => lettersOfUnit(B.units.get(u))), 5, R);
-        return ls.map((l) => ({ kind: 'nom', key: 'L:' + l.id + ':oral', show: l.ch, expect: [l.ar, l.ch], tr: l.nom, q: 'Dis le nom de cette lettre.' }));
-      }
-      const lv = c ? c.lv : 4; const ctx = ctxFor(lv, null); const pool = (c && c.id === 'c6' ? ctx.allWords : ctx.words).filter((w) => w.n >= 2 && w.n <= 5);
-      return sample(pool, 5, R).map((w) => ({ kind: 'mot', key: 'W:' + w.id + ':oral', word: w.id, show: w.ar, expect: [w.ar], tr: w.tr, q: 'Lis ce mot à voix haute.' }));
-    }
-    function oralConsentLine() {
-      if (Oral.consent == null) { loadOralConsent().then(() => scheduleRender()); return ''; }
-      return Oral.consent ? `<button type="button" class="btn btn--ghost btn--sm" data-act="ar-oral-revoke">${icon('mic', 'sm')}Retirer mon accord pour l’oral</button>` : '';
-    }
-    function oralStop() {
-      clearTimeout(Oral.timer);
-      if (Oral.mr && Oral.mr.state !== 'inactive') { try { Oral.mr.stop(); } catch (e) { /* rien */ } }
-      if (Oral.stream) Oral.stream.getTracks().forEach((t) => t.stop());
-      Oral.stream = null;
-    }
-    /* Enregistrement → WAV 16 kHz mono (format accepté partout), silence détecté sans rien envoyer */
-    async function toWav16(blob) {
-      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) throw new Error('audio');
-      const ac = new AC();
-      try {
-        const buf = await blob.arrayBuffer();
-        const audio = await new Promise((res, rej) => { const p = ac.decodeAudioData(buf, res, rej); if (p && p.then) p.then(res, rej); });
-        const src = audio.getChannelData(0); const ratio = audio.sampleRate / 16000; const n = Math.max(1, Math.floor(src.length / ratio));
-        const pcm = new Int16Array(n); let peak = 0;
-        for (let i = 0; i < n; i++) {
-          const a = Math.floor(i * ratio); const b = Math.min(src.length, Math.max(a + 1, Math.floor((i + 1) * ratio))); let s = 0;
-          for (let j = a; j < b; j++) s += src[j];
-          const v = Math.max(-1, Math.min(1, s / (b - a))); if (Math.abs(v) > peak) peak = Math.abs(v); pcm[i] = Math.round(v * 0x7fff);
-        }
-        const dv = new DataView(new ArrayBuffer(44 + n * 2)); const w = (o, t) => { for (let i = 0; i < t.length; i++) dv.setUint8(o + i, t.charCodeAt(i)); };
-        w(0, 'RIFF'); dv.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
-        dv.setUint32(24, 16000, true); dv.setUint32(28, 32000, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); w(36, 'data'); dv.setUint32(40, n * 2, true);
-        for (let i = 0; i < n; i++) dv.setInt16(44 + i * 2, pcm[i], true);
-        return { bytes: new Uint8Array(dv.buffer), peak, secs: n / 16000 };
-      } finally { try { ac.close(); } catch (e) { /* rien */ } }
-    }
-    function b64(bytes) { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); }
-    async function geminiHear(wav, o) {
-      const key = geminiKey(); if (!key) throw { code: 'nokey' };
-      const what = o.kind === 'nom' ? `le nom de la lettre arabe « ${o.show} » (${o.tr}, en arabe ${o.expect[0]})` : `le mot arabe « ${o.show} » (lecture attendue : ${o.tr})`;
-      const prompt = `Tu aides un adulte qui apprend à lire l’arabe du Coran. Il devait prononcer ${what}. Écoute l’enregistrement.\n`
-        + '1) Écris en arabe, avec les voyelles, exactement ce que tu entends (pas ce qui était attendu si tu ne l’entends pas).\n'
-        + '2) Dis si ce qui est prononcé correspond à ce qui était attendu, voyelles comprises.\n'
-        + 'Réponds uniquement en JSON : {"entendu": "…", "juste": true ou false, "remarque": "une phrase courte en français, sans jugement sur le tajwid"}. '
-        + 'Si l’enregistrement est vide ou inaudible : {"entendu": "", "juste": false, "remarque": "inaudible"}.';
-      const body = { contents: [{ parts: [{ inline_data: { mime_type: 'audio/wav', data: b64(wav.bytes) } }, { text: prompt }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 300, thinkingConfig: { thinkingBudget: 0 } } };
-      let r, j = null;
-      try { r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
-      catch (e) { throw { code: 'network' }; }
-      try { j = await r.json(); } catch (e) { j = null; }
-      if (!r.ok) { const m = String((j && j.error && (j.error.status + ' ' + j.error.message)) || ''); throw { code: r.status === 429 || /RESOURCE_EXHAUSTED/.test(m) ? 'quota' : /API_KEY|PERMISSION|UNAUTHENTICATED/.test(m) || r.status === 403 ? 'key' : 'service' }; }
-      const cand = j && j.candidates && j.candidates[0];
-      const txt = ((cand && cand.content && cand.content.parts) || []).filter((p) => !p.thought).map((p) => p.text || '').join('');
-      let res = null; try { res = JSON.parse(txt.replace(/^```(json)?|```$/g, '').trim()); } catch (e) { throw { code: 'service' }; }
-      return { heard: String(res.entendu || '').slice(0, 80), juste: res.juste === true, remark: String(res.remarque || '').slice(0, 160) };
-    }
-    /* Note d'un mot prononcé : lettres reconnues (vérifiées par l'appli) et avis de l'IA sur les voyelles */
-    function oralScore(o, h) {
-      const L = (s) => normAr(s, false, true).replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/\s+/g, '');
-      const heard = L(h.heard); const lettersOk = !!heard && o.expect.some((x) => L(x) === heard || (o.kind === 'nom' && heard.includes(L(x))));
-      return lettersOk ? (h.juste ? 1 : 0.5) : (h.juste ? 0.5 : 0);
-    }
-    function oralErrText(code) {
-      if (code === 'nokey' || code === 'key') return 'La clé Gemini de l’agenda est absente ou refusée : l’oral est passé (rien n’est compté).';
-      if (code === 'quota') return 'Le quota Gemini est atteint pour l’instant : réessaie plus tard, ou passe ce mot.';
-      if (code === 'network') return 'Pas de réseau : réessaie, ou passe ce mot.';
-      if (code === 'mic') return 'Le micro n’est pas disponible (refusé ou absent).';
-      return 'L’analyse n’a pas pu se faire : réessaie, ou passe ce mot.';
-    }
 
     /* ===== Écriture à l'écran, photos de feuilles et enregistrements : sur l'appareil seulement ===== */
     const KEEP = (k) => (Store.owner || 'local') + '|ar-keep|' + k;
@@ -703,6 +649,7 @@
       const view = { study: viewStudy, train: viewTrain, exams: viewExams, sheets: viewSheets }[AR.view] || viewStudy;
       swapFr(root, `${topbar()}
         <header class="ar-top"><h1 class="ar-top__t">Lire et écrire l’arabe</h1>${segHTML()}</header>
+        ${api.syncBanner ? api.syncBanner() : ''}
         ${view()}`);
     }
     /* --- Étudier : où j'en suis, puis les 10 chapitres --- */
@@ -752,15 +699,13 @@
       const c = chOf(id); const s = examState(id);
       return `<li class="ar-excard${s.passed ? ' is-passed' : ''}" style="${pc(c)}">
           <div class="ar-excard__h">${c ? chNum(c, s.passed) : `<span class="ar-num ar-num--final" aria-hidden="true">${icon('award', 'sm')}</span>`}
-            <div class="ar-excard__t"><b>${esc(examTitle(id))}</b><small>${c ? ttl(c.titre) : 'Tout le programme'} · ${EXAM_N(id)} questions${id === 'final' ? ', ramenées sur 20' : ''}</small></div></div>
+            <div class="ar-excard__t"><b>${esc(examTitle(id))}</b><small>${c ? ttl(c.titre) : 'Tout le programme'} · 10 ou 15 questions</small></div></div>
           ${s.tries ? `<div class="ar-excard__res"><p><b>${note20(s.best)}/20</b> meilleure note${s.passed ? ' · réussi' : ` · ${SEUIL}/20 pour réussir`}<small>${s.tries} ${plural(s.tries, 'essai', 'essais')} · dernier le ${esc(dDM(s.last.d))} (${note20(s.last.score)}/20)</small></p>${spark(s.xs)}</div>` : ''}
           <button type="button" class="btn ${s.tries ? 'btn--soft' : 'btn--primary'} btn--block" data-act="ar-exam" data-x="${id}">${icon(s.tries ? 'repeat' : 'play', 'sm')}${s.tries ? 'Refaire un examen similaire' : 'Passer l’examen'}</button>
         </li>`;
     }
     function viewExams() {
-      return `<p class="lede">Tous tes examens sont là. Chacun compte ${20} questions notées par l’appli (l’examen final : 30, ramenées sur 20). Réussi à partir de ${SEUIL}/20 ; sinon, tu refais un examen similaire, avec d’autres questions.</p>
-        <p class="line-info">${icon('mic', 'sm')}<span>${oralPossible() ? 'Partie orale à la fin de chaque examen (sauf le chapitre 1), notée à part par l’IA.' : 'Partie orale : elle s’ajoute quand une clé Gemini est enregistrée dans les réglages de l’agenda.'}</span></p>
-        ${oralConsentLine()}
+      return `<p class="lede">Tous tes examens sont là. Tu choisis 10 ou 15 questions, notées par l’appli et ramenées sur 20. Réussi à partir de ${SEUIL}/20 ; sinon, tu refais un examen similaire, avec d’autres questions. Fais-en autant que tu veux.</p>
         ${B.d.parts.map((p) => `<section class="ar-part" style="--pc: var(--ar-${p.id}); --pc-tint: var(--ar-${p.id}-tint); --pc-ink: var(--ar-${p.id}-ink)"><h2 class="ar-part__t"><span>Partie ${p.n}</span>${esc(p.nom)}</h2>
             <ol class="ar-exlist">${p.chapitres.map((n) => examCard(CHS()[n - 1].id)).join('')}</ol></section>`).join('')}
         <section class="ar-part ar-part--final"><h2 class="ar-part__t"><span>À la fin</span>L’examen final</h2><ol class="ar-exlist">${examCard('final')}</ol></section>
@@ -816,7 +761,7 @@
             <li class="ar-path__i${!todo && !s.passed ? ' is-cur' : ''}"><button type="button" class="ar-path__b" data-act="ar-train-ch" data-ch="${c.id}">
                 <span class="ar-path__n">${icon('repeat', 'sm')}</span><span class="ar-path__t"><small>S’entraîner</small><b>10 exercices du chapitre</b><small>${pr.n ? `${pct(pr.p)} % de réussite récente` : 'Avant l’examen, autant de fois que tu veux'}</small></span>${icon('chev-r', 'sm')}</button></li>
             <li class="ar-path__i${s.passed ? ' is-done' : ''}"><button type="button" class="ar-path__b" data-act="ar-exam" data-x="${c.id}">
-                <span class="ar-path__n">${s.passed ? icon('check', 'sm') : icon('award', 'sm')}</span><span class="ar-path__t"><small>Examen du chapitre</small><b>20 questions, noté sur 20</b><small>${s.tries ? `Meilleure note ${note20(s.best)}/20 · ${s.tries} ${plural(s.tries, 'essai', 'essais')}${s.passed ? ' · réussi' : ''}` : `Réussi à partir de ${SEUIL}/20`}</small></span>${icon('chev-r', 'sm')}</button></li>
+                <span class="ar-path__n">${s.passed ? icon('check', 'sm') : icon('award', 'sm')}</span><span class="ar-path__t"><small>Examen du chapitre</small><b>10 ou 15 questions, noté sur 20</b><small>${s.tries ? `Meilleure note ${note20(s.best)}/20 · ${s.tries} ${plural(s.tries, 'essai', 'essais')}${s.passed ? ' · réussi' : ''}` : `Réussi à partir de ${SEUIL}/20`}</small></span>${icon('chev-r', 'sm')}</button></li>
           </ol>
           <section class="ar-savoir" style="${pc(c)}"><h2 class="sec-title">${icon('check-circle', 'sm')}À la fin du chapitre, tu sais</h2><ul>${c.savoir.map((x) => `<li>${tx(x)}</li>`).join('')}</ul></section>
           <button type="button" class="link-row" data-act="ar-sheets-ch" data-ch="${c.id}">${icon('file-text', 'sm')}<span>Fiches PDF du chapitre ${c.n}<small class="link-row__sub">Fiche de révision et fiches d’exercices</small></span>${icon('chev-r', 'sm')}</button>`;
@@ -1008,13 +953,18 @@
       if (cur.length) out.push(cur.join(' '));
       return out;
     }
-    function itemBody(it, examMode) {
+    /* Choix multiples : toucher une réponse la sélectionne (on peut en changer), « Valider » l'enregistre */
+    function itemBody(it, examMode, last) {
       const done = it.done; const reveal = done && !examMode;
       if (it.ch) {
-        return `<div class="ar-choices${it.ch.length > 4 ? ' ar-choices--many' : ''}" role="group" aria-label="Choix">${it.ch.map((c) => {
-          const cls = reveal ? (String(c.v) === String(it.ans) ? ' is-right' : (String(c.v) === String(done.v) ? ' is-wrong' : '')) : (done && String(c.v) === String(done.v) ? ' is-on' : '');
-          return `<button type="button" class="ar-choice${cls}" data-act="ar-pick" data-v="${esc(String(c.v))}"${done ? ' disabled' : ''}>${c.html}</button>`;
-        }).join('')}</div>`;
+        const sel = done ? String(done.v) : it.sel != null ? String(it.sel) : null;
+        return `<div class="ar-choices${it.ch.length > 4 ? ' ar-choices--many' : ''}" role="group" aria-label="Choisis ta réponse">${it.ch.map((c) => {
+          const v = String(c.v);
+          const cls = reveal ? (v === String(it.ans) ? ' is-right' : (v === String(done.v) ? ' is-wrong' : '')) : (sel === v ? ' is-on' : '');
+          return `<button type="button" class="ar-choice${cls}" data-act="ar-pick" data-v="${esc(v)}" aria-pressed="${sel === v}"${done ? ' disabled' : ''}>${c.html}</button>`;
+        }).join('')}</div>
+          ${done ? '' : `<div class="ar-valid"><button type="button" class="btn btn--primary btn--block" data-act="ar-validate"${sel == null ? ' disabled' : ''}>${icon('check', 'sm')}${examMode && last ? 'Valider et terminer' : 'Valider'}</button>
+            <p class="ar-valid__h" aria-live="polite">${sel == null ? 'Touche ta réponse, puis « Valider ».' : 'Tu peux encore changer : touche une autre réponse.'}</p></div>`}`;
       }
       if (it.kb) return `<div class="ar-kbwrap">${kbHTML(it, !!done)}</div>${reveal ? `<p class="ar-kb__ans">Réponse attendue : ${ar(it.ans, 'ar-big')}</p>` : ''}`;
       if (it.t === 'compose') {
@@ -1067,7 +1017,7 @@
           <h2 class="ar-ex__q">${esc(it.q)}</h2>
           ${listenBtn}
           ${it.show ? `<div class="ar-ex__show">${it.show}</div>` : ''}
-          ${itemBody(it, examMode)}
+          ${itemBody(it, examMode, n >= total)}
           ${examMode ? (it.done ? `<p class="ar-saved">${icon('check', 'sm')}Réponse enregistrée. La correction sera donnée à la fin.</p>` : '') : feedbackHTML(it)}
           ${it.done ? `<button type="button" class="btn btn--primary btn--block ar-next" data-act="ar-next">${icon('arrow-r', 'sm')}${n >= total && examMode ? 'Terminer' : 'Continuer'}</button>` : ''}
         </article>`;
@@ -1083,6 +1033,7 @@
       const mode = src === 'exam' ? 'exam' : (Run.set && Run.set.kind === 'check' ? 'check' : 'train');
       logAtt(Object.assign({}, it, { mode }), ok, Object.assign(err ? { err } : {}, extra || {}));
       scheduleRender();
+      if (src === 'exam') ACT['ar-next']();   // en examen : pas de correction tout de suite, on passe à la question suivante
     }
     const topRun = () => { const t = topPage(); return t && (t.name === 'ar-run' || t.name === 'ar-exam') ? t : null; };
     function curItem() { const t = topRun(); if (!t) return null; const rs = runState(t.props.src); if (!rs) return null; return { src: t.props.src, rs, it: rs.items[rs.i] }; }
@@ -1125,8 +1076,18 @@
       onClose() { clipStop(); recReset(); },
     };
 
-    /* ===== Examen : annonce, questions, partie orale, résultat et correction ===== */
+    /* ===== Examen : annonce, questions, résultat et correction ===== */
     function choiceHTML(it, v) { const c = (it.ch || []).find((x) => String(x.v) === String(v)); return c ? c.html : '—'; }
+    function resultActions(e, out) {
+      const nx = nextExamId(e, out); const same = nx === e.exam; const c = chOf(e.exam); const cn = chOf(nx); const nWrong = examWrong(e).length;
+      const label = same ? 'Enchaîner un autre examen' : cn ? `Enchaîner : examen du chapitre ${cn.n}` : 'Enchaîner : examen final';
+      return `<div class="ar-actions">
+          <button type="button" class="btn btn--primary btn--block" data-act="ar-exam-chain" data-x="${esc(nx)}">${icon('arrow-r', 'sm')}${esc(label)}</button>
+          ${nWrong ? `<button type="button" class="btn btn--soft btn--block" data-act="ar-exam-review">${icon('repeat', 'sm')}Réviser ${nWrong > 1 ? `mes ${nWrong} erreurs` : 'mon erreur'}</button>` : ''}
+          ${!same ? `<button type="button" class="btn btn--ghost btn--block" data-act="ar-exam-chain" data-x="${esc(e.exam)}">${icon('repeat', 'sm')}Refaire un examen ${c ? `du chapitre ${c.n}` : 'final'}</button>` : ''}
+          <button type="button" class="btn btn--ghost btn--block" data-act="ar-exam-close">${icon('check', 'sm')}Terminer</button>
+        </div>`;
+    }
     function correctionHTML(e) {
       return `<ol class="ar-corr">${examItems(e).map((it, i) => {
         const d = it.done || { ok: 0, v: null }; const cls = d.ok >= 1 ? 'is-ok' : d.ok > 0 ? 'is-mid' : 'is-ko';
@@ -1138,25 +1099,6 @@
             ${d.ok < 1 && it.expl ? `<p class="ar-corr__x">${it.expl}</p>` : ''}</li>`;
       }).join('')}</ol>`;
     }
-    function oralHTML(e) {
-      const o = e.oral[e.oi]; if (!o) return '';
-      const st0 = Oral.state;
-      const res = o.res;
-      return `<p class="ar-sec">${icon('mic', 'sm')}Partie orale · ${e.oi + 1} sur ${e.oral.length} · notée à part, à titre indicatif</p>
-        <article class="ar-ex ar-oral">
-          <h2 class="ar-ex__q">${esc(o.q)}</h2>
-          <div class="ar-ex__show">${ar(o.show, o.kind === 'nom' ? 'ar-huge ar-glyph' : 'ar-big')}</div>
-          ${res ? `<div class="ar-fb ${res.ok >= 1 ? 'ar-fb--ok' : res.ok > 0 ? 'ar-fb--half' : 'ar-fb--ko'}" role="status"><p class="ar-fb__t">${icon(res.ok >= 1 ? 'check-circle' : 'alert-circle', 'sm')}${res.ok >= 1 ? 'L’IA a reconnu ce qu’il fallait.' : res.ok > 0 ? 'Presque : l’IA a un doute.' : 'L’IA n’a pas reconnu ce qu’il fallait.'}</p>
-              <p class="ar-fb__x">L’IA a entendu : ${res.heard ? ar(res.heard) : '(rien de clair)'}${res.remark && res.remark !== 'inaudible' ? ` — ${esc(res.remark)}` : ''}</p>
-              <p class="ar-fb__x">Attendu : ${ar(o.expect[0])} (« ${esc(o.tr)} »)</p></div>
-            ${(o.tries || 0) < 2 && res.ok < 1 ? `<button type="button" class="btn btn--soft btn--block" data-act="ar-oral-again">${icon('repeat', 'sm')}Réessayer une fois</button>` : ''}
-            <button type="button" class="btn btn--primary btn--block" data-act="ar-oral-next">${icon('arrow-r', 'sm')}${e.oi + 1 >= e.oral.length ? 'Voir mon résultat' : 'Mot suivant'}</button>`
-          : st0 === 'busy' ? '<div class="loading"><span class="spin"></span><span>L’IA écoute…</span></div>'
-          : `<button type="button" class="ar-mic${st0 === 'rec' ? ' is-rec' : ''}" data-act="ar-oral-rec" aria-pressed="${st0 === 'rec'}">${icon(st0 === 'rec' ? 'stop' : 'mic', 'lg')}<span>${st0 === 'rec' ? 'J’ai fini' : 'Appuie, puis parle'}</span></button>
-            ${o.err ? `<p class="notice notice--warn">${icon('alert-circle')}<span>${esc(o.err)}</span></p>` : ''}
-            <button type="button" class="btn btn--ghost btn--block" data-act="ar-oral-skip">Passer ce mot</button>`}
-        </article>`;
-    }
     PAGES['ar-exam'] = {
       label: () => 'Examen',
       render(p) {
@@ -1166,22 +1108,13 @@
           const prev = examState(e.exam);
           return `${pageHead(title)}
             <header class="ar-chhead" style="${pc(c)}">${c ? chNum(c) : `<span class="ar-num ar-num--final" aria-hidden="true">${icon('award', 'sm')}</span>`}<div><p class="ar-chhead__k">${c ? `Chapitre ${c.n}` : 'Tout le programme'}</p><h1 class="ar-chhead__t">${c ? ttl(c.titre) : 'Examen final'}</h1></div></header>
-            <p class="lede">${N} questions notées par l’appli${e.exam === 'final' ? ', ramenées sur 20' : ', une question = 1 point'}. Pas de correction pendant l’examen : tu la vois à la fin. Réussi à partir de ${SEUIL}/20.${prev.tries ? ` Ce sont d’autres questions que tes ${prev.tries} ${plural(prev.tries, 'essai', 'essais')} précédents.` : ''}</p>
+            <p class="ar-len__l" id="ar-len-l">Combien de questions ?</p>
+            <div class="ar-len" role="group" aria-labelledby="ar-len-l" style="${pc(c)}">${EXAM_LENS.map((k) => `<button type="button" class="ar-len__b${e.n === k ? ' is-on' : ''}" aria-pressed="${e.n === k}" data-act="ar-exam-len" data-n="${k}"><b>${k}</b><span>questions</span></button>`).join('')}</div>
+            <p class="lede">${N} questions notées par l’appli, ramenées sur 20 : réussi à partir de ${SEUIL}/20, soit ${needFor(N)} bonnes réponses sur ${N}. Pour chaque question, tu choisis ta réponse (tu peux en changer), puis tu valides. La correction vient à la fin.${prev.tries ? ` Ce sont d’autres questions que tes ${prev.tries} ${plural(prev.tries, 'essai', 'essais')} précédents.` : ''}</p>
             <table class="ar-grid"><thead><tr><th>Partie</th><th>Questions</th></tr></thead>
-              <tbody>${e.secs.map((g) => `<tr><td>${esc(g.titre)}</td><td>${g.items.length}</td></tr>`).join('')}${e.oral.length ? `<tr><td>Partie orale (à part, à titre indicatif)</td><td>${oralPossible() ? e.oral.length : '—'}</td></tr>` : ''}</tbody></table>
-            ${e.oral.length ? `<p class="fine">${oralPossible() ? 'Partie orale : tu prononces 5 lettres ou mots ; l’IA (Gemini, avec la clé de ton agenda) dit ce qu’elle entend. Ta voix ne part qu’avec ton accord, demandé au début de l’oral.' : 'Partie orale : elle s’ajoute quand une clé Gemini est enregistrée dans les réglages de l’agenda. Sans elle, l’examen est noté sur l’écrit seulement.'}</p>` : ''}
+              <tbody>${e.secs.map((g) => `<tr><td>${esc(g.titre)}</td><td>${g.items.length}</td></tr>`).join('')}</tbody></table>
             <button type="button" class="btn btn--primary btn--block" data-act="ar-exam-go">${icon('play', 'sm')}Commencer</button>`;
         }
-        if (e.step === 'oral-consent') {
-          return `${pageHead(title)}
-            <h1 class="screen-title">Partie orale</h1>
-            <p class="lede">Tu vas prononcer ${e.oral.length} ${e.oral[0] && e.oral[0].kind === 'nom' ? 'noms de lettres' : 'mots'}. Pour chacun, l’appli enregistre quelques secondes de ta voix et les envoie à Google (Gemini), avec la clé enregistrée dans ton agenda, pour savoir ce qui est entendu.</p>
-            <ul class="ar-savoir"><li>Rien n’est gardé dans l’appli : ni l’enregistrement, ni la réponse de l’IA en dehors de ta note.</li><li>Avec une clé Gemini gratuite, Google peut conserver ces enregistrements et s’en servir pour améliorer ses services.</li><li>L’IA juge si elle reconnaît le bon mot ; elle ne juge pas le tajwid. La note orale est à part, à titre indicatif.</li></ul>
-            <button type="button" class="btn btn--primary btn--block" data-act="ar-oral-ok">${icon('check', 'sm')}J’accepte, je commence l’oral</button>
-            <button type="button" class="btn btn--ghost btn--block" data-act="ar-oral-no">Passer l’oral cette fois</button>
-            <p class="fine">Tu pourras retirer ton accord à tout moment dans « Examens blancs ».</p>`;
-        }
-        if (e.step === 'oral') return `${pageHead(title, { backLabel: 'Quitter l’examen (il ne sera pas compté)' })}${oralHTML(e)}`;
         if (e.step === 'done') {
           const out = e.out || examResult(e); const st1 = examState(e.exam);
           return `${pageHead(title)}
@@ -1189,15 +1122,11 @@
               <p class="ar-result__k">${esc(title)}</p>
               <p class="ar-result__note"><b>${note20(out.score)}</b><span>/20</span></p>
               <p class="ar-result__m">${out.passed ? (out.score >= 18 ? 'Réussi, très bien.' : 'Réussi.') : `Pas encore : il faut ${SEUIL}/20.`}</p>
-              ${out.oral ? `<p class="ar-result__o">${icon('mic', 'sm')}Oral : ${note20(out.oral.ok)} sur ${out.oral.n} reconnus par l’IA (à titre indicatif)</p>` : ''}
+              <p class="ar-result__c">${note20(out.pts)} ${plural(out.pts, 'bonne réponse', 'bonnes réponses')} sur ${out.n}</p>
               ${spark(st1.xs)}
             </section>
             <ul class="ar-hist__p ar-hist__p--big">${out.parts.map((x) => `<li class="${x.ok >= x.n * 0.8 ? 'is-ok' : 'is-ko'}"><span>${esc(x.titre)}</span><b>${note20(x.ok)} / ${x.n}</b></li>`).join('')}</ul>
-            <div class="ar-actions">
-              <button type="button" class="btn ${out.passed ? 'btn--soft' : 'btn--primary'} btn--block" data-act="ar-exam-again">${icon('repeat', 'sm')}Refaire un examen similaire</button>
-              ${c ? `<button type="button" class="btn btn--soft btn--block" data-act="ar-train-ch" data-ch="${c.id}">${icon('repeat', 'sm')}M’entraîner sur le chapitre ${c.n}</button>` : ''}
-              <button type="button" class="btn btn--ghost btn--block" data-act="ar-exam-close">${icon('check', 'sm')}Terminer</button>
-            </div>
+            ${resultActions(e, out)}
             <h2 class="sec-title">${icon('list', 'sm')}La correction</h2>
             ${correctionHTML(e)}`;
         }
@@ -1209,7 +1138,7 @@
           ${itemHTML(it, rs.i + 1, N, true, sec.titre)}`;
       },
       after(p, el) { wireCanvas(el); },
-      onClose() { clipStop(); recReset(); oralStop(); Oral.state = 'idle'; if (Ex.cur && Ex.cur.step !== 'done') Ex.cur = null; },
+      onClose() { clipStop(); recReset(); if (Ex.cur && Ex.cur.step !== 'done') Ex.cur = null; },
     };
 
     /* ===== Actions ===== */
@@ -1257,7 +1186,8 @@
       else if (a.mix) ACT['ar-train-mix']();
       else ACT['ar-train-errors']();
     };
-    ACT['ar-pick'] = (el) => { const c = curItem(); if (!c || !c.it || c.it.done) return; const v = el.dataset.v; record(c.src, c.it, String(v) === String(c.it.ans) ? 1 : 0, v); };
+    ACT['ar-pick'] = (el) => { const c = curItem(); if (!c || !c.it || c.it.done) return; c.it.sel = String(el.dataset.v); scheduleRender(); };
+    ACT['ar-validate'] = () => { const c = curItem(); if (!c || !c.it || c.it.done || !c.it.ch || c.it.sel == null) return; const v = c.it.sel; record(c.src, c.it, String(v) === String(c.it.ans) ? 1 : 0, v); };
     ACT['ar-kb'] = (el) => {
       const c = curItem(); if (!c || !c.it || c.it.done || !c.it.kb) return;
       const cur = c.it.kb === 1 ? '' : String(c.it.kb); const ch = el.dataset.c;
@@ -1288,10 +1218,7 @@
     };
     ACT['ar-crit'] = (el) => { const c = curItem(); if (!c || !c.it || c.it.done) return; c.it.crit = Object.assign({}, c.it.crit || {}, { [el.dataset.k]: !(c.it.crit || {})[el.dataset.k] }); scheduleRender(); };
     ACT['ar-crit-ok'] = () => { const c = curItem(); if (!c || !c.it || c.it.done) return; const n = Object.values(c.it.crit || {}).filter(Boolean).length; record(c.src, c.it, Math.round((n / 3) * 2) / 2, null, c.it.secs ? { secs: c.it.secs } : null); };
-    async function examToEnd(e) {
-      if (e.oral.length && oralPossible()) { await loadOralConsent(); e.step = Oral.consent ? 'oral' : 'oral-consent'; e.oi = 0; return; }
-      await examSave(e);
-    }
+    async function examToEnd(e) { await examSave(e); }
     async function examSave(e) { e.step = 'saving'; scheduleRender(); e.out = await finishExam(e); e.step = 'done'; }
     ACT['ar-next'] = async () => {
       const t = topRun(); if (!t) return; const rs = runState(t.props.src); if (!rs) return;
@@ -1315,46 +1242,28 @@
       openPage('ar-exam', { src: 'exam' });
     };
     ACT['ar-exam-go'] = () => { if (!Ex.cur) return; Ex.cur.step = 'run'; scheduleRender(); };
-    ACT['ar-exam-again'] = () => { const e = Ex.cur; if (!e) return; Ex.cur = buildExam(e.exam); const el = document.querySelector('#pages .page'); if (el) el.scrollTop = 0; scheduleRender(); };
-    ACT['ar-exam-close'] = () => { Ex.cur = null; backPage(); };
-    /* --- oral --- */
-    ACT['ar-oral-ok'] = async () => { const e = Ex.cur; if (!e) return; Oral.consent = true; try { await idbPut('kv', ORAL_KEY(), todayISO()); } catch (er) { /* accord gardé pour cette visite */ } e.step = 'oral'; e.oi = 0; scheduleRender(); };
-    ACT['ar-oral-no'] = async () => { const e = Ex.cur; if (!e) return; e.oral.forEach((o) => { o.skipped = true; }); await examSave(e); scheduleRender(); };
-    ACT['ar-oral-revoke'] = async () => { Oral.consent = false; try { await idbDel('kv', ORAL_KEY()); } catch (e) { /* rien */ } toast('Accord retiré : l’appli te le redemandera avant tout oral.'); scheduleRender(); };
-    ACT['ar-oral-rec'] = async () => {
-      const e = Ex.cur; if (!e) return; const o = e.oral[e.oi]; if (!o || o.res) return;
-      if (Oral.state === 'rec') { oralStop(); return; }
-      if (Oral.state === 'busy') return;
-      clipStop(); o.err = null;
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mr = new MediaRecorder(stream); const chunks = [];
-        mr.ondataavailable = (ev) => { if (ev.data && ev.data.size) chunks.push(ev.data); };
-        mr.onstop = async () => {
-          if (Oral.stream) Oral.stream.getTracks().forEach((t) => t.stop()); Oral.stream = null;
-          const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
-          Oral.state = 'busy'; scheduleRender();
-          try {
-            const wav = await toWav16(blob);
-            if (wav.peak < 0.015 || wav.secs < 0.3) { o.err = 'Je n’ai rien entendu : approche-toi du téléphone et parle un peu plus fort.'; Oral.state = 'idle'; scheduleRender(); return; }
-            const h = await geminiHear(wav, o); o.tries = (o.tries || 0) + 1;
-            const ok = oralScore(o, h); o.res = { heard: h.heard, juste: h.juste, remark: h.remark, ok: Math.max(ok, (o.res && o.res.ok) || 0) };
-          } catch (er) { o.err = oralErrText(er && er.code); if (er && (er.code === 'key' || er.code === 'nokey')) { e.oral.forEach((x) => { x.skipped = true; }); Oral.state = 'idle'; await examSave(e); scheduleRender(); toast(o.err, true); return; } }
-          Oral.state = 'idle'; scheduleRender();
-        };
-        Object.assign(Oral, { mr, stream, chunks, state: 'rec' });
-        mr.start(); scheduleRender();
-        clearTimeout(Oral.timer); Oral.timer = setTimeout(() => { if (Oral.state === 'rec') oralStop(); }, 6000);
-      } catch (er) { o.err = oralErrText('mic'); Oral.state = 'idle'; scheduleRender(); }
+    ACT['ar-exam-len'] = (el) => {
+      const e = Ex.cur; const n = Number(el.dataset.n); if (!e || e.step !== 'intro' || !EXAM_LENS.includes(n) || n === e.n) return;
+      lsSet('qr-ar-exam-n', String(n)); Ex.cur = buildExam(e.exam, n); scheduleRender();
     };
-    ACT['ar-oral-again'] = () => { const e = Ex.cur; if (!e) return; const o = e.oral[e.oi]; if (!o) return; o.prev = o.res; o.res = null; scheduleRender(); };
-    ACT['ar-oral-skip'] = async () => { const e = Ex.cur; if (!e) return; oralStop(); Oral.state = 'idle'; const o = e.oral[e.oi]; if (o) { o.skipped = true; if (o.prev && !o.res) o.res = o.prev; } await nextOral(e); };
-    ACT['ar-oral-next'] = async () => { const e = Ex.cur; if (!e) return; await nextOral(e); };
-    async function nextOral(e) {
-      e.oi++; const el = document.querySelector('#pages .page'); if (el) el.scrollTop = 0;
-      if (e.oi >= e.oral.length) await examSave(e);
+    /* Enchaîner : l'examen suivant commence tout de suite (même nombre de questions, sans annonce) */
+    ACT['ar-exam-chain'] = (el) => {
+      const e = Ex.cur; const id = el.dataset.x; if (!B.d || !B.d.chExams[id]) return;
+      Ex.cur = buildExam(id, e ? e.n : examLen()); Ex.cur.step = 'run'; clipStop();
+      const pg = document.querySelector('#pages .page'); if (pg) pg.scrollTop = 0;
       scheduleRender();
-    }
+    };
+    /* Réviser les erreurs de l'examen : les mêmes éléments, présentés autrement, avec la correction tout de suite */
+    ACT['ar-exam-review'] = () => {
+      const e = Ex.cur; if (!e) return; const R = rng('rev:' + e.id + ':' + uid());
+      const wrong = examWrong(e); let items = wrong.map((it) => regen({ key: it.key, t: it.t, lv: it.lv, u: it.u }, R)).filter(Boolean);
+      if (items.length && items.length < 6) items = items.concat(wrong.map((it) => regen({ key: it.key, t: it.t, lv: it.lv, u: it.u }, R)).filter(Boolean));
+      items = items.slice(0, 12);
+      const c = chOf(e.exam); Ex.cur = null; backPage();
+      startRun({ kind: 'train', title: 'Réviser mes erreurs', sub: c ? `Examen du chapitre ${c.n}` : 'Examen final', items, again: c ? { ch: c.id } : { mix: 1 } });
+    };
+    ACT['ar-exam-again'] = () => { const e = Ex.cur; if (!e) return; Ex.cur = buildExam(e.exam, e.n); const el = document.querySelector('#pages .page'); if (el) el.scrollTop = 0; scheduleRender(); };
+    ACT['ar-exam-close'] = () => { Ex.cur = null; backPage(); };
     ACT['ar-fiche-ver'] = (el) => { Fiche.eco = el.dataset.v === 'eco'; scheduleRender(); };
     ACT['ar-print'] = (el) => {
       const src = el.dataset.src; const ua = navigator.userAgent;
@@ -1405,6 +1314,6 @@
       P.render = function (...a) { return frNb(r.apply(this, a)); };
     }
     api.registerTab('arabe', renderTab);
-    window.__AR = { bank, st, atts, exams, makeSet, buildExam, Run, Ex, GEN, ctxFor, checkSet, trainSet, position, chState, examState, errorItems, normAr, kbScore, oralScore, startRun, Oral, B, AR };
+    window.__AR = { bank, st, atts, exams, makeSet, buildExam, scaleGrid, EXAM_LENS, needFor, Run, Ex, GEN, ctxFor, checkSet, trainSet, position, chState, examState, errorItems, normAr, kbScore, startRun, B, AR };
   });
 })();

@@ -2,7 +2,7 @@
 contrôles automatiques : pas de débordement horizontal, contraste des pastilles de chapitre, aucune erreur."""
 from qa import *
 import sys
-from ar_helpers import answer_current
+from ar_helpers import answer_current, advance
 
 checks = []
 def check(name, cond, extra=''):
@@ -33,14 +33,20 @@ with sync_playwright() as p:
         over = e.js(OVER); check(f'{amb} : étape sans débordement', not over, over)
         pg.click('[data-act="back"]'); pg.wait_for_timeout(300)
         pg.click('.ar-path__b[data-act="ar-exam"]'); pg.wait_for_timeout(600)
+        e.shot(f'AE-{amb}-examen-annonce')
+        over = e.js(OVER); check(f'{amb} : annonce de l’examen (10 ou 15 questions) sans débordement', not over, over)
         pg.click('[data-act="ar-exam-go"]'); pg.wait_for_timeout(300)
-        n = 0; kb = False
+        n = 0; kb = False; sel = False
         while pg.locator('.ar-ex').count() and n < 25:
             t = e.js("() => { const e = window.__AR.Ex.cur; const it = e.secs.flatMap((x) => x.items)[e.i]; return it ? it.t : null; }")
             if t and t.startswith('k_') and not kb:
                 e.shot(f'AE-{amb}-clavier'); kb = True
                 over = e.js(OVER); check(f'{amb} : clavier arabe sans débordement', not over, over)
-            answer_current(e, right=(n % 6 != 2)); pg.click('[data-act="ar-next"]'); pg.wait_for_timeout(150); n += 1
+            if not sel and pg.locator('.ar-ex [data-act="ar-pick"]').count():
+                pg.locator('.ar-ex [data-act="ar-pick"]').first.click(); pg.wait_for_timeout(250)
+                e.shot(f'AE-{amb}-choix'); sel = True
+                over = e.js(OVER); check(f'{amb} : réponse choisie + « Valider » sans débordement', not over, over)
+            answer_current(e, right=(n % 6 != 2)); advance(pg); n += 1
         pg.wait_for_timeout(600)
         e.shot(f'AE-{amb}-resultat')
         pg.click('[data-act="ar-exam-close"]'); pg.wait_for_timeout(300)
