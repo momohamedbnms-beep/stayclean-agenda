@@ -192,7 +192,7 @@ table.rv td small { color: #555; font-size: 7.4pt; }
 table.rv td.c { text-align: center; }
 .exam { display: grid; grid-template-columns: 1fr 1fr; gap: 1mm 6mm; margin: 0; padding: 0; list-style: none; font-size: 9.3pt; }
 .exam li { display: flex; gap: 2mm; align-items: baseline; }
-.exam li b { min-width: 6mm; text-align: end; color: var(--accent); }
+.exam li b { min-width: 11mm; text-align: end; color: var(--accent); white-space: nowrap; }
 .steps4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2mm; }
 .steps4 div { border-radius: 2.5mm; background: var(--panel); border: var(--panel-border); padding: 2mm 2.5mm; font-size: 9.2pt; line-height: 1.4; }
 .steps4 b { display: block; color: var(--accent); font-size: 10pt; margin-bottom: 0.6mm; }
@@ -417,10 +417,29 @@ def sheet_passages(lvn, sid, title, intro, n=3, log=False):
 
 
 # ---------- Fiches de révision (une par chapitre : ce qu'il faut savoir pour l'examen) ----------
+def scale_grid(secs, n):
+    """Même calcul que l'appli (coran/arabe.js, scaleGrid) : la grille ramenée à n questions, chaque partie gardant sa part."""
+    tot = sum(x['n'] for x in secs) or 1
+    raw = [x['n'] * n / tot for x in secs]
+    out = [max(1, int(r)) for r in raw]
+    diff = n - sum(out)
+    order = sorted(range(len(raw)), key=lambda i: (-(raw[i] - int(raw[i])), i))
+    k = 0
+    while diff > 0 and order:
+        out[order[k % len(order)]] += 1; diff -= 1; k += 1
+    while diff < 0:
+        j = max(range(len(out)), key=lambda i: out[i])
+        if out[j] <= 1: break
+        out[j] -= 1; diff += 1
+    return out
+
+
 def exam_box(c):
     secs = BANK['chExams'][c['id']]
-    items = ''.join(f'<li><b>{x["n"]}</b><span>{e(x["titre"])}</span></li>' for x in secs)
-    return f"""<h2>Ce que vérifie l’examen du chapitre {c['n']} (20 questions, réussi à 16/20)</h2><ul class="exam">{items}</ul>"""
+    a, b = scale_grid(secs, 10), scale_grid(secs, 15)
+    assert sum(a) == 10 and sum(b) == 15
+    items = ''.join(f'<li><b>{x}{"" if x == y else f" ou {y}"}</b><span>{e(s["titre"])}</span></li>' for s, x, y in zip(secs, a, b))
+    return f"""<h2>Ce que vérifie l’examen du chapitre {c['n']} (10 ou 15 questions au choix, réussi à 16/20)</h2><ul class="exam">{items}</ul>"""
 
 
 def savoir_box(c):

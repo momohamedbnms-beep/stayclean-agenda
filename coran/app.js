@@ -2195,7 +2195,9 @@ function arabeCard() {
       <p class="mz-ar__n"><b>${passed}</b> ${plural(passed, 'chapitre réussi', 'chapitres réussis')} sur 10${A.final && A.final.passed ? ' · examen final réussi' : ''}</p>
       <ol class="mz-ar__chs" aria-label="Les 10 chapitres">${A.chapters.map((c) => `<li class="mz-ar__ch mz-ar__ch--${c.part}${c.passed ? ' is-passed' : c.tries || c.nd ? ' is-started' : ''}" title="Chapitre ${c.n}"><span>${c.n}</span></li>`).join('')}</ol>
       <p class="fine">${pos ? `En cours : chapitre ${pos.n}${A.pos.u ? `, étape ${pos.units.indexOf(A.pos.u) + 1} sur ${pos.units.length}` : ', examen à passer'}.` : 'Les 10 chapitres sont réussis.'}${last ? ` Dernier examen : chapitre ${last.c.n}, ${String(last.c.last.score).replace('.', ',')}/20.` : ''}</p>
-      <button type="button" class="btn btn--soft btn--sm" data-act="tab" data-tab="arabe">${icon('arrow-r', 'sm')}Continuer l’arabe</button>
+      ${A.coach && A.coach.n ? `<p class="mz-ar__c">${icon('target', 'sm')}<span>Ton coach : ${A.coach.top || 'rien qui revient pour l’instant.'}${A.coach.weak ? ` ${A.coach.weak} ${plural(A.coach.weak, 'élément', 'éléments')} à revoir.` : ''}</span></p>` : ''}
+      <div class="row-btns"><button type="button" class="btn btn--soft btn--sm" data-act="tab" data-tab="arabe">${icon('arrow-r', 'sm')}Continuer l’arabe</button>
+        ${A.coach && A.coach.n ? `<button type="button" class="btn btn--ghost btn--sm" data-act="ar-open" data-page="ar-coach">${icon('target', 'sm')}Mon coach</button>` : ''}</div>
     </section>`;
 }
 function renderProgress() {

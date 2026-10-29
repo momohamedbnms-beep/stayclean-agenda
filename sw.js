@@ -1,4 +1,4 @@
-var V = "stayclean-agenda-cache-v43";
+var V = "stayclean-agenda-cache-v44";
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 self.addEventListener("install", function (e) {
   self.skipWaiting();
@@ -45,6 +45,8 @@ self.addEventListener("fetch", function (e) {
   );
 });
 
+/* v44 (29/10/2026) — Mon Coran : « Ton coach » (ce que tu rates souvent, lettres confondues, aujourd'hui, évolution),
+   révision ciblée, examen de mes points faibles ; fiches de révision à jour (10 ou 15 questions). Même règle « réseau d'abord ». */
 /* v43 (29/10/2026) — Mon Coran : la progression suit sur tous les appareils (connexion au compte dans Mon Coran,
    fusion téléphone/Mac sans rien effacer, activation guidée de la sauvegarde) ; examens de 10 ou 15 questions,
    réponse choisie puis validée, enchaînement, plus d'oral par IA. Même règle « réseau d'abord ». */

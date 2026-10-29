@@ -24,7 +24,7 @@
     api.addKinds(['ar_state', 'ar_att', 'ar_exam']);
 
     const BANK_V = '20261029a';
-    const FICHES_V = '20261028c';
+    const FICHES_V = '20261029a';
     const SEUIL = 16;
     /* Typographie française : espace insécable avant ; : ! ? » et après « (texte entre les balises seulement) */
     const frNb = (h) => (typeof h === 'string' ? h.replace(/(^|>)([^<]+)/g, (m, a, t) => a + t.replace(/ ([;:!?»])/g, ' $1').replace(/« /g, '« ')) : h);
@@ -56,7 +56,6 @@
       return B.fichesP;
     }
     const levelOf = (n) => B.d.levels[n];
-    const skillName = (id) => { const s = B.d.skills.find((x) => x.id === id); return s ? s.court : id; };
     const CHS = () => B.d.chapters;
     const chOf = (id) => B.d.chapters.find((c) => c.id === id) || null;
     const partOf = (c) => B.d.parts.find((p) => p.id === c.part);
@@ -130,15 +129,6 @@
       const set = new Set(c.units); const xs = atts().filter((a) => set.has(a.u) && a.g !== 'self' && (a.mode === 'train' || a.mode === 'check')).slice(-20);
       return { n: xs.length, p: xs.length ? xs.reduce((s, a) => s + (Number(a.ok) || 0), 0) / xs.length : 0 };
     }
-    /* Erreurs récentes : éléments à reprendre (mal réussis lors des 14 derniers jours et pas réussis depuis) */
-    function errorItems() {
-      const last = new Map();
-      for (const a of atts()) { if (!a.key) continue; last.set(a.key, a); }
-      const out = [];
-      for (const [k, a] of last) if (Number(a.ok) < 1 && daysBetween(a.d || todayISO(), todayISO()) <= 14) out.push({ key: k, t: a.t, sk: a.sk, err: a.err, lv: a.lv, u: a.u });
-      return out;
-    }
-
     /* ===== Hasard reproductible : une même graine donne le même tirage (chaque examen a la sienne) ===== */
     function rng(seed) { let s = 0; for (const c of String(seed)) s = (s * 31 + c.charCodeAt(0)) >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
     const pickOne = (xs, R) => xs[Math.floor(R() * xs.length)];
@@ -245,7 +235,8 @@
         return { t: 'lettre', sk: 'rec', key: 'L:' + l.id + ':ch', q: `Touche la lettre ${l.nom}.`, show: `<p class="ar-hint">${tx(l.son)}</p>`, ch: ch.map((x) => ({ v: x.id, html: ar(x.ch, 'ar-glyph') })), ans: l.id, errFam: l.id, expl: `${esc(l.nom)} s’écrit ${ar(l.ch)}.` };
       },
       forme(c, R) {
-        const l = pickOne(c.focus, R); const pos = pickOne(l.lie ? ['debut', 'milieu', 'fin'] : ['milieu', 'fin'], R); const ch = letterChoices(l, c.letters, R);
+        const l = pickOne(c.focus, R); const ok = l.lie ? ['debut', 'milieu', 'fin'] : ['milieu', 'fin'];
+        const pos = c.pos && ok.includes(c.pos) ? c.pos : pickOne(ok, R); const ch = letterChoices(l, c.letters, R);
         return { t: 'forme', sk: 'lie', key: 'L:' + l.id + ':' + pos, q: 'Quelle lettre est-ce ?', show: `${ar(formOf(l.ch, pos), 'ar-huge ar-glyph')}<p class="ar-cap">Forme ${esc(POS[pos])} d’un mot</p>`, ch: ch.map((x) => ({ v: x.id, html: ar(x.ch, 'ar-glyph') })), ans: l.id, errFam: l.id, expl: `C’est ${ar(l.ch)} (${esc(l.nom)}) ${esc(POS[pos])} d’un mot : ${ar(formOf(l.ch, pos))}.${l.lie ? '' : ' Elle ne s’attache pas à la lettre suivante.'}` };
       },
       son(c, R) {
@@ -407,7 +398,7 @@
     /* Reprendre un élément du journal des erreurs (même type d'exercice, même lettre / mot / signe) */
     function regen(e, R) {
       const [kind, id, x] = String(e.key).split(':'); const unit = e.u ? B.units.get(e.u) : null; const c = ctxFor(e.lv == null ? 1 : e.lv, unit);
-      if (kind === 'L') { const l = B.letters.get(id); if (l) c.focus = [l]; }
+      if (kind === 'L') { const l = B.letters.get(id); if (l) c.focus = [l]; if (['debut', 'milieu', 'fin'].includes(x)) c.pos = x; }
       if (kind === 'W') { const w = B.words.get(id); if (w) c.words = [w]; }
       if (kind === 'S') { const l = B.letters.get(id); if (l) c.letters = [l]; if (x && VOW[x]) c.vowels = [x]; }
       if (kind === 'G') c.signs = [id];
@@ -455,8 +446,10 @@
       while (diff < 0) { let j = 0; out.forEach((x, i) => { if (x > out[j]) j = i; }); if (out[j] <= 1) break; out[j]--; diff++; }
       return out;
     }
-    function examTitle(id) { const c = chOf(id); return c ? `Examen du chapitre ${c.n}` : 'Examen final'; }
+    const EXAM_IDS = (id) => id === 'faibles' || !!(B.d && B.d.chExams[id]);
+    function examTitle(id) { if (id === 'faibles') return 'Examen de mes points faibles'; const c = chOf(id); return c ? `Examen du chapitre ${c.n}` : 'Examen final'; }
     function buildExam(id, len) {
+      if (id === 'faibles') return buildWeakExam(len);
       const n = EXAM_LENS.includes(len) ? len : examLen();
       const c = chOf(id); const grid = (B.d.chExams || {})[id] || []; const counts = scaleGrid(grid, n); const draw = uid();
       const secs = grid.map((sec, i) => Object.assign({}, sec, { n: counts[i] }));
@@ -676,6 +669,7 @@
           </section>`;
       }
       return `${now}
+        ${coachCard()}
         ${B.d.parts.map((p) => `<section class="ar-part" style="--pc: var(--ar-${p.id}); --pc-tint: var(--ar-${p.id}-tint); --pc-ink: var(--ar-${p.id}-ink)">
             <h2 class="ar-part__t"><span>Partie ${p.n}</span>${esc(p.nom)}</h2><p class="ar-part__d">${esc(p.desc)}</p>
             <ol class="ar-chaps">${p.chapitres.map((n) => { const c = CHS()[n - 1]; const s = chState(c); const cur = pos.c && pos.c.id === c.id; return `<li><button type="button" class="ar-chap${cur ? ' is-cur' : ''}${s.passed ? ' is-passed' : ''}" data-act="ar-chap" data-ch="${c.id}">
@@ -686,13 +680,14 @@
     }
     /* --- M'entraîner --- */
     function viewTrain() {
-      const errs = errorItems();
+      const D = coachData(); const nr = coachReviewKeys(D).length;
       return `<p class="lede">Choisis un chapitre : 10 exercices. Ce que tu rates revient plus souvent. Les exercices d’écriture à la main et de lecture à voix haute sont des auto-évaluations ; tout le reste est corrigé par l’appli.</p>
-        ${errs.length ? `<button type="button" class="link-row" data-act="ar-train-errors">${icon('alert-circle', 'sm')}<span>Mes erreurs à reprendre<small class="link-row__sub">${errs.length} ${plural(errs.length, 'élément manqué', 'éléments manqués')} ces 14 derniers jours</small></span>${icon('chev-r', 'sm')}</button>` : ''}
+        ${nr ? `<button type="button" class="link-row" data-act="ar-coach-review">${icon('alert-circle', 'sm')}<span>Réviser mes erreurs<small class="link-row__sub">${nr} ${plural(nr, 'élément repéré', 'éléments repérés')} par ton coach</small></span>${icon('chev-r', 'sm')}</button>` : ''}
+        <button type="button" class="link-row" data-act="ar-open" data-page="ar-coach">${icon('target', 'sm')}<span>Mon coach<small class="link-row__sub">Ce que tu rates souvent, ce qui est facile, ta journée</small></span>${icon('chev-r', 'sm')}</button>
         <button type="button" class="link-row" data-act="ar-train-mix">${icon('shuffle', 'sm')}<span>Tout réviser<small class="link-row__sub">Un mélange des chapitres commencés</small></span>${icon('chev-r', 'sm')}</button>
         ${B.d.parts.map((p) => `<section class="ar-part" style="--pc: var(--ar-${p.id}); --pc-tint: var(--ar-${p.id}-tint); --pc-ink: var(--ar-${p.id}-ink)"><h2 class="ar-part__t"><span>Partie ${p.n}</span>${esc(p.nom)}</h2>
             <ol class="ar-chaps">${p.chapitres.map((n) => { const c = CHS()[n - 1]; const pr = chPractice(c); return `<li><button type="button" class="ar-chap" data-act="ar-train-ch" data-ch="${c.id}">${chNum(c)}<span class="ar-chap__t"><b>${ttl(c.titre)}</b><small>${pr.n ? `${pct(pr.p)} % de réussite sur tes ${pr.n} dernières réponses` : 'Pas encore d’exercice fait'}</small></span>${icon('repeat', 'sm')}</button></li>`; }).join('')}</ol></section>`).join('')}
-        <button type="button" class="link-row" data-act="ar-open" data-page="ar-errors">${icon('list', 'sm')}<span>Mon journal des erreurs<small class="link-row__sub">Ce qui t’a manqué, par type d’erreur</small></span>${icon('chev-r', 'sm')}</button>`;
+`;
     }
     /* --- Examens blancs : tous visibles, dans l'ordre --- */
     function examCard(id) {
@@ -704,8 +699,17 @@
           <button type="button" class="btn ${s.tries ? 'btn--soft' : 'btn--primary'} btn--block" data-act="ar-exam" data-x="${id}">${icon(s.tries ? 'repeat' : 'play', 'sm')}${s.tries ? 'Refaire un examen similaire' : 'Passer l’examen'}</button>
         </li>`;
     }
+    function weakExamCard() {
+      const D = coachData(); const s = examState('faibles'); const ok = D.weak.length >= 3;
+      return `<section class="ar-part ar-part--final"><h2 class="ar-part__t"><span>Ton coach</span>Tes points faibles</h2><ol class="ar-exlist"><li class="ar-excard${ok ? '' : ' is-off'}">
+          <div class="ar-excard__h"><span class="ar-num ar-num--final" aria-hidden="true">${icon('target', 'sm')}</span><div class="ar-excard__t"><b>Examen de mes points faibles</b><small>${ok ? `10 ou 15 questions sur les ${D.weak.length} éléments que tu rates en ce moment` : 'Disponible dès que ton coach a repéré au moins 3 éléments ratés'}</small></div></div>
+          ${s.tries ? `<div class="ar-excard__res"><p><b>${note20(s.last.score)}/20</b> dernière note<small>${s.tries} ${plural(s.tries, 'essai', 'essais')} · le ${esc(dDM(s.last.d))}</small></p>${spark(s.xs)}</div>` : ''}
+          ${ok ? `<button type="button" class="btn btn--primary btn--block" data-act="ar-exam" data-x="faibles">${icon('play', 'sm')}Passer l’examen de mes points faibles</button>` : ''}
+        </li></ol></section>`;
+    }
     function viewExams() {
       return `<p class="lede">Tous tes examens sont là. Tu choisis 10 ou 15 questions, notées par l’appli et ramenées sur 20. Réussi à partir de ${SEUIL}/20 ; sinon, tu refais un examen similaire, avec d’autres questions. Fais-en autant que tu veux.</p>
+        ${weakExamCard()}
         ${B.d.parts.map((p) => `<section class="ar-part" style="--pc: var(--ar-${p.id}); --pc-tint: var(--ar-${p.id}-tint); --pc-ink: var(--ar-${p.id}-ink)"><h2 class="ar-part__t"><span>Partie ${p.n}</span>${esc(p.nom)}</h2>
             <ol class="ar-exlist">${p.chapitres.map((n) => examCard(CHS()[n - 1].id)).join('')}</ol></section>`).join('')}
         <section class="ar-part ar-part--final"><h2 class="ar-part__t"><span>À la fin</span>L’examen final</h2><ol class="ar-exlist">${examCard('final')}</ol></section>
@@ -838,31 +842,291 @@
     };
 
     /* ===== Mes erreurs ===== */
-    function errLabel(e) {
-      const [kind, id, x] = String(e.key).split(':');
-      if (kind === 'L') { const l = B.letters.get(id); return l ? `${ar(l.ch)} ${esc(l.nom)}` : esc(id); }
-      if (kind === 'W') { const w = B.words.get(id); return w ? `${ar(w.ar)} <span class="tl">${esc(w.tr)}</span>` : esc(id); }
-      if (kind === 'S') { const l = B.letters.get(id); return l ? ar(l.ch + (VOW[x] ? VOW[x][0] : '')) : esc(id); }
-      if (kind === 'G') { const sg = B.d.signs.find((q) => q.id === id); return sg ? esc(sg.nom) : esc(id); }
-      if (kind === 'X') { const sp = B.d.special.find((q) => q.id === id); return sp ? `${ar(sp.ch)} ${esc(sp.nom)}` : esc(id); }
-      if (kind === 'M') { const m = B.d.mushaf.find((q) => q.id === id) || B.d.stops.find((q) => q.id === id); return m ? `${ar(m.ch)} ${esc(m.nom)}` : esc(id); }
-      if (kind === 'P' || kind === 'F') return `${esc(suraTitle(Number(id)))} ${esc(id)}:${esc(x)}`;
-      return esc(e.key);
+    /* ===== Ton coach : il lit toutes tes réponses corrigées par l'appli et compte ce qui revient =====
+       Rien n'est deviné : chaque phrase vient d'un comptage de tes réponses (examens, entraînement, vérifications),
+       et chaque explication vient de la banque du cours (familles de lettres, sons proches, rôle des signes). */
+    const TYPE_LABEL = {
+      sens: 'Trouver la première lettre', points: 'Compter les points', liaison: 'Lettres qui ne s’attachent pas', nom: 'Nom des lettres',
+      lettre: 'Trouver une lettre', forme: 'Lettres dans un mot (début, milieu, fin)', son: 'Sons proches', syllabe: 'Lire une syllabe',
+      lecture: 'Lire un mot', ecoute: 'Reconnaître un mot entendu', signe: 'Signes (sukūn, shadda, tanwīn, voyelles longues)',
+      article: 'Article : lettres solaires et lunaires', special: 'Formes particulières', mushaf: 'Signes du mushaf et de pause',
+      compose: 'Composer un mot entendu', k_premiere: 'Écrire la première lettre', k_lettre: 'Écrire une lettre',
+      k_syllabe: 'Écrire une syllabe', k_dictee: 'Dictée : écrire le mot entendu',
+    };
+    const POS_TXT = { debut: 'au début d’un mot', milieu: 'au milieu d’un mot', fin: 'à la fin d’un mot' };
+    const typeLabel = (t) => TYPE_LABEL[t] || t;
+    function letterOf(v) {
+      if (v == null || v === '') return null; const s = String(v);
+      return B.letters.get(s) || B.byCh.get(normAr(s, false, true).replace(/\s+/g, '').charAt(0)) || null;
     }
-    PAGES['ar-errors'] = {
-      label: () => 'Mes erreurs',
+    function famRule(l) {
+      const fam = B.d.families && B.d.families[l.fam];
+      return fam && B.d.letters.filter((y) => y.fam === l.fam).length > 1 ? fam.regle : '';
+    }
+    /* Ce qu'est un élément du journal (une lettre, une syllabe, un mot, un signe) : son nom et son explication */
+    function keyInfo(key) {
+      const [k, id, x] = String(key || '').split(':');
+      if (k === 'L') {
+        const l = B.letters.get(id); if (!l) return null;
+        const label = ({ nom: `le nom de ${ar(l.ch)}`, ch: `trouver ${ar(l.ch)} (${esc(l.nom)})`, kb: `écrire ${esc(l.nom)} (${ar(l.ch)})`, pts: `les points de ${ar(l.ch)} (${esc(l.nom)})`, son: `le son de ${ar(l.ch)} (${esc(l.nom)})`, lie: 'les lettres qui ne s’attachent pas', trace: `tracer ${ar(l.ch)}` })[x]
+          || (POS_TXT[x] ? `${ar(l.ch)} (${esc(l.nom)}) ${POS_TXT[x]}` : `${ar(l.ch)} (${esc(l.nom)})`);
+        let expl;
+        if (x === 'pts') expl = `${ar(l.ch)} : ${l.pts[0] ? `${l.pts[0]} point${l.pts[0] > 1 ? 's' : ''} ${esc(l.pts[1])}` : 'aucun point'}.`;
+        else if (x === 'lie') expl = `Six lettres ne s’attachent jamais à la suivante : ${ar(B.d.nonJoining.join(' '))}.`;
+        else if (x === 'son') { const pr = B.d.close.find((p) => p[0] === l.id || p[1] === l.id); expl = `${esc(l.nom)} : ${tx(l.son)}${pr ? ` À distinguer : ${tx(pr[2])}.` : ''}`; }
+        else if (POS_TXT[x]) expl = `${ar(l.ch)} ${POS_TXT[x]} s’écrit ${ar(formOf(l.ch, x), 'ar-form')}.${l.lie ? '' : ' Elle ne s’attache pas à la lettre suivante.'}${famRule(l) ? ' ' + tx(famRule(l)) : ''}`;
+        else expl = famRule(l) ? tx(famRule(l)) : `${esc(l.nom)} : ${tx(l.son)}`;
+        return { kind: 'letter', l, x, label, expl };
+      }
+      if (k === 'S') {
+        const l = B.letters.get(id); const vw = VOW[x]; if (!l || !vw) return null; const say = trCons(l) + vw[1];
+        return { kind: 'syll', l, label: `${String(key).endsWith(':kb') ? 'écrire ' : ''}la syllabe ${ar(l.ch + vw[0])} (« ${esc(say)} »)`,
+          expl: `${ar(l.ch + vw[0])} se lit « ${esc(say)} » : ${x === 'fatha' ? 'trait au-dessus, son « a »' : x === 'kasra' ? 'trait au-dessous, son « i »' : 'petit wāw au-dessus, son « ou »'}.` };
+      }
+      if (k === 'W') {
+        const w = B.words.get(id); if (!w) return null; const bl = baseLetters(w.ar);
+        const label = ({ debut: `la première lettre de ${ar(w.ar)}`, kp: `la première lettre de ${ar(w.ar)}`, lire: `lire ${ar(w.ar)}`, ecoute: `reconnaître ${ar(w.ar)} à l’oreille`, art: `l’article dans ${ar(w.ar)}`, kd: `écrire ${ar(w.ar)} sous la dictée`, ecr: `composer ${ar(w.ar)}`, voix: `lire ${ar(w.ar)} à voix haute`, trace: `écrire ${ar(w.ar)}` })[x] || ar(w.ar);
+        let expl = `${ar(w.ar)} se lit « ${esc(w.tr)} ».`;
+        if (x === 'debut' || x === 'kp') expl = `L’arabe se lit de droite à gauche : la première lettre de ${ar(w.ar)} est celle tout à droite, ${ar(bl[0])}.`;
+        else if (x === 'kd' || x === 'ecr') expl = `${ar(w.ar)} (« ${esc(w.tr)} ») s’écrit avec ${bl.map((ch) => ar(ch)).join(' + ')}, de droite à gauche.`;
+        else if (x === 'art') expl = w.f.includes('article_sun') ? `Lettre solaire : le ل ne se prononce pas, la lettre suivante porte une shadda. ${ar(w.ar)} = « ${esc(w.tr)} ».` : `Lettre lunaire : le ل porte un sukūn et se prononce. ${ar(w.ar)} = « ${esc(w.tr)} ».`;
+        return { kind: 'word', w, label, expl };
+      }
+      if (k === 'G') { const sg = B.d.signs.find((y) => y.id === id); return sg ? { kind: 'sign', label: `le signe ${sign(sg.ch)} (${esc(sg.nom)})`, expl: tx(sg.role) } : null; }
+      if (k === 'X') { const sp = B.d.special.find((y) => y.id === id); return sp ? { kind: 'special', label: `${ar(sp.ch)} (${esc(sp.nom)})`, expl: tx(sp.role) } : null; }
+      if (k === 'M') { const m = B.d.mushaf.find((y) => y.id === id) || B.d.stops.find((y) => y.id === id); return m ? { kind: 'mushaf', label: `le signe ${sign(m.ch)} (${esc(m.nom)})`, expl: tx(m.role) } : null; }
+      return null;
+    }
+    /* L'analyse (recalculée seulement quand il y a du nouveau) */
+    const CoachMemo = { key: '', data: null };
+    function coachData() {
+      const mA = Store.mem.ar_att; const mE = Store.mem.ar_exam; const today = todayISO(); const done = st().done || {};
+      const memo = `${Store.owner}|${mA ? mA.size : 0}|${mE ? mE.size : 0}|${Object.keys(done).length}|${today}`;
+      if (CoachMemo.key === memo && CoachMemo.data) return CoachMemo.data;
+      const all = atts().filter((a) => a.key && a.g !== 'self' && !SELF_TYPES.has(a.t));
+      // élément par élément
+      const byKey = new Map();
+      for (const a of all) {
+        let r = byKey.get(a.key); if (!r) { r = { key: a.key, t: a.t, lv: a.lv, u: a.u, n: 0, ko: 0, days: new Set(), res: [], lastD: '', lastKoD: '' }; byKey.set(a.key, r); }
+        const ok = Number(a.ok) || 0; r.n++; r.res.push(ok); r.lastD = a.d || r.lastD; r.t = a.t; r.lv = a.lv; r.u = a.u;
+        if (ok < 1) { r.ko++; r.days.add(a.d); r.lastKoD = a.d || r.lastKoD; }
+      }
+      const items = [...byKey.values()].map((r) => {
+        const l2 = r.res.slice(-2); const fixed = l2.length === 2 && l2.every((x) => x >= 1);
+        return Object.assign(r, { rate: (r.n - r.ko) / r.n, fixed, lastKo: r.res[r.res.length - 1] < 1, often: r.ko >= 3 && r.days.size >= 2 });
+      });
+      // à travailler : pas encore réussi deux fois de suite depuis la dernière erreur
+      const weak = items.filter((r) => !r.fixed && r.ko >= 1 && (r.lastKo || r.ko >= 2))
+        .sort((a, b) => (b.often - a.often) || (b.ko - a.ko) || (a.rate - b.rate) || String(b.lastKoD).localeCompare(String(a.lastKoD)))
+        .map((r) => Object.assign(r, { info: keyInfo(r.key) })).filter((r) => r.info);
+      // lettres confondues (réponse donnée ≠ lettre attendue)
+      const conf = new Map();
+      for (const a of all) {
+        if (Number(a.ok) >= 1 || a.v == null) continue;
+        const [k, id, x] = String(a.key).split(':'); if (k !== 'L' || x === 'pts' || x === 'lie') continue;
+        const exp = B.letters.get(id); const got = letterOf(a.v); if (!exp || !got || got.id === exp.id) continue;
+        const pk = [exp.id, got.id].sort().join('|'); const c = conf.get(pk) || { a: B.letters.get(pk.split('|')[0]), b: B.letters.get(pk.split('|')[1]), n: 0, lastD: '' };
+        c.n++; c.lastD = a.d || c.lastD; conf.set(pk, c);
+      }
+      const pairs = [...conf.values()].sort((x, y) => y.n - x.n || String(y.lastD).localeCompare(String(x.lastD)));
+      // types d'erreurs (30 derniers jours)
+      const errs = new Map(); let nErr = 0;
+      for (const a of all) { if (Number(a.ok) >= 1 || !a.err || daysBetween(a.d || today, today) > 30) continue; errs.set(a.err, (errs.get(a.err) || 0) + 1); nErr++; }
+      // par type d'exercice : tes 30 dernières réponses de chaque type
+      const byT = new Map(); for (const a of all) { if (!byT.has(a.t)) byT.set(a.t, []); byT.get(a.t).push(Number(a.ok) || 0); }
+      const types = [...byT.entries()].map(([t, xs]) => { const r = xs.slice(-30); return { t, n: r.length, rate: r.reduce((s, x) => s + x, 0) / r.length }; });
+      const hard = types.filter((x) => x.n >= 5 && x.rate < 0.7).sort((a, b) => a.rate - b.rate);
+      const easy = types.filter((x) => x.n >= 8 && x.rate >= 0.9).sort((a, b) => b.rate - a.rate);
+      // aujourd'hui
+      const tA = all.filter((a) => a.d === today); const tEx = exams().filter((e) => e.d === today && typeof e.score === 'number').reverse();
+      const tSteps = Object.entries(done).filter(([, d]) => d === today).map(([u]) => u);
+      const tFixed = items.filter((r) => r.ko && r.lastD === today && r.res[r.res.length - 1] >= 1 && r.days.size && ![...r.days].every((d) => d === today)).length;
+      const tWeak = weak.filter((r) => r.lastKoD === today);
+      // examens : l'évolution des notes du dernier examen passé (même examen, pour comparer ce qui est comparable)
+      const allEx = exams().filter((e) => typeof e.score === 'number'); const seriesId = allEx[0] ? allEx[0].exam : null;
+      const series = seriesId ? allEx.filter((e) => e.exam === seriesId).slice(0, 8).reverse() : [];
+      let trend = '';
+      if (series.length >= 3) { const d = series[series.length - 1].score - series[0].score; trend = d >= 2 ? 'up' : d <= -2 ? 'down' : 'flat'; }
+      const data = { n: all.length, nEx: allEx.length, byKey, weak, often: weak.filter((r) => r.ko >= 2), pairs, errs: [...errs.entries()].sort((a, b) => b[1] - a[1]), nErr, types, hard, easy,
+        today: { n: tA.length, ok: tA.reduce((s, a) => s + (Number(a.ok) || 0), 0), ex: tEx, steps: tSteps, fixed: tFixed, weak: tWeak }, series, seriesId, trend };
+      CoachMemo.key = memo; CoachMemo.data = data;
+      return data;
+    }
+    const scoreList = (xs) => xs.map((e) => note20(e.score)).join(' → ');
+    function todayLines(D) {
+      const T = D.today; const out = [];
+      if (T.ex.length) out.push(`${T.ex.length} ${plural(T.ex.length, 'examen', 'examens')} (${T.ex.map((e) => note20(e.score) + '/20').join(', ')})`);
+      if (T.n) out.push(`${T.n} ${plural(T.n, 'réponse', 'réponses')}, ${pct(T.ok / T.n)} % justes`);
+      if (T.steps.length) out.push(`${T.steps.length} ${plural(T.steps.length, 'étape faite', 'étapes faites')}`);
+      return out;
+    }
+    /* Ce qui n'a pas avancé aujourd'hui */
+    function notYetToday(D) {
+      const pos = position(); const T = D.today;
+      if (!pos.c) return null;
+      const c = pos.c; const u = pos.u ? B.units.get(pos.u) : null;
+      if (u && !T.steps.length) return `L’étape ${c.units.indexOf(u.id) + 1} du chapitre ${c.n} (« ${ttl(u.titre)} ») n’a pas encore avancé aujourd’hui.`;
+      if (!u && !T.ex.some((e) => e.exam === c.id)) return `L’examen du chapitre ${c.n} t’attend : toutes ses étapes sont faites.`;
+      return null;
+    }
+    function trendText(D) {
+      if (!D.series.length) return '';
+      if (D.series.length < 2) return `${examTitle(D.seriesId)} : ${note20(D.series[0].score)}/20.`;
+      const s = `${examTitle(D.seriesId)} : ${scoreList(D.series.slice(-5))}.`;
+      return D.trend === 'up' ? `${s} Ça monte.` : D.trend === 'down' ? `${s} Ça baisse un peu : une révision ciblée avant le prochain examen.` : D.trend === 'flat' ? `${s} C’est stable.` : s;
+    }
+    const pairLabel = (p) => `${ar(p.a.ch)} (${esc(p.a.nom)}) et ${ar(p.b.ch)} (${esc(p.b.nom)})`;
+    /* Ce qui distingue deux lettres : la forme et les points (famille), et le son quand la banque les compare */
+    function pairExpl(p, kind) {
+      const fam = p.a.fam === p.b.fam ? famRule(p.a) : '';
+      const cl = B.d.close.find((x) => (x[0] === p.a.id && x[1] === p.b.id) || (x[0] === p.b.id && x[1] === p.a.id));
+      if (kind === 'son' && cl) return `${tx(cl[2])}.${fam ? ' ' + tx(fam) : ''}`;
+      const out = [fam ? tx(fam) : '', cl ? `À l’oreille : ${tx(cl[2])}.` : ''].filter(Boolean).join(' ');
+      return out || `${ar(p.a.ch)} : ${tx(p.a.son)} ${ar(p.b.ch)} : ${tx(p.b.son)}`;
+    }
+    /* Les 2 ou 3 phrases les plus utiles, pour la carte d'« Étudier » */
+    function coachTop(D) {
+      const out = [];
+      if (D.pairs[0] && D.pairs[0].n >= 2) out.push({ ko: true, h: `Tu confonds ${pairLabel(D.pairs[0])} : ${D.pairs[0].n} fois.` });
+      const w = D.often.find((r) => !(r.info.kind === 'letter' && D.pairs[0] && [D.pairs[0].a.id, D.pairs[0].b.id].includes(r.info.l.id)));
+      if (w) out.push({ ko: true, h: `Revient souvent : ${w.info.label} (raté ${w.ko} ${plural(w.ko, 'fois', 'fois')}).` });
+      if (D.hard[0] && out.length < 2) out.push({ ko: true, h: `À travailler : ${esc(typeLabel(D.hard[0].t).toLowerCase())} (${pct(D.hard[0].rate)} % de réussite).` });
+      if (D.easy[0]) out.push({ ko: false, h: `Facile pour toi : ${esc(typeLabel(D.easy[0].t).toLowerCase())} (${pct(D.easy[0].rate)} %).` });
+      return out.slice(0, 3);
+    }
+    function coachCard() {
+      if (!B.d) return '';
+      const D = coachData();
+      if (!D.n) return `<section class="ar-coach"><p class="ar-coach__k">${icon('target', 'sm')}Ton coach</p><p class="ar-coach__p">Dès tes premières réponses, ton coach repère ce que tu rates souvent et ce qui est facile pour toi, et te prépare des révisions sur tes erreurs.</p></section>`;
+      const top = coachTop(D); const tl = todayLines(D); const nr = coachReviewKeys(D).length;
+      return `<section class="ar-coach" data-anchor="coach">
+          <p class="ar-coach__k">${icon('target', 'sm')}Ton coach<small>${D.n} ${plural(D.n, 'réponse lue', 'réponses lues')}</small></p>
+          ${top.length ? `<ul class="ar-coach__l">${top.map((x) => `<li class="${x.ko ? 'is-ko' : 'is-ok'}">${icon(x.ko ? 'alert-circle' : 'check-circle', 'sm')}<span>${x.h}</span></li>`).join('')}</ul>` : '<p class="ar-coach__p">Rien qui revient pour l’instant : continue, ton coach suit chaque réponse.</p>'}
+          <p class="ar-coach__d">${tl.length ? `Aujourd’hui : ${tl.join(' · ')}.` : 'Aujourd’hui : rien encore.'}</p>
+          <div class="ar-coach__acts">
+            ${nr ? `<button type="button" class="btn btn--primary btn--sm" data-act="ar-coach-review">${icon('repeat', 'sm')}Réviser mes erreurs</button>` : ''}
+            <button type="button" class="btn btn--soft btn--sm" data-act="ar-open" data-page="ar-coach">${icon('list', 'sm')}Tout voir</button>
+          </div>
+        </section>`;
+    }
+    /* Ce que la révision ciblée reprend : les éléments à travailler, les plus fréquents d'abord */
+    function coachReviewKeys(D) { return D.weak.slice(0, 12); }
+    PAGES['ar-coach'] = {
+      label: () => 'Mon coach',
       render() {
-        if (!B.d) { bank().catch(() => {}); return pageHead('Mes erreurs') + loadingHTML(); }
-        const errs = errorItems(); const by = new Map();
-        for (const e of errs) { const k = e.err || 'autre'; if (!by.has(k)) by.set(k, []); by.get(k).push(e); }
-        const counts = new Map(); for (const a of atts()) if (a.err) counts.set(a.err, (counts.get(a.err) || 0) + 1);
-        return `${pageHead('Mes erreurs')}
-          <p class="lede">Ce que tu as manqué ces 14 derniers jours et pas encore réussi depuis. Chaque élément revient plus souvent dans tes exercices.</p>
-          ${errs.length ? `<button type="button" class="btn btn--primary btn--block" data-act="ar-train-errors">${icon('repeat', 'sm')}Retravailler mes erreurs</button>` : '<div class="empty"><p>Rien à reprendre pour l’instant.</p></div>'}
-          ${[...by.entries()].map(([k, xs]) => `<section class="ar-errgroup"><h2 class="sec-title">${esc(B.d.errors[k] || 'autre')} <small>(${xs.length})</small></h2>
-              <ul class="ar-errlist">${xs.slice(0, 30).map((e) => `<li>${errLabel(e)}<small>${esc(skillName(e.sk))}</small></li>`).join('')}</ul></section>`).join('')}
-          ${counts.size ? `<h2 class="sec-title">${icon('list', 'sm')}Depuis le début</h2><ul class="ar-errcount">${[...counts.entries()].sort((a, b) => b[1] - a[1]).map(([k, n]) => `<li><span>${esc(B.d.errors[k] || k)}</span><b>${n}</b></li>`).join('')}</ul>` : ''}`;
+        if (!B.d) { bank().catch(() => {}); return pageHead('Mon coach') + loadingHTML(); }
+        const D = coachData(); const tl = todayLines(D); const ny = notYetToday(D); const weakN = D.weak.length;
+        if (!D.n) return `${pageHead('Mon coach')}<h1 class="screen-title">Mon coach</h1><div class="empty"><p>Ton coach n’a encore rien à lire. Fais une étape, un entraînement ou un examen : il repérera ce que tu rates souvent et ce qui est facile pour toi.</p></div>`;
+        const card = (r) => `<li class="ar-cw${r.often ? ' is-often' : ''}">
+            <p class="ar-cw__t">${r.info.label}</p>
+            <p class="ar-cw__n">Raté ${r.ko} ${plural(r.ko, 'fois', 'fois')} sur ${r.n}${r.often ? ' · revient souvent' : ''}${r.lastKoD ? ` · dernière erreur ${r.lastKoD === todayISO() ? 'aujourd’hui' : 'le ' + esc(dDM(r.lastKoD))}` : ''}</p>
+            <p class="ar-cw__x">${r.info.expl}</p>
+            <button type="button" class="btn btn--soft btn--sm" data-act="ar-coach-item" data-k="${esc(r.key)}">${icon('repeat', 'sm')}M’entraîner là-dessus</button>
+          </li>`;
+        const errTot = D.nErr || 1;
+        return `${pageHead('Mon coach')}
+          <h1 class="screen-title">Mon coach</h1>
+          <p class="lede">Il lit tes ${D.n} ${plural(D.n, 'réponse corrigée', 'réponses corrigées')} et tes ${D.nEx} ${plural(D.nEx, 'examen', 'examens')}, et compte ce qui revient. Les explications viennent du cours.</p>
+          <div class="ar-coach__acts ar-coach__acts--top">
+            ${weakN ? `<button type="button" class="btn btn--primary btn--block" data-act="ar-coach-review">${icon('repeat', 'sm')}Réviser mes erreurs (${Math.min(12, weakN)} ${plural(Math.min(12, weakN), 'élément', 'éléments')})</button>` : ''}
+            ${weakN >= 3 ? `<button type="button" class="btn btn--soft btn--block" data-act="ar-exam" data-x="faibles">${icon('award', 'sm')}Examen de mes points faibles</button>` : ''}
+          </div>
+          <section class="ar-csec" data-anchor="today"><h2 class="sec-title">${icon('calendar', 'sm')}Aujourd’hui</h2>
+            <ul class="ar-cday">
+              ${tl.length ? `<li class="is-ok">${icon('check', 'sm')}<span>Fait : ${tl.join(' · ')}.</span></li>` : `<li>${icon('circle', 'sm')}<span>Rien de fait aujourd’hui pour l’instant.</span></li>`}
+              ${D.today.fixed ? `<li class="is-ok">${icon('check-circle', 'sm')}<span>${D.today.fixed} ${plural(D.today.fixed, 'ancienne erreur réussie', 'anciennes erreurs réussies')} aujourd’hui.</span></li>` : ''}
+              ${D.today.weak.length ? `<li class="is-ko">${icon('alert-circle', 'sm')}<span>Raté aujourd’hui : ${D.today.weak.slice(0, 4).map((r) => r.info.label).join(' ; ')}.</span></li>` : ''}
+              ${ny ? `<li>${icon('target', 'sm')}<span>${ny}</span></li>` : ''}
+            </ul></section>
+          ${D.pairs.length && D.pairs[0].n >= 2 ? `<section class="ar-csec" data-anchor="pairs"><h2 class="sec-title">${icon('shuffle', 'sm')}Les lettres que tu confonds</h2>
+            <ul class="ar-cws">${D.pairs.filter((p) => p.n >= 2).slice(0, 4).map((p) => `<li class="ar-cw is-often"><p class="ar-cw__t">${pairLabel(p)}</p><p class="ar-cw__n">${p.n} fois</p><p class="ar-cw__x">${pairExpl(p)}</p>
+              <button type="button" class="btn btn--soft btn--sm" data-act="ar-coach-pair" data-a="${esc(p.a.id)}" data-b="${esc(p.b.id)}">${icon('repeat', 'sm')}M’entraîner sur ces deux lettres</button></li>`).join('')}</ul></section>` : ''}
+          <section class="ar-csec" data-anchor="weak"><h2 class="sec-title">${icon('alert-circle', 'sm')}Ce que tu rates ${D.often.length ? 'souvent' : 'en ce moment'}</h2>
+            ${weakN ? `<ul class="ar-cws">${D.weak.slice(0, 8).map(card).join('')}</ul>${weakN > 8 ? `<p class="fine">et ${weakN - 8} autres éléments, repris dans « Réviser mes erreurs ».</p>` : ''}` : '<p class="fine">Rien à reprendre : tout ce que tu as raté a été réussi deux fois de suite depuis.</p>'}</section>
+          ${D.errs.length ? `<section class="ar-csec" data-anchor="errs"><h2 class="sec-title">${icon('list', 'sm')}D’où viennent tes erreurs (30 derniers jours)</h2>
+            <ul class="ar-cbar">${D.errs.slice(0, 5).map(([k, n]) => `<li><span>${esc(B.d.errors[k] || k)}</span><span class="ar-cbar__b" aria-hidden="true"><span style="width:${Math.round((n / errTot) * 100)}%"></span></span><b>${n}</b></li>`).join('')}</ul></section>` : ''}
+          <section class="ar-csec" data-anchor="types"><h2 class="sec-title">${icon('layers', 'sm')}Où tu as du mal, où c’est facile</h2>
+            ${D.hard.length ? `<ul class="ar-ctypes">${D.hard.slice(0, 5).map((x) => `<li class="is-ko"><span>${esc(typeLabel(x.t))}</span><b>${pct(x.rate)} %</b><small>sur tes ${x.n} dernières réponses</small></li>`).join('')}</ul>` : '<p class="fine">Aucun type d’exercice sous 70 % de réussite.</p>'}
+            ${D.easy.length ? `<ul class="ar-ctypes">${D.easy.slice(0, 5).map((x) => `<li class="is-ok"><span>${esc(typeLabel(x.t))}</span><b>${pct(x.rate)} %</b><small>sur tes ${x.n} dernières réponses</small></li>`).join('')}</ul>` : ''}</section>
+          ${D.series.length ? `<section class="ar-csec" data-anchor="exams"><h2 class="sec-title">${icon('award', 'sm')}Tes examens</h2><p class="ar-cnote">${trendText(D)}</p>${spark(D.series.slice().reverse())}</section>` : ''}
+          <p class="fine">Une erreur sort de la liste quand l’élément est réussi deux fois de suite. Ton coach ne devine rien : il compte tes réponses ; les auto-évaluations (écriture à la main, lecture à voix haute) ne sont pas comptées.</p>`;
       },
+    };
+    /* Ce que ton coach retient d'un examen (sous la note) */
+    function examCoachHTML(e) {
+      const wrong = examItems(e).filter((it) => !it.done || Number(it.done.ok) < 1);
+      if (!wrong.length) return `<section class="ar-csec ar-cexam"><h2 class="sec-title">${icon('target', 'sm')}Ce que ton coach retient</h2><p class="ar-cnote">Aucune erreur : rien à réviser. Enchaîne !</p></section>`;
+      const D = coachData(); const lines = []; const seen = new Set();
+      for (const it of wrong) {
+        if (seen.has(it.key)) continue; seen.add(it.key);
+        const info = keyInfo(it.key); if (!info) continue; const r = D.byKey.get(it.key);
+        const again = r && r.ko >= 2 ? ` <b class="ar-again">${r.ko}<sup>e</sup> fois</b>` : '';
+        let conf = ''; let expl = info.expl;
+        if (it.done && it.done.v != null && info.kind === 'letter') {
+          const got = letterOf(it.done.v);
+          if (got && got.id !== info.l.id) { conf = ` — tu as mis ${ar(got.ch)} (${esc(got.nom)})`; if (info.x !== 'pts' && info.x !== 'lie') expl = pairExpl({ a: info.l, b: got }, info.x === 'son' ? 'son' : 'vue'); }
+        }
+        lines.push(`<li><span>${info.label}${conf}${again}</span><small>${expl}</small></li>`);
+      }
+      const prev = examState(e.exam).xs.filter((x) => x.draw !== e.draw)[0];
+      const delta = prev && e.out ? e.out.score - prev.score : null;
+      return `<section class="ar-csec ar-cexam"><h2 class="sec-title">${icon('target', 'sm')}Ce que ton coach retient</h2>
+          ${delta != null ? `<p class="ar-cnote">${delta > 0 ? `+${note20(delta)} point${Math.abs(delta) > 1 ? 's' : ''} par rapport à ton essai précédent (${note20(prev.score)}/20).` : delta < 0 ? `${note20(delta)} point${Math.abs(delta) > 1 ? 's' : ''} par rapport à ton essai précédent (${note20(prev.score)}/20).` : `Même note que ton essai précédent.`}</p>` : ''}
+          <ul class="ar-cex">${lines.join('')}</ul></section>`;
+    }
+    /* --- Séries ciblées : réviser exactement ce qui est raté --- */
+    const AUTO_ONLY = (it) => it && it.grade !== 'self' && !SELF_TYPES.has(it.t);
+    function itemsForKeys(rs, R, perKey = 1) {
+      let out = [];
+      for (let k = 0; k < perKey; k++) for (const r of rs) { const it = regen({ key: r.key, t: r.t, lv: r.lv, u: r.u }, R); if (AUTO_ONLY(it)) out.push(it); }
+      return out;
+    }
+    function coachReviewSet(D, n = 12) {
+      const R = rng('coach:' + uid()); const ks = coachReviewKeys(D);
+      let items = itemsForKeys(ks, R); if (items.length && items.length < 6) items = items.concat(itemsForKeys(ks, R));
+      return shuffle(items, R).slice(0, n);
+    }
+    /* Deux lettres confondues : les reconnaître, les nommer, les trouver dans un mot (4 questions chacune) */
+    function pairSet(a, b) {
+      const R = rng('pair:' + a.id + b.id + ':' + uid()); const out = [];
+      for (const l of [a, b]) for (const t of ['nom', 'lettre', 'forme', 'k_lettre']) {
+        const other = l === a ? b : a; const c = ctxFor(2, null); c.focus = [l]; c.letters = uniq([a, b, ...c.letters]);
+        const it = genOne(t, c, R); if (!it) continue;
+        // l'autre lettre est toujours parmi les choix : c'est elle qu'il faut savoir écarter
+        if (it.ch && !it.ch.some((x) => String(x.v) === other.id)) { const k = it.ch.findIndex((x) => String(x.v) !== String(it.ans)); if (k >= 0) it.ch[k] = { v: other.id, html: t === 'nom' ? `<b>${esc(other.nom)}</b>` : ar(other.ch, 'ar-glyph') }; }
+        out.push(Object.assign(it, { lv: 2, u: null, mode: 'train', grade: 'auto', id: uid('i') }));
+      }
+      return shuffle(out, R);
+    }
+    /* Examen de mes points faibles : 10 ou 15 questions notées sur ce que tu rates, sans correction pendant l'examen */
+    function buildWeakExam(len) {
+      const n = EXAM_LENS.includes(len) ? len : examLen(); const D = coachData(); const draw = uid(); const R = rng('faibles:' + draw);
+      const ks = D.weak.slice(0, n); let items = itemsForKeys(ks, R);
+      for (let k = 0; items.length < n && k < 3; k++) items = items.concat(itemsForKeys(ks, R));
+      // pas assez d'erreurs : les types d'exercices où tu as le plus de mal
+      if (items.length < n) {
+        const pos = position(); const lv = pos.c ? pos.c.lv : 4;
+        for (const h of D.hard) { if (items.length >= n) break; items = items.concat(makeSet({ lv, n: Math.min(3, n - items.length), types: [h.t], seed: 'faibles:' + draw + ':' + h.t, mode: 'exam' }).filter(AUTO_ONLY)); }
+      }
+      items = shuffle(items, R).slice(0, n).map((it) => Object.assign(it, { mode: 'exam', grade: 'auto', id: uid('i'), done: null }));
+      const groups = new Map(); for (const it of items) { const g = typeLabel(it.t); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(it); }
+      const secs = [...groups.entries()].sort((a, b) => b[1].length - a[1].length).map(([titre, xs], i) => { xs.forEach((it) => { it.sec = i; }); return { i, titre, items: xs }; });
+      return { id: uid('ex'), exam: 'faibles', n, draw, date: todayISO(), at: new Date().toISOString(), secs, i: 0, step: 'intro' };
+    }
+    ACT['ar-coach-review'] = async () => {
+      if (!(await needBank())) return; const D = coachData(); const items = coachReviewSet(D);
+      if (!items.length) { toast('Rien à réviser pour l’instant : tout ce que tu as raté a été réussi depuis.'); return; }
+      startRun({ kind: 'train', title: 'Réviser mes erreurs', sub: 'Ce que ton coach a repéré', items, again: { coach: 1 } });
+    };
+    ACT['ar-coach-item'] = async (el) => {
+      if (!(await needBank())) return; const D = coachData(); const r = D.byKey.get(el.dataset.k); if (!r) return;
+      const R = rng('item:' + r.key + ':' + uid()); const items = itemsForKeys([r], R, 3);
+      if (!items.length) { toast('Pas d’exercice disponible pour cet élément.'); return; }
+      startRun({ kind: 'train', title: 'M’entraîner là-dessus', sub: 'Un élément repéré par ton coach', items, again: { coach: 1 } });
+    };
+    ACT['ar-coach-pair'] = async (el) => {
+      if (!(await needBank())) return; const a = B.letters.get(el.dataset.a); const b = B.letters.get(el.dataset.b); if (!a || !b) return;
+      startRun({ kind: 'train', title: 'Deux lettres à distinguer', sub: `${a.ch} et ${b.ch}`, items: pairSet(a, b), again: { coach: 1 } });
     };
 
     /* ===== Fiches d'un chapitre ===== */
@@ -1031,7 +1295,7 @@
       const err = ok < 1 ? errTag(it, v) : null;
       it.done = { v: v == null ? null : String(v), ok, err };
       const mode = src === 'exam' ? 'exam' : (Run.set && Run.set.kind === 'check' ? 'check' : 'train');
-      logAtt(Object.assign({}, it, { mode }), ok, Object.assign(err ? { err } : {}, extra || {}));
+      logAtt(Object.assign({}, it, { mode }), ok, Object.assign(err ? { err } : {}, ok < 1 && v != null && v !== '' ? { v: String(v).slice(0, 40) } : {}, extra || {}));
       scheduleRender();
       if (src === 'exam') ACT['ar-next']();   // en examen : pas de correction tout de suite, on passe à la question suivante
     }
@@ -1080,7 +1344,7 @@
     function choiceHTML(it, v) { const c = (it.ch || []).find((x) => String(x.v) === String(v)); return c ? c.html : '—'; }
     function resultActions(e, out) {
       const nx = nextExamId(e, out); const same = nx === e.exam; const c = chOf(e.exam); const cn = chOf(nx); const nWrong = examWrong(e).length;
-      const label = same ? 'Enchaîner un autre examen' : cn ? `Enchaîner : examen du chapitre ${cn.n}` : 'Enchaîner : examen final';
+      const label = e.exam === 'faibles' ? 'Enchaîner : un autre examen de mes points faibles' : same ? 'Enchaîner un autre examen' : cn ? `Enchaîner : examen du chapitre ${cn.n}` : 'Enchaîner : examen final';
       return `<div class="ar-actions">
           <button type="button" class="btn btn--primary btn--block" data-act="ar-exam-chain" data-x="${esc(nx)}">${icon('arrow-r', 'sm')}${esc(label)}</button>
           ${nWrong ? `<button type="button" class="btn btn--soft btn--block" data-act="ar-exam-review">${icon('repeat', 'sm')}Réviser ${nWrong > 1 ? `mes ${nWrong} erreurs` : 'mon erreur'}</button>` : ''}
@@ -1107,7 +1371,8 @@
         if (e.step === 'intro') {
           const prev = examState(e.exam);
           return `${pageHead(title)}
-            <header class="ar-chhead" style="${pc(c)}">${c ? chNum(c) : `<span class="ar-num ar-num--final" aria-hidden="true">${icon('award', 'sm')}</span>`}<div><p class="ar-chhead__k">${c ? `Chapitre ${c.n}` : 'Tout le programme'}</p><h1 class="ar-chhead__t">${c ? ttl(c.titre) : 'Examen final'}</h1></div></header>
+            <header class="ar-chhead" style="${pc(c)}">${c ? chNum(c) : `<span class="ar-num ar-num--final" aria-hidden="true">${icon(e.exam === 'faibles' ? 'target' : 'award', 'sm')}</span>`}<div><p class="ar-chhead__k">${c ? `Chapitre ${c.n}` : e.exam === 'faibles' ? 'Préparé par ton coach' : 'Tout le programme'}</p><h1 class="ar-chhead__t">${c ? ttl(c.titre) : e.exam === 'faibles' ? 'Mes points faibles' : 'Examen final'}</h1></div></header>
+            ${e.exam === 'faibles' ? '<p class="ar-cnote">Seulement ce que tu rates en ce moment, présenté autrement. Noté comme un examen ; il ne compte pas pour réussir un chapitre.</p>' : ''}
             <p class="ar-len__l" id="ar-len-l">Combien de questions ?</p>
             <div class="ar-len" role="group" aria-labelledby="ar-len-l" style="${pc(c)}">${EXAM_LENS.map((k) => `<button type="button" class="ar-len__b${e.n === k ? ' is-on' : ''}" aria-pressed="${e.n === k}" data-act="ar-exam-len" data-n="${k}"><b>${k}</b><span>questions</span></button>`).join('')}</div>
             <p class="lede">${N} questions notées par l’appli, ramenées sur 20 : réussi à partir de ${SEUIL}/20, soit ${needFor(N)} bonnes réponses sur ${N}. Pour chaque question, tu choisis ta réponse (tu peux en changer), puis tu valides. La correction vient à la fin.${prev.tries ? ` Ce sont d’autres questions que tes ${prev.tries} ${plural(prev.tries, 'essai', 'essais')} précédents.` : ''}</p>
@@ -1127,6 +1392,7 @@
             </section>
             <ul class="ar-hist__p ar-hist__p--big">${out.parts.map((x) => `<li class="${x.ok >= x.n * 0.8 ? 'is-ok' : 'is-ko'}"><span>${esc(x.titre)}</span><b>${note20(x.ok)} / ${x.n}</b></li>`).join('')}</ul>
             ${resultActions(e, out)}
+            ${examCoachHTML(e)}
             <h2 class="sec-title">${icon('list', 'sm')}La correction</h2>
             ${correctionHTML(e)}`;
         }
@@ -1175,16 +1441,11 @@
       startRun({ kind: 'train', ch: c.id, title: `M’entraîner · chapitre ${c.n}`, sub: c.titre, items: trainSet(c), again: { ch: c.id } });
     };
     ACT['ar-train-mix'] = async () => { if (!(await needBank())) return; startRun({ kind: 'train', title: 'Tout réviser', sub: 'Mélange des chapitres commencés', items: mixSet(), again: { mix: 1 } }); };
-    ACT['ar-train-errors'] = async () => {
-      if (!(await needBank())) return; const R = rng('err:' + uid());
-      const items = shuffle(errorItems(), R).slice(0, 10).map((e) => regen(e, R)).filter(Boolean);
-      startRun({ kind: 'train', title: 'Mes erreurs', sub: 'à reprendre', items, again: { err: 1 } });
-    };
     ACT['ar-train-again'] = () => {
       const a = Run.set && Run.set.again; if (!a) { backPage(); return; }
       if (a.ch) ACT['ar-train-ch']({ dataset: { ch: a.ch } });
       else if (a.mix) ACT['ar-train-mix']();
-      else ACT['ar-train-errors']();
+      else ACT['ar-coach-review']();
     };
     ACT['ar-pick'] = (el) => { const c = curItem(); if (!c || !c.it || c.it.done) return; c.it.sel = String(el.dataset.v); scheduleRender(); };
     ACT['ar-validate'] = () => { const c = curItem(); if (!c || !c.it || c.it.done || !c.it.ch || c.it.sel == null) return; const v = c.it.sel; record(c.src, c.it, String(v) === String(c.it.ans) ? 1 : 0, v); };
@@ -1236,8 +1497,9 @@
     ACT['ar-listen-verse'] = (el) => playVerse(Number(el.dataset.s), Number(el.dataset.a));
     ACT['ar-play-name'] = (el) => { const l = B.letters.get(el.dataset.l); if (l && l.nomAudio) playClip(verseUrl(l.nomAudio.loc[0], l.nomAudio.loc[1]), 0, l.nomAudio.clip[1], 'nom:' + l.id); };
     ACT['ar-exam'] = async (el) => {
-      if (!(await needBank())) return; const id = el.dataset.x; if (!B.d.chExams[id]) return;
+      if (!(await needBank())) return; const id = el.dataset.x; if (!EXAM_IDS(id)) return;
       Ex.cur = buildExam(id);
+      if (!examItems(Ex.cur).length) { Ex.cur = null; toast('Ton coach n’a pas encore repéré de points faibles : fais d’abord un examen ou un entraînement.'); return; }
       const t = topPage(); if (t && (t.name === 'ar-run' || t.name === 'ar-exam')) backPage();
       openPage('ar-exam', { src: 'exam' });
     };
@@ -1248,8 +1510,10 @@
     };
     /* Enchaîner : l'examen suivant commence tout de suite (même nombre de questions, sans annonce) */
     ACT['ar-exam-chain'] = (el) => {
-      const e = Ex.cur; const id = el.dataset.x; if (!B.d || !B.d.chExams[id]) return;
-      Ex.cur = buildExam(id, e ? e.n : examLen()); Ex.cur.step = 'run'; clipStop();
+      const e = Ex.cur; const id = el.dataset.x; if (!B.d || !EXAM_IDS(id)) return;
+      const nx = buildExam(id, e ? e.n : examLen());
+      if (!examItems(nx).length) { toast('Plus de point faible à travailler pour l’instant : bravo. Enchaîne sur un examen de chapitre.'); return; }
+      Ex.cur = nx; Ex.cur.step = 'run'; clipStop();
       const pg = document.querySelector('#pages .page'); if (pg) pg.scrollTop = 0;
       scheduleRender();
     };
@@ -1305,7 +1569,9 @@
     /* Résumé pour « Mes progrès » : chapitres réussis et notes */
     api.arabeSummary = () => {
       if (!B.d) { bank().catch(() => {}); return null; }
-      return { chapters: CHS().map((c) => Object.assign({ id: c.id, n: c.n, titre: c.titre, part: c.part }, chState(c))), final: examState('final'), pos: position() };
+      const D = coachData(); const top = coachTop(D).find((x) => x.ko);
+      return { chapters: CHS().map((c) => Object.assign({ id: c.id, n: c.n, titre: c.titre, part: c.part }, chState(c))), final: examState('final'), pos: position(),
+        coach: { n: D.n, weak: D.weak.length, top: top ? top.h : '' } };
     };
 
     for (const k of Object.keys(PAGES)) {
@@ -1314,6 +1580,6 @@
       P.render = function (...a) { return frNb(r.apply(this, a)); };
     }
     api.registerTab('arabe', renderTab);
-    window.__AR = { bank, st, atts, exams, makeSet, buildExam, scaleGrid, EXAM_LENS, needFor, Run, Ex, GEN, ctxFor, checkSet, trainSet, position, chState, examState, errorItems, normAr, kbScore, startRun, B, AR };
+    window.__AR = { bank, st, atts, exams, makeSet, buildExam, scaleGrid, EXAM_LENS, needFor, Run, Ex, GEN, ctxFor, checkSet, trainSet, position, chState, examState, normAr, kbScore, startRun, coachData, keyInfo, buildWeakExam, B, AR };
   });
 })();

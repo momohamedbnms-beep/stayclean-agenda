@@ -159,8 +159,8 @@ with sync_playwright() as p:
         if pg.locator('[data-act="back"]').count(): pg.click('[data-act="back"]'); pg.wait_for_timeout(250)
     # Examens blancs : tous visibles d'un coup
     pg.click('[data-act="ar-view"][data-v="exams"]'); pg.wait_for_timeout(500)
-    check('Examens blancs : les 10 chapitres et l’examen final, tous ouverts', pg.locator('.ar-excard').count() == 11 and pg.locator('.ar-excard [data-act="ar-exam"]').count() == 11)
-    card = pg.locator('.ar-excard').first.inner_text()
+    check('Examens blancs : les 10 chapitres et l’examen final, tous ouverts (et l’examen de mes points faibles en tête)', pg.locator('.ar-excard [data-act="ar-exam"]:not([data-x="faibles"])').count() == 11 and 'Examen de mes points faibles' in pg.locator('.ar-excard').first.inner_text())
+    card = pg.locator('.ar-excard', has=pg.locator('[data-act="ar-exam"][data-x="c1"]')).inner_text()
     check('carte du chapitre 1 : meilleure note 18/20, 3 essais, « Refaire un examen similaire »', '18/20' in card and '3 essais' in card and 'Refaire un examen similaire' in card, card.replace('\n', ' | '))
     e.shot('AR8-examens')
     # Où j'en suis : chapitre 1 réussi → chapitre 2

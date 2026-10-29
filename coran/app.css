@@ -712,3 +712,7 @@ body.has-player .toasts { bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 .inst > li small { color: var(--ink-3); font-size: 14px; line-height: 1.45; }
 .inst__sql { width: 100%; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; border-radius: var(--r-sm); border: 1.5px solid var(--line-strong); background: var(--surface); color: var(--ink); padding: 8px; resize: vertical; }
 a.btn { text-decoration: none; }
+.mz-ar__c { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 12px; color: var(--ink-2); font-size: 14.5px; line-height: 1.45; }
+.mz-ar__c > .i { flex: none; margin-top: 2px; color: var(--green-ink); }
+:root[data-ambiance="nuit"] .mz-ar__c > .i { color: var(--primary); }
+.mz-ar__c .ar-t { font-size: 1.3em; line-height: 1.2; }

@@ -76,3 +76,38 @@ def advance(pg):
     if pg.locator('.ar-ex [data-act="ar-next"]').count():
         pg.click('.ar-ex [data-act="ar-next"]')
     pg.wait_for_timeout(120)
+
+
+# Historique fictif pour les tests du coach (réponses, examens, étapes)
+TODAY = '2026-10-29'
+SEED = """async () => {
+  const Q = window.__QR; const A = window.__AR; await A.bank();
+  const att = async (id, d, t, key, ok, extra) => Q.put('ar_att', id, Object.assign({ at: d + 'T10:' + String(id.length).padStart(2, '0') + ':00Z', d, t, sk: 'rec', u: 'u2a', lv: 1, key, ok, g: 'auto', mode: 'train' }, extra || {}));
+  let k = 0; const id = () => 'seed' + String(++k).padStart(3, '0');
+  // ح pris pour خ (3 fois, sur 2 jours) ; خ pris pour ح (1 fois) ; à corriger : la confusion revient
+  await att(id(), '2026-10-27', 'nom', 'L:ha_:nom', 0, { v: 'kha', err: 'point' });
+  await att(id(), '2026-10-28', 'nom', 'L:ha_:nom', 0, { v: 'kha', err: 'point' });
+  await att(id(), '2026-10-29', 'forme', 'L:ha_:milieu', 0, { v: 'kha', err: 'point', sk: 'lie' });
+  await att(id(), '2026-10-28', 'lettre', 'L:kha:ch', 0, { v: 'ha_', err: 'point' });
+  // dictée : ratée deux fois
+  await att(id(), '2026-10-27', 'k_dictee', 'W:94b27c80:kd', 0, { v: 'حتم', err: 'ordre', sk: 'ecr', lv: 2 });
+  await att(id(), '2026-10-28', 'k_dictee', 'W:94b27c80:kd', 0, { v: 'ختن', err: 'ordre', sk: 'ecr', lv: 2 });
+  await att(id(), '2026-10-28', 'k_dictee', 'W:2dd4b5ac:kd', 0.5, { v: 'ومن', err: 'ordre', sk: 'ecr', lv: 2 });
+  await att(id(), '2026-10-28', 'k_dictee', 'W:44073530:kd', 1, { sk: 'ecr', lv: 2 });
+  await att(id(), '2026-10-28', 'k_dictee', 'W:44073530:kd', 0, { v: 'دهب', err: 'ordre', sk: 'ecr', lv: 2 });
+  // les points de ب : ratés une fois, puis réussis deux fois de suite → acquis
+  await att(id(), '2026-10-27', 'points', 'L:ba:pts', 0, { v: '2', err: 'point', lv: 0 });
+  await att(id(), '2026-10-28', 'points', 'L:ba:pts', 1, { lv: 0 });
+  await att(id(), '2026-10-29', 'points', 'L:ba:pts', 1, { lv: 0 });
+  // syllabes : toujours justes (facile)
+  for (const s of ['ba:fatha', 'ta:kasra', 'tha:damma', 'nun:fatha', 'ya:kasra', 'ba:damma', 'ta:fatha', 'tha:kasra', 'nun:damma', 'ya:fatha'])
+    await att(id(), '2026-10-28', 'syllabe', 'S:' + s, 1, { sk: 'voy', lv: 2 });
+  // aujourd'hui : quelques réponses
+  await att(id(), '2026-10-29', 'syllabe', 'S:ba:kasra', 1, { sk: 'voy', lv: 2 });
+  await att(id(), '2026-10-29', 'syllabe', 'S:ta:damma', 1, { sk: 'voy', lv: 2 });
+  // chapitre 1 réussi ; examens du chapitre 2 : 12, 14,5, puis 15,5 aujourd'hui (pas encore réussi)
+  const ex = (eid, d, score, x) => Q.put('ar_exam', eid, { at: d + 'T11:00:00Z', d, exam: x || 'c2', draw: eid, score, pts: score / 2, n: 10, parts: [], passed: score >= 16, wrong: [] });
+  await ex('e0', '2026-10-26', 17, 'c1'); await ex('e1', '2026-10-27', 12); await ex('e2', '2026-10-28', 14.5); await ex('e3', '2026-10-29', 15.5);
+  // étapes : chapitre 1 fait, chapitre 2 commencé hier
+  await Q.put('ar_state', 'main', { v: 2, done: { u0a: '2026-10-26', u0b: '2026-10-26', u0c: '2026-10-26', u1a: '2026-10-28' }, seen: {} });
+  Q.renderAll(); }"""

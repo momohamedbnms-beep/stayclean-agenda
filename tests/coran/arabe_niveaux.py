@@ -70,10 +70,10 @@ with sync_playwright() as p:
         pg.click(f'[data-act="ar-view"][data-v="{v}"]'); pg.wait_for_timeout(400)
     check('ancienne version : Étudier repart du chapitre 1, examens sans note, sans erreur', 'Chapitre 1' in pg.locator('.ar-now').inner_text() and not real_errors(e.errors), real_errors(e.errors)[:2])
     pg.click('[data-act="ar-view"][data-v="exams"]'); pg.wait_for_timeout(300)
-    check('ancienne version : les 11 examens sans essai compté', pg.locator('.ar-excard').count() == 11 and pg.locator('.ar-excard__res').count() == 0)
+    check('ancienne version : les 11 examens sans essai compté', pg.locator('.ar-excard [data-act="ar-exam"]:not([data-x="faibles"])').count() == 11 and pg.locator('.ar-excard__res').count() == 0)
     # --- entraînement, chapitres 6 à 10 ---
     pg.click('[data-act="ar-view"][data-v="train"]'); pg.wait_for_timeout(500)
-    check('M’entraîner : les 10 chapitres, « Tout réviser », journal des erreurs', pg.locator('.ar-chap[data-act="ar-train-ch"]').count() == 10 and pg.locator('[data-act="ar-train-mix"]').count() == 1 and pg.locator('[data-act="ar-open"][data-page="ar-errors"]').count() == 1)
+    check('M’entraîner : les 10 chapitres, « Tout réviser », « Mon coach »', pg.locator('.ar-chap[data-act="ar-train-ch"]').count() == 10 and pg.locator('[data-act="ar-train-mix"]').count() == 1 and pg.locator('#tab-arabe [data-act="ar-open"][data-page="ar-coach"]').count() == 1)
     e.shot('AN-entrainement')
     seen = {}
     for ch in ('c6', 'c7', 'c8', 'c9', 'c10'):
