@@ -19,7 +19,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "messagerie-6.1";
+  var VERSION = "messagerie-7.0";
   var BOITE_WA = 143967;
   var RAPIDES = [
     ["📷 Photo", "Bonjour, pour obtenir un devis précis, il faudra juste nous envoyer une photo de l’élément à nettoyer ainsi que votre code postal📍"],
@@ -71,7 +71,7 @@
   var AUTO_ORDRE = ["rappel_veille", "suivi_apres", "avis", "relance_douce"];
   var S = {
     pret: false, erreur: null, charge: false, avert: null,
-    convs: [], relances: [], msgs: {}, ia: {}, reglages: {}, erreurs: [], dossiers: [], regles: [], auto: [], optout: [], autoErreur: null,
+    convs: [], relances: [], demandes: [], msgs: {}, ia: {}, reglages: {}, erreurs: [], dossiers: [], regles: [], auto: [], optout: [], autoErreur: null,
     relMode: lire("scm6-relmode", "manuel"), demanderAuto: null,
     vue: lire("scm-vue", "liste"),               // liste | relances | regles | sante | id de conversation
     filtreRegle: lire("scm5-regles", "tout"), regleEdit: null, regleAjout: false,
@@ -88,7 +88,7 @@
     sante: null, santeCharge: false, santeLe: 0, horsLigne: (typeof navigator !== "undefined" && navigator.onLine === false),
     renduEnAttente: false, tempsReel: "attente"
   };
-  if (!/^(liste|relances|regles|sante)$/.test(String(S.vue))) S.vue = "liste";
+  if (!/^(liste|resas|sante)$/.test(String(S.vue))) S.vue = "liste"; /* 7.0 : Relances et Règles retirées (IA coupée le 2/11) */
   if (S.filtreRel !== "tout" && !CAT[S.filtreRel]) S.filtreRel = "tout";
 
   /* ------------------------------------------------------------ utilitaires */
@@ -292,6 +292,79 @@
     } catch (e) { return null; }
   }
 
+
+  /* ---------- 7.0 : réservations du site dans le fil (rien ne se perd, même sans message WhatsApp) */
+  function neufDe(t) { return chiffres(t).slice(-9); }
+  function demandesPour(c) {
+    var d = neufDe(c && c.tel); if (d.length !== 9) return [];
+    return S.demandes.filter(function (x) { return neufDe(x.tel) === d; });
+  }
+  function convPourDemande(x) {
+    var d = neufDe(x.tel); if (d.length !== 9) return null;
+    for (var i = 0; i < S.convs.length; i++) if (neufDe(S.convs[i].tel) === d) return S.convs[i];
+    return null;
+  }
+  var STATUT_DEM = { nouvelle: ["ambre", "⏳ À valider"], confirmee: ["vert", "✅ Confirmée"], annulee: ["gris", "Annulée"], refusee: ["gris", "Refusée"] };
+  function quandResa(x) {
+    if (!x.jour) return "Date à fixer";
+    var d = new Date(String(x.jour).slice(0, 10) + "T12:00:00");
+    return JOURS_L[d.getDay()] + " " + d.getDate() + " " + MOIS_L[d.getMonth()] + (x.heure ? " à " + String(x.heure).slice(0, 5).replace(":", "h").replace(/h00$/, "h").replace(/^0/, "") : "");
+  }
+  function lignesResa(x) {
+    var l = Array.isArray(x.items) ? x.items : [];
+    return l.map(function (i) { return String(i && (i.label || i.nom || i.name) || "").trim(); }).filter(Boolean);
+  }
+  function texteConfirmResa(x) {
+    var p = String(x.nom || "").trim().split(/\s+/)[0];
+    return "Bonjour" + (p ? " " + p : "") + " 👋\n\nMerci pour votre réservation sur notre site ✅\n📅 " + quandResa(x).charAt(0).toUpperCase() + quandResa(x).slice(1) +
+      (x.adresse ? "\n📍 " + x.adresse : "") + "\n\nSi quelque chose change, répondez simplement à ce message.\n\nStayClean";
+  }
+  function carteResa(x, dansFil) {
+    var st = STATUT_DEM[x.statut] || ["gris", esc(x.statut || "")];
+    var l = lignesResa(x);
+    var cv = dansFil ? null : convPourDemande(x);
+    var tel = chiffres(x.tel);
+    var tel32 = /^0\d{8,9}$/.test(tel) ? "32" + tel.slice(1) : tel;
+    var h = '<div class="scm-resa' + (dansFil ? " fil" : "") + '">' +
+      '<p class="scm-resa-t">🌐 Réservation sur le site · n°' + esc(x.id) + ' <i class="scm-t ' + st[0] + '">' + st[1] + "</i></p>" +
+      (dansFil ? "" : '<p class="scm-resa-n"><b>' + esc(x.nom || "Client") + "</b>" + (x.tel ? " · " + esc(telLisible(x.tel) || x.tel) : "") + "</p>") +
+      '<p class="scm-resa-q">📅 <b>' + esc(quandResa(x)) + "</b>" + (x.total ? " · 💶 " + esc(x.total) + " €" : "") + "</p>" +
+      (x.adresse ? '<p class="scm-resa-l">📍 ' + esc(x.adresse) + "</p>" : "") +
+      (l.length ? '<p class="scm-resa-l">🧽 ' + esc(l.join(" · ")) + "</p>" : "") +
+      (x.message ? '<p class="scm-resa-m">« ' + esc(String(x.message).slice(0, 400)) + " »</p>" : "") +
+      '<p class="scm-resa-d">Reçue ' + esc(quandLong(x.cree_le)) + "</p>";
+    if (!dansFil) {
+      h += '<div class="scm-resa-b">';
+      if (cv) h += '<button class="scm-btn" data-scm="ouvrir" data-id="' + cv.id + '">💬 Voir la conversation</button>';
+      else h += '<span class="scm-resa-sans">Pas de message WhatsApp de ce client</span>';
+      var auj = new Date(), a0 = auj.getFullYear() + "-" + d2(auj.getMonth() + 1) + "-" + d2(auj.getDate());
+      var confirmer = !cv && String(x.jour || "9") >= a0 && x.statut !== "annulee" && x.statut !== "refusee";
+      if (tel32.length >= 9) h += '<a class="scm-btn wa" href="' + esc(waLien(tel32, confirmer ? texteConfirmResa(x) : "")) + '">' + (confirmer ? "💬 Lui confirmer sur WhatsApp" : "Ouvrir WhatsApp") + "</a>";
+      h += "</div>";
+    }
+    return h + "</div>";
+  }
+  function htmlResas() {
+    var auj = new Date(); var a = auj.getFullYear() + "-" + d2(auj.getMonth() + 1) + "-" + d2(auj.getDate());
+    var l = S.demandes.slice();
+    if (!l.length) return '<div class="scm-vide">Aucune réservation du site ces 6 derniers mois.</div>';
+    var avenir = l.filter(function (x) { return String(x.jour || "9") >= a && x.statut !== "annulee" && x.statut !== "refusee"; })
+      .sort(function (x, y) { return (String(x.jour) + String(x.heure || "")).localeCompare(String(y.jour) + String(y.heure || "")); });
+    var passees = l.filter(function (x) { return avenir.indexOf(x) < 0; });
+    var h = '<p class="scm-intro">Toutes les réservations faites sur le site, même si le client n\'a rien envoyé sur WhatsApp. Rien ne se perd.</p>';
+    h += '<p class="scm-grp toi"><i></i>À venir <span class="scm-cnt">' + avenir.length + "</span></p>" + (avenir.length ? avenir.map(function (x) { return carteResa(x, false); }).join("") : '<p class="scm-aide">Aucune pour l\'instant.</p>');
+    if (passees.length) {
+      var vus = S.voirTerminees ? passees : passees.slice(0, 10);
+      h += '<p class="scm-grp fin"><i></i>Passées, annulées, refusées <span class="scm-cnt">' + passees.length + "</span></p>" + vus.map(function (x) { return carteResa(x, false); }).join("");
+      if (passees.length > vus.length) h += '<button data-scm="voir-terminees" class="scm-plus">Voir les ' + passees.length + "</button>";
+    }
+    return h;
+  }
+  function resasSansWa() {
+    var auj = new Date(); var a = auj.getFullYear() + "-" + d2(auj.getMonth() + 1) + "-" + d2(auj.getDate());
+    return S.demandes.filter(function (x) { return String(x.jour || "9") >= a && x.statut !== "annulee" && x.statut !== "refusee" && !convPourDemande(x); }).length;
+  }
+
   function charger() {
     var c = sb(); if (!c || S.charge) return;
     S.charge = true;
@@ -305,7 +378,8 @@
       c.from("sc_dossiers").select("*").order("cree_le", { ascending: false }).limit(200),
       c.from("sc_regles").select("*").order("ordre", { ascending: true }).limit(500),
       c.from("sc_auto").select("*").gt("cree_le", new Date(Date.now() - 14 * 864e5).toISOString()).order("prevu_le", { ascending: false }).limit(400),
-      c.from("sc_optout").select("*").limit(1000)
+      c.from("sc_optout").select("*").limit(1000),
+      c.from("sc_demandes").select("*").gt("cree_le", new Date(Date.now() - 180 * 864e5).toISOString()).order("cree_le", { ascending: false }).limit(500)
     ]).then(function (r) {
       S.charge = false;
       var err = r[0].error || r[1].error;
@@ -322,6 +396,7 @@
       S.autoErreur = r[7].error ? (r[7].error.message || "erreur") : null;
       S.auto = r[7].data || [];
       S.optout = r[8].error ? [] : (r[8].data || []);
+      S.demandes = r[9].error ? S.demandes : (r[9].data || []);
       S.ia = {}; (r[2].data || []).forEach(majIA);
       S.reglages = {}; (r[3].data || []).forEach(majReglage);
       S.erreurs = r[4].data || [];
@@ -355,6 +430,7 @@
         .on("postgres_changes", { event: "*", schema: "public", table: "sc_dossiers" }, function (p) { majListe(S.dossiers, p.new); dessiner(); })
         .on("postgres_changes", { event: "*", schema: "public", table: "sc_regles" }, function (p) { majListe(S.regles, p.new); dessiner(); })
         .on("postgres_changes", { event: "*", schema: "public", table: "sc_auto" }, function (p) { majListe(S.auto, p.new); dessiner(); })
+        .on("postgres_changes", { event: "*", schema: "public", table: "sc_demandes" }, function (p) { if (p.new && p.new.id) { majListe(S.demandes, p.new); S.demandes.sort(function (a, b) { return String(b.cree_le).localeCompare(String(a.cree_le)); }); dessiner(); } })
         .subscribe(function (etat) {
           // 6.1 : la fermeture du canal rappelle ce même code (« CLOSED ») : sans ce garde-fou, boucle
           // infinie (« Maximum call stack size exceeded », 25 fois le 7/10) et temps réel coupé.
@@ -718,7 +794,6 @@
   /* ---------- en-tête : onglets + état du système */
   function etatSysteme() {
     if (S.horsLigne) return ["rouge", "📴 Pas de connexion internet"];
-    if (reglage("ia_pause", false)) return ["rouge", "⏸ IA en pause pour tout le monde"];
     var nonLues = S.erreurs.filter(function (e) { return !e.vu; }).length;
     var pb = S.sante && S.sante.verifs ? S.sante.verifs.filter(function (v) { return v.ok === false && v.cle !== "erreurs"; }).length : 0;
     if (S.sante && S.sante.erreur) pb++;
@@ -726,17 +801,17 @@
     var total = pb + (nonLues ? 1 : 0);
     if (total) return ["ambre", "⚠️ " + total + (total > 1 ? " points à vérifier" : " point à vérifier")];
     if (!S.sante) return ["gris", S.santeCharge ? "… Vérification du système" : "Santé du système"];
-    return ["vert", "✅ Tout fonctionne · IA " + (reglage("ia_nouveaux", true) ? "active" : "seulement sur tes clients activés")];
+    return ["vert", "✅ Tout fonctionne"];
   }
   function htmlHaut() {
     if (estConv() && connecte() && S.pret && conv(S.vue)) return S.horsLigne ? '<div class="scm-hors">📴 Pas de connexion : rien ne peut partir pour l\'instant.</div>' : "";
     var n = aTraiter(), r = S.relances.filter(function (x) { return x.statut !== "fait" && x.reponse; }).length + autoAEnvoyer().length;
     var e = etatSysteme();
     var av = S.regles.filter(function (x) { return x.statut === "a_valider"; }).length;
-    return '<div class="scm-seg trois">' +
+    var sw = resasSansWa();
+    return '<div class="scm-seg">' +
       '<button data-scm="vue" data-v="liste" class="' + (S.vue === "liste" ? "on" : "") + '"><span class="ico">💬 </span>Discussions' + (n ? ' <i class="navdot">' + n + "</i>" : "") + "</button>" +
-      '<button data-scm="vue" data-v="relances" class="' + (S.vue === "relances" ? "on" : "") + '"><span class="ico">📤 </span>Relances' + (r ? ' <span class="scm-cnt">' + r + "</span>" : "") + "</button>" +
-      '<button data-scm="vue" data-v="regles" class="' + (S.vue === "regles" ? "on" : "") + '"><span class="ico">📚 </span>Règles' + (av ? ' <span class="scm-cnt ambre">' + av + "</span>" : "") + "</button></div>" +
+      '<button data-scm="vue" data-v="resas" class="' + (S.vue === "resas" ? "on" : "") + '"><span class="ico">🌐 </span>Réservations site' + (sw ? ' <span class="scm-cnt ambre">' + sw + "</span>" : "") + "</button></div>" +
       '<button class="scm-sys ' + e[0] + (S.vue === "sante" ? " on" : "") + '" data-scm="vue" data-v="sante"><span>' + esc(e[1]) + "</span><b>›</b></button>";
   }
 
@@ -744,9 +819,8 @@
     if (!connecte()) return '<div class="scm-vide">Connecte-toi (Réglages → Synchronisation) pour voir tes messages WhatsApp ici.</div>';
     if (S.erreur) return '<div class="scm-vide">Messages indisponibles : ' + esc(S.erreur) + '<br><button data-scm="recharger" class="scm-btn">↻ Réessayer</button></div>';
     if (!S.pret) return '<div class="scm-vide">Chargement des conversations…</div>';
-    if (S.vue === "relances") return htmlRelances();
+    if (S.vue === "resas") return htmlResas();
     if (S.vue === "sante") return htmlSante();
-    if (S.vue === "regles") return htmlRegles();
     if (estConv()) { var cc = conv(S.vue); return cc ? htmlEnteteFil(cc) + htmlFil(cc) : htmlListe(); }
     return htmlListe();
   }
@@ -768,7 +842,7 @@
       if (!l.length) return '<div class="scm-vide">Aucun client ne correspond à « ' + esc(S.recherche) + " ».</div>";
     }
     var doss = q ? "" : htmlDossiers();
-    if (!l.length) return doss + '<p class="scm-intro">L\'IA répond seule à tes clients sur le 0497. Ici tu vois tout, et tu reprends la main quand tu veux.</p><div class="scm-vide">Aucune conversation pour l\'instant. Dès qu\'un client écrit sur le 0497, elle apparaît ici.</div>';
+    if (!l.length) return doss + '<div class="scm-vide">Aucune conversation pour l\'instant. Dès qu\'un client écrit sur le 0497, elle apparaît ici.</div>';
     var toi = l.filter(attendToi);
     var main = l.filter(function (c) { return c.statut === "open" && !attendToi(c); });
     var ia = l.filter(function (c) { return c.statut !== "open" && c.statut !== "resolved" && !attendToi(c); });
@@ -781,7 +855,7 @@
     var h = doss;
     h += bloc("À toi de répondre", "toi", toi, "Ces clients attendent ta réponse.");
     h += bloc("Tu as la main", "main", main, "");
-    h += bloc("L'IA s'en occupe", "ia", ia, "");
+    h += bloc("En cours", "ia", ia, "");
     if (fin.length) {
       var vus = S.voirTerminees || q ? fin : fin.slice(0, 5);
       h += bloc("Terminées", "fin", vus, "");
@@ -791,7 +865,7 @@
   }
   function ligne(c) {
     var etat = retardIA(c) ? "retard" : c.statut === "open" ? "toi" : c.statut === "resolved" ? "fin" : "ia";
-    var qui = c.dernier_auteur === "ia" ? "🤖 " : c.dernier_auteur === "mohamed" ? "Toi : " : "";
+    var qui = c.dernier_auteur === "mohamed" || c.dernier_auteur === "ia" ? "Toi : " : "";
     var tags = "";
     if (retardIA(c)) tags += '<i class="scm-t rouge">IA en retard</i>';
     if (c.priorite === "urgent") tags += '<i class="scm-t rouge">Urgent</i>';
@@ -799,7 +873,7 @@
     if (en.code === "main") tags += '<i class="scm-t gris">✋ Toi</i>';
     else if (en.code === "pause") tags += '<i class="scm-t gris">⏸ Pause</i>';
     else if (en.code === "attente") tags += '<i class="scm-t rouge">🙋 Attente responsable</i>';
-    if (relancesPour(c).length) tags += '<i class="scm-t bleu">📤 Relance prête</i>';
+    if (demandesPour(c).length) tags += '<i class="scm-t vert">🌐 Réservé sur le site</i>';
     (c.etiquettes || []).forEach(function (e) {
       if (e === "reclamation" && c.priorite === "urgent") return;
       var cl = e === "reclamation" ? "rouge" : e === "reservation" ? "vert" : e === "annulation" ? "ambre" : "bleu";
@@ -815,20 +889,11 @@
 
   /* ---------- fil d'une conversation */
   function htmlEnteteFil(c) {
-    var e0 = etatNumero(c).code;
-    var etat = c.statut === "resolved" ? '<span class="scm-etat fin">Terminée</span>'
-      : e0 === "auto" ? '<span class="scm-etat ia">🤖 L\'IA répond</span>'
-      : '<span class="scm-etat toi">✋ Toi</span>';
+    var etat = c.statut === "resolved" ? '<span class="scm-etat fin">Terminée</span>' : "";
     var h = '<div class="scm-th"><button data-scm="retour" class="scm-back" aria-label="Retour">‹</button>' +
       '<div class="scm-who"><b>' + esc(nomDe(c)) + "</b>" +
       (c.tel && !/^\+000/.test(c.tel) ? '<button data-scm="copier" data-t="' + esc(telLocal(c.tel)) + '">' + esc(telLisible(c.tel)) + " · copier</button>" : '<small>Chat du site (test)</small>') +
       "</div>" + etat + "</div>";
-    var en = etatNumero(c);
-    h += '<div class="scm-etat-c e-' + en.code + '"><b>' + esc(en.label) + "</b><small>" + esc(en.sous) + "</small>" +
-      '<div class="scm-cmd" role="group" aria-label="Qui répond à ce client ?">' +
-      '<button data-scm="cmd" data-mode="robot" class="' + (en.code === "auto" ? "on" : "") + '">🤖 Rendre au robot</button>' +
-      '<button data-scm="cmd" data-mode="main" class="' + (en.code === "main" ? "on" : "") + '">✋ Je prends la main</button>' +
-      '<button data-scm="cmd" data-mode="pause" class="' + (en.code === "pause" ? "on" : "") + '">⏸ Pause</button></div></div>';
     dossiersPour(c).forEach(function (d) { h += carteDossier(d, true); });
     var actions = "";
     if (c.statut !== "resolved") actions += '<button data-scm="terminer" class="scm-btn">✓ Terminer</button>';
@@ -840,13 +905,6 @@
     } else if (tags.indexOf("reservation") >= 0 && c.alerte && /^✅/.test(c.alerte)) {
       h += '<div class="scm-ban vert">' + esc(c.alerte) + ' <button data-scm="aller-demandes">Voir les demandes →</button></div>';
     }
-    if (retardIA(c)) h += '<div class="scm-ban rouge">⏱ Ce client attend depuis plus de 10 min et l\'IA n\'a pas répondu : réponds-lui (et regarde « Santé »).</div>';
-    relancesPour(c).slice(0, 1).forEach(function (r) {
-      var k = catDe(r);
-      h += '<div class="scm-ban bleu"><span>📤 Relance prête · <b>' + esc(k.nom) + "</b></span>" +
-        '<span class="scm-ban-b"><button data-scm="rel-dans-pied" data-id="' + esc(r.id) + '">Mettre dans ma réponse</button>' +
-        '<button data-scm="voir-relance" data-id="' + esc(r.id) + '">Voir la fiche</button></span></div>';
-    });
     var b = rdvDe(c);
     if (b) {
       var d = new Date(b.date + "T12:00:00");
@@ -858,12 +916,15 @@
   function htmlFil(c) {
     var l = S.msgs[c.id];
     if (!l) return '<div class="scm-vide">Chargement…</div>';
-    if (!l.length) return '<div class="scm-vide">Pas encore de message enregistré ici pour ce client (seuls les messages depuis la mise en route apparaissent).</div>';
+    var tout = l.map(function (m) { return { t: m.cree_le, m: m }; })
+      .concat(demandesPour(c).map(function (x) { return { t: x.cree_le, r: x }; }))
+      .sort(function (a, b) { return String(a.t).localeCompare(String(b.t)); });
+    if (!tout.length) return '<div class="scm-vide">Pas encore de message enregistré ici pour ce client (seuls les messages depuis la mise en route apparaissent).</div>';
     var h = '<div class="scm-fil">', jour = "";
-    l.forEach(function (m) {
-      var d = new Date(m.cree_le), j = jourLong(d);
+    tout.forEach(function (e) {
+      var d = new Date(e.t), j = jourLong(d);
       if (j !== jour) { h += '<p class="scm-jour">' + esc(j) + "</p>"; jour = j; }
-      h += bulle(m, d);
+      h += e.r ? carteResa(e.r, true) : bulle(e.m, d);
     });
     return h + "</div>";
   }
@@ -890,13 +951,12 @@
     var heure = "<time>" + hm(d) + coches(m) + "</time>";
     if (m.auteur === "note") return '<div class="scm-note">📝 ' + liens(m.texte || "") + heure + "</div>";
     var cl = m.auteur === "client" ? "c" : m.auteur === "mohamed" ? "mo" : "ia";
-    var qui = m.auteur === "ia" ? "<small>🤖 IA</small>" : m.auteur === "mohamed" ? "<small>Toi</small>" : "";
+    var qui = m.auteur === "ia" ? "<small>Message auto</small>" : m.auteur === "mohamed" ? "<small>Toi</small>" : "";
     var err = m.statut === "failed" && m.erreur ? '<p class="scm-err">' + esc(m.erreur) + "</p>" : "";
     return '<div class="scm-b ' + cl + '">' + qui + pieces(m) + (m.texte ? "<p>" + liens(m.texte) + "</p>" : "") + err + heure + "</div>";
   }
   function htmlRapides(c) {
     var h = '<div class="scm-rap">';
-    relancesPour(c).slice(0, 1).forEach(function (r) { h += '<button class="rel" data-scm="rel-dans-pied" data-id="' + esc(r.id) + '">📤 Relance prête</button>'; });
     return h + RAPIDES.map(function (r, i) { return '<button data-scm="rapide" data-i="' + i + '">' + esc(r[0]) + "</button>"; }).join("") + "</div>";
   }
   function htmlPied(c) {
@@ -906,7 +966,6 @@
         '<div class="scm-2"><a id="scm-walien" class="scm-btn wa" data-scm="pied-wa" href="#">💬 Ouvrir WhatsApp</a><button data-scm="copier-txt" class="scm-btn">📋 Copier</button></div></div>';
     }
     return '<div class="scm-pied">' + htmlRapides(c) +
-      '<p id="scm-info" class="scm-info">✋ En envoyant, tu prends la main : l\'IA se met en retrait pour ce client.</p>' +
       '<div class="scm-saisie"><textarea id="scm-txt" rows="2" placeholder="Écrire à ' + esc(prenomDe(c) || "ce client") + '…"></textarea>' +
       '<button id="scm-envoi" data-scm="envoyer" class="scm-send" aria-label="Envoyer">➤</button></div></div>';
   }
@@ -1458,6 +1517,10 @@
       ".scm-ban button{background:none;border:0;font:inherit;font-weight:800;color:inherit;text-decoration:underline;padding:0;cursor:pointer}" +
       ".scm-ban-b{display:flex;gap:12px}.scm-ban.bleu button{color:var(--bleu-dark)}" +
       ".scm-rdv{margin:6px 0 2px;font-size:12.5px;color:var(--gris)}.scm-rdv b{color:var(--nuit)}" +
+      ".scm-resa{background:#F0FAF4;border:1px solid #BFE6CF;border-left:4px solid #1F9D57;border-radius:12px;padding:10px 12px;margin:8px 0;font-size:13px;line-height:1.45}" +
+      ".scm-resa.fil{align-self:stretch;margin:6px 0}.scm-resa p{margin:2px 0}.scm-resa-t{font-weight:700;color:#14532D;display:flex;gap:6px;align-items:center;flex-wrap:wrap}" +
+      ".scm-resa-q b{color:var(--nuit)}.scm-resa-l{color:#334155}.scm-resa-m{color:#475569;font-style:italic;white-space:pre-wrap}.scm-resa-d{color:var(--gris);font-size:11.5px}" +
+      ".scm-resa-b{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}.scm-resa-sans{font-size:12px;color:#B45309;font-weight:600}" +
       ".scm-fil{display:flex;flex-direction:column;gap:6px;padding:8px 0 12px}" +
       ".scm-jour{align-self:center;font-size:11px;font-weight:700;color:var(--gris);background:var(--gris-bg);border-radius:999px;padding:3px 10px;margin:8px 0 2px;text-transform:capitalize}" +
       ".scm-b{max-width:84%;padding:8px 12px 6px;border-radius:16px;font-size:14.5px;line-height:1.45;word-wrap:break-word;overflow-wrap:anywhere;box-shadow:0 1px 2px rgba(15,34,51,.06)}" +
