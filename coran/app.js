@@ -803,15 +803,30 @@ function syncBanner() {
    - « sourate » (MP3Quran) : un fichier par sourate ; un verset se joue entre ses repères de début et de fin.
    Le suivi coloré lit toujours la position réelle de l'audio (currentTime) : pause, reprise, déplacement,
    répétition et vitesse restent justes. Aucune minuterie indépendante, aucun repère emprunté à une autre voix. */
+/* note : ce qu'en disent les auditeurs (avis sur Reddit r/islam, r/MuslimLounge, r/Hifdh ; listes d'écoles
+   coraniques en ligne — voir « Sources et droits »), reformulé, sans citation inventée.
+   sync : 'words' = repères mot à mot quran-align ; 'ayah' = un fichier par verset, le verset joué est exact (pas de
+   repères mot à mot publiés) ; 'mp3quran' / 'computed' = fichier par sourate avec repères de versets. */
 const RECITERS = {
-  luhaidan: { id: 'luhaidan', name: 'Mohamed Al-Luhaidan', ar: 'محمد اللحيدان', style: 'murattal', kind: 'surah', base: 'https://cdn.mp3quran.net/audio/muhammad-luhaidan/r1/', src: 'MP3Quran', sync: 'computed' },
-  dossari: { id: 'dossari', name: 'Yasser Al-Dossari', ar: 'ياسر الدوسري', style: 'murattal', kind: 'surah', base: 'https://cdn.mp3quran.net/audio/yasser-dosari/r1/', src: 'MP3Quran', sync: 'mp3quran', read: 92 },
-  husary_muallim: { id: 'husary_muallim', name: 'Mahmoud Khalil Al-Husary', ar: 'محمود خليل الحصري', style: 'pédagogique (muʿallim)', kind: 'ayah', folder: 'Husary_Muallim_128kbps', src: 'EveryAyah', sync: 'words' },
-  husary: { id: 'husary', name: 'Mahmoud Khalil Al-Husary', ar: 'محمود خليل الحصري', style: 'murattal', kind: 'ayah', folder: 'Husary_64kbps', src: 'EveryAyah', sync: 'words' },
-  minshawi: { id: 'minshawi', name: 'Mohamed Siddiq Al-Minshawi', ar: 'محمد صديق المنشاوي', style: 'murattal', kind: 'ayah', folder: 'Minshawy_Murattal_128kbps', src: 'EveryAyah', sync: 'words' },
-  alafasy: { id: 'alafasy', name: 'Mishary Rashid Alafasy', ar: 'مشاري راشد العفاسي', style: 'murattal', kind: 'ayah', folder: 'Alafasy_128kbps', src: 'EveryAyah', sync: 'words' },
+  luhaidan: { id: 'luhaidan', name: 'Mohamed Al-Luhaidan', ar: 'محمد اللحيدان', style: 'murattal', kind: 'surah', base: 'https://cdn.mp3quran.net/audio/muhammad-luhaidan/r1/', src: 'MP3Quran', sync: 'computed', group: 'main', note: 'Voix principale de l’appli · récitation calme et profonde' },
+  maher: { id: 'maher', name: 'Maher Al-Muaiqly', ar: 'ماهر المعيقلي', style: 'murattal', kind: 'ayah', folder: 'MaherAlMuaiqly128kbps', src: 'EveryAyah', sync: 'ayah', group: 'loved', note: 'Imam de la Grande Mosquée de La Mecque · voix chaude et posée, rythme régulier' },
+  dossari: { id: 'dossari', name: 'Yasser Al-Dossari', ar: 'ياسر الدوسري', style: 'murattal', kind: 'surah', base: 'https://cdn.mp3quran.net/audio/yasser-dosari/r1/', src: 'MP3Quran', sync: 'mp3quran', read: 92, group: 'loved', note: 'Imam de la Grande Mosquée de La Mecque · l’une des voix les plus citées, très émouvante' },
+  shuraim: { id: 'shuraim', name: 'Saoud Al-Shuraim', ar: 'سعود الشريم', style: 'murattal', kind: 'ayah', folder: 'Saood_ash-Shuraym_128kbps', src: 'EveryAyah', sync: 'words', group: 'loved', note: 'Longtemps imam de la Grande Mosquée de La Mecque · voix directe et puissante' },
+  abdulbasit: { id: 'abdulbasit', name: 'Abdul Basit Abdul Samad', ar: 'عبد الباسط عبد الصمد', style: 'murattal', kind: 'ayah', folder: 'Abdul_Basit_Murattal_64kbps', src: 'EveryAyah', sync: 'words', group: 'loved', note: 'Récitateur égyptien (1927–1988) · voix grave et riche, parmi les plus aimées' },
+  abdulbasit_mujawwad: { id: 'abdulbasit_mujawwad', name: 'Abdul Basit Abdul Samad', ar: 'عبد الباسط عبد الصمد', style: 'mujawwad', kind: 'ayah', folder: 'Abdul_Basit_Mujawwad_128kbps', src: 'EveryAyah', sync: 'words', group: 'loved', note: 'Le même en mujawwad : lent et mélodieux, très émouvant (plutôt pour écouter)' },
+  minshawi: { id: 'minshawi', name: 'Mohamed Siddiq Al-Minshawi', ar: 'محمد صديق المنشاوي', style: 'murattal', kind: 'ayah', folder: 'Minshawy_Murattal_128kbps', src: 'EveryAyah', sync: 'words', group: 'loved', note: 'Récitateur égyptien (1920–1969) · clair et bien rythmé, souvent conseillé pour mémoriser' },
+  minshawi_mujawwad: { id: 'minshawi_mujawwad', name: 'Mohamed Siddiq Al-Minshawi', ar: 'محمد صديق المنشاوي', style: 'mujawwad', kind: 'ayah', folder: 'Minshawy_Mujawwad_192kbps', src: 'EveryAyah', sync: 'words', group: 'loved', note: 'Le même en mujawwad : chaud et mélodieux (plutôt pour écouter)' },
+  alafasy: { id: 'alafasy', name: 'Mishary Rashid Alafasy', ar: 'مشاري راشد العفاسي', style: 'murattal', kind: 'ayah', folder: 'Alafasy_128kbps', src: 'EveryAyah', sync: 'words', group: 'loved', note: 'Imam au Koweït · voix claire et agréable, très populaire' },
+  sudais: { id: 'sudais', name: 'Abdurrahman As-Sudais', ar: 'عبد الرحمن السديس', style: 'murattal', kind: 'ayah', folder: 'Abdurrahmaan_As-Sudais_192kbps', src: 'EveryAyah', sync: 'words', group: 'loved', note: 'Imam de la Grande Mosquée de La Mecque · voix émue, très reconnaissable' },
+  ayyub: { id: 'ayyub', name: 'Muhammad Ayyub', ar: 'محمد أيوب', style: 'murattal', kind: 'ayah', folder: 'Muhammad_Ayyoub_128kbps', src: 'EveryAyah', sync: 'ayah', group: 'loved', note: 'Imam de la mosquée du Prophète à Médine (1952–2016) · récitation belle et sobre' },
+  qatami: { id: 'qatami', name: 'Nasser Al-Qatami', ar: 'ناصر القطامي', style: 'murattal', kind: 'ayah', folder: 'Nasser_Alqatami_128kbps', src: 'EveryAyah', sync: 'ayah', group: 'loved', note: 'Récitateur saoudien · voix chaude, très émouvante' },
+  shatri: { id: 'shatri', name: 'Abu Bakr Al-Shatri', ar: 'أبو بكر الشاطري', style: 'murattal', kind: 'ayah', folder: 'Abu_Bakr_Ash-Shaatree_128kbps', src: 'EveryAyah', sync: 'words', group: 'loved', note: 'Récitateur saoudien · voix grave, rythme posé qui aide à méditer' },
+  ajmi: { id: 'ajmi', name: 'Ahmed Al-Ajmi', ar: 'أحمد العجمي', style: 'murattal', kind: 'ayah', folder: 'Ahmed_ibn_Ali_al-Ajamy_128kbps_ketaballah.net', src: 'EveryAyah', sync: 'ayah', group: 'loved', note: 'Récitateur saoudien · voix puissante et énergique' },
+  husary_muallim: { id: 'husary_muallim', name: 'Mahmoud Khalil Al-Husary', ar: 'محمود خليل الحصري', style: 'pédagogique (muʿallim)', kind: 'ayah', folder: 'Husary_Muallim_128kbps', src: 'EveryAyah', sync: 'words', group: 'learn', note: 'Version pédagogique : lente, avec le temps de répéter après lui' },
+  husary: { id: 'husary', name: 'Mahmoud Khalil Al-Husary', ar: 'محمود خليل الحصري', style: 'murattal', kind: 'ayah', folder: 'Husary_64kbps', src: 'EveryAyah', sync: 'words', group: 'learn', note: 'Récitateur égyptien (1917–1980) · diction très claire, conseillé pour apprendre le tajwîd' },
 };
-const RECITER_ORDER = ['luhaidan', 'dossari', 'husary_muallim', 'husary', 'minshawi', 'alafasy'];
+const RECITER_ORDER = ['luhaidan', 'maher', 'dossari', 'shuraim', 'abdulbasit', 'abdulbasit_mujawwad', 'minshawi', 'minshawi_mujawwad', 'alafasy', 'sudais', 'ayyub', 'qatami', 'shatri', 'ajmi', 'husary_muallim', 'husary'];
+const RECITER_GROUPS = [['main', 'Voix principale', ''], ['loved', 'Les voix les plus aimées', 'Choisies d’après les avis d’auditeurs (forums, écoles coraniques en ligne).'], ['learn', 'Pour apprendre la prononciation', '']];
 const EVERYAYAH = 'https://everyayah.com/data/';
 const TIMING_V = '20261027d';
 /* Al-Luhaidan est la voix principale : un choix fait avant cette version (sans « reciterV2 ») n'est plus repris ;
@@ -887,6 +902,7 @@ async function timingFileOk(R, s, tm) {
 function syncInfo(rid, s) {
   const R = RECITERS[rid] || reciter();
   if (R.sync === 'words') return { level: 'mot', label: 'Suivi mot à mot', detail: 'Repères mot à mot quran-align (CC BY 4.0) pour ces fichiers EveryAyah.' };
+  if (R.sync === 'ayah') return { level: 'verset', label: 'Suivi par verset', detail: 'Un fichier par verset (EveryAyah) : le verset récité est toujours le bon. Aucun repère mot à mot n’est publié pour cette voix.' };
   if (R.sync === 'mp3quran') return { level: 'verset', label: 'Suivi par verset', detail: 'Repères de versets publiés par MP3Quran pour cet enregistrement. Pas de repères mot à mot publiés.' };
   const d = Timing.computed; const e = d && s ? d.s[String(s)] : null;
   if (!d) return { level: '?', label: 'Suivi par verset', detail: 'Repères de versets calculés pour cet enregistrement (contrôlés).' };
@@ -945,7 +961,7 @@ async function runSource(run) {
   }
   if (run.kind === 'ayah') {
     const R = run.R; const t = run.tracks[0]; const s = t.s; const a = t.a;
-    run.words = (await wordTimings(R.folder, s) || [])[a - 1] || null;
+    run.words = R.sync === 'words' ? ((await wordTimings(R.folder, s)) || [])[a - 1] || null : null;
     const key = audioKey(R.folder, s, a);
     let url = Player.objUrls.get(key);
     if (!url) {
@@ -3523,9 +3539,23 @@ function reciterSub(k) {
   const r = RECITERS[k]; const d = Timing.computed;
   const n = d ? Object.values(d.s).filter((e) => e && e.ok).length : null;
   const sync = r.sync === 'words' ? 'suivi mot à mot (repères quran-align)'
+    : r.sync === 'ayah' ? 'suivi par verset (un fichier par verset)'
     : r.sync === 'mp3quran' ? 'suivi par verset (repères MP3Quran)'
     : `suivi par verset ${n != null ? `sur ${n} sourate${n > 1 ? 's' : ''}` : ''} (repères calculés et contrôlés) ; pas de suivi mot à mot : aucune donnée publiée pour cette voix`;
   return `${r.style} · Hafs · ${r.kind === 'surah' ? 'fichiers par sourate (MP3Quran)' : 'fichiers par verset (EveryAyah)'} · ${sync}`;
+}
+/* Une voix dans les réglages : la choisir (toute la ligne) ou l'écouter (▶, le début d'Al-Fatiha) */
+const styleLabel = (r) => (r.style === 'murattal' ? 'Murattal' : r.style === 'mujawwad' ? 'Mujawwad' : 'Pédagogique');
+function reciterRow(k) {
+  const r = RECITERS[k]; const on = k === reciterId(); const playing = UI.sampleRid === k;
+  const tech = `${styleLabel(r)} · ${r.sync === 'words' ? 'suivi mot à mot' : 'suivi par verset'}`;
+  return `<div class="rc${on ? ' is-on' : ''}">
+      <button type="button" class="opt rc__pick${on ? ' is-on' : ''}" role="radio" aria-checked="${on}" data-act="set-pref" data-k="reciter" data-v="${k}">
+        <span class="opt__dot" aria-hidden="true">${on ? icon('check', 'sm') : ''}</span>
+        <span class="opt__t"><b>${esc(r.name)}${r.style !== 'murattal' ? ` <span class="rc__style">${esc(styleLabel(r).toLowerCase())}</span>` : ''}</b><small>${esc(r.note || '')}</small><small class="rc__tech">${esc(tech)}</small></span>
+      </button>
+      <button type="button" class="icon-btn rc__play${playing ? ' is-playing' : ''}" data-act="reciter-sample" data-rid="${k}" aria-pressed="${playing}" aria-label="${playing ? 'Arrêter l’écoute' : `Écouter ${esc(r.name)}${r.style !== 'murattal' ? ' (' + esc(r.style) + ')' : ''}`}">${icon(playing ? 'stop' : 'play', 'sm')}</button>
+    </div>`;
 }
 function radioRow(name, value, cur, label, sub) {
   const on = String(value) === String(cur);
@@ -3557,9 +3587,8 @@ PAGES.settings = {
       </section>
       <section class="set">
         <h2 class="set__h" id="set-reciter">Récitateur</h2>
-        <p class="fine">Choix unique pour toute l’appli. Le nom affiché est toujours celui de l’enregistrement joué : aucune autre voix ne le remplace en silence.</p>
-        <div class="opts" role="radiogroup" aria-label="Récitateur">${RECITER_ORDER.map((k) => { const r = RECITERS[k]; return radioRow('reciter', k, reciterId(), r.name + (k === 'luhaidan' ? ' (principal)' : k === 'dossari' ? ' (secondaire)' : ''), reciterSub(k)); }).join('')}</div>
-        <button type="button" class="btn btn--soft btn--sm" data-act="reciter-test">${icon('play', 'sm')}Écouter un exemple (Al-Fatiha, verset 1)</button>
+        <p class="fine">Choix unique pour toute l’appli. Touche ${icon('play', 'sm')} pour écouter le début d’Al-Fatiha avec une voix. Le nom affiché est toujours celui de l’enregistrement joué : aucune autre voix ne le remplace en silence.</p>
+        <div role="radiogroup" aria-label="Récitateur">${RECITER_GROUPS.map(([g, title, sub]) => `<h3 class="rc-h">${esc(title)}</h3>${sub ? `<p class="fine rc-sub">${esc(sub)}</p>` : ''}<div class="opts">${RECITER_ORDER.filter((k) => RECITERS[k].group === g).map((k) => reciterRow(k)).join('')}</div>`).join('')}</div>
       </section>
       <section class="set">
         <h2 class="set__h">Rappel (facultatif)</h2>
@@ -3603,7 +3632,7 @@ PAGES.settings = {
       </section>
       <button type="button" class="btn btn--ghost btn--block" data-act="go-agenda">${icon('home', 'sm')}Revenir à l’agenda</button>`;
   },
-  onClose() { Offline.inv = null; Offline.recs = null; Offline.textState = null; },
+  onClose() { Offline.inv = null; Offline.recs = null; Offline.textState = null; if (UI.sampleRid) { UI.sampleRid = null; if (Player.ctx === 'sample') stopAudio(); } },
 };
 
 /* --- Détail d'une sourate : six jalons, état, vérification par un enseignant --- */
@@ -3662,9 +3691,11 @@ PAGES.sources = {
       ${n ? row('Juz et pages', `<p>${esc(n.metadonnees.source)}. ${esc(n.metadonnees.pages)}</p><p class="fine">Contrôle croisé : les pages de début et de fin des 114 sourates correspondent à celles de Quran.com.</p>`) : ''}
       ${row('Groupes de mémorisation (« Mémoriser »)', `<p>240 groupes, 8 par juz : quarts de hizb (۞) des métadonnées Tanzil (CC BY 3.0). ${Groups.d ? esc(Groups.d.regle) : 'Dans une sourate courte ou moyenne, une limite qui tombe au milieu de la sourate est déplacée au début de cette sourate ou de la suivante.'}</p><p class="fine">Les pourcentages comptent les mots du texte Tanzil (sans la basmala du verset 1 ni les signes de pause). Les premiers mots de chaque juz sont copiés du texte Tanzil.</p>`)}
       ${row('Récitation (audio)', `<p><b>Mohamed Al-Luhaidan</b> (récitateur principal) et <b>Yasser Al-Dossari</b> : un fichier par sourate, depuis <a href="https://www.mp3quran.net" target="_blank" rel="noopener">MP3Quran.net</a> (Hafs ʿan ʿĀṣim, murattal). MP3Quran publie une API pour les développeurs mais aucune licence : les fichiers ne sont pas copiés dans l’appli, ils sont lus depuis leurs serveurs et, seulement si tu le demandes, gardés sur ton téléphone pour ton usage personnel.</p>
-        <p><b>Mahmoud Khalil Al-Husary</b> (murattal et pédagogique), <b>Mohamed Siddiq Al-Minshawi</b>, <b>Mishary Alafasy</b> : fichiers verset par verset d’<a href="https://everyayah.com" target="_blank" rel="noopener">EveryAyah.com</a>, mêmes conditions.</p>
+        <p><b>Maher Al-Muaiqly</b>, <b>Saoud Al-Shuraim</b>, <b>Abdul Basit Abdul Samad</b> (murattal et mujawwad), <b>Mohamed Siddiq Al-Minshawi</b> (murattal et mujawwad), <b>Mishary Alafasy</b>, <b>Abdurrahman As-Sudais</b>, <b>Muhammad Ayyub</b>, <b>Nasser Al-Qatami</b>, <b>Abu Bakr Al-Shatri</b>, <b>Ahmed Al-Ajmi</b>, <b>Mahmoud Khalil Al-Husary</b> (murattal et pédagogique) : fichiers verset par verset d’<a href="https://everyayah.com" target="_blank" rel="noopener">EveryAyah.com</a>, mêmes conditions.</p>
+        <p><b>Le choix des voix</b> suit les avis d’auditeurs : les récitateurs les plus cités et les mieux notés sur Reddit (r/islam, r/MuslimLounge, r/Hifdh ; relevés de <a href="https://gummysearch.com/tools/best-products/quran-reciter/" target="_blank" rel="noopener">GummySearch</a>) et dans des listes d’écoles coraniques en ligne (<a href="https://riwaqalquran.com/?p=18607" target="_blank" rel="noopener">Riwaq Al-Quran</a>, <a href="https://mishkahacademy.com/faqs/which-quran-reciter-is-good-for-memorization" target="_blank" rel="noopener">Mishkah Academy</a>), parmi ceux qui existent verset par verset (indispensable pour répéter un verset). La phrase sous chaque nom reformule ces avis ; ce n’est pas un classement.</p>
         <p class="fine">Le nom affiché est toujours celui de l’enregistrement joué. Les exercices de l’espace « Lire et écrire l’arabe » utilisent des mots extraits de la récitation pédagogique d’Al-Husary : ils ne sont jamais attribués à une autre voix.</p>`)}
-      ${row('Suivi du texte pendant la récitation', `<p><b>Mot à mot</b> (Al-Husary, Al-Minshawi, Alafasy) : repères <a href="https://github.com/cpfair/quran-align" target="_blank" rel="noopener">quran-align</a> de Collin Fair, licence CC BY 4.0, calculés pour ces fichiers EveryAyah précis. Qualité publiée par l’auteur : écart moyen inférieur à 73 ms avec une méthode indépendante ; 99,8 à 99,9 % des mots ont leur repère.</p>
+      ${row('Suivi du texte pendant la récitation', `<p><b>Mot à mot</b> (Al-Husary, Al-Minshawi, Alafasy, Al-Shuraim, Abdul Basit, As-Sudais, Al-Shatri) : repères <a href="https://github.com/cpfair/quran-align" target="_blank" rel="noopener">quran-align</a> de Collin Fair, licence CC BY 4.0, calculés pour ces fichiers EveryAyah précis. Qualité publiée par l’auteur : écart moyen inférieur à 73 ms avec une méthode indépendante. Ici, 97,6 à 99,9 % des mots ont leur repère seuls (les récitations mujawwad, plus lentes et ornées, ont un peu plus de mots repérés par petits groupes) ; un mot sans repère n’est jamais surligné au hasard.</p>
+        <p><b>Par verset, Maher Al-Muaiqly, Muhammad Ayyub, Nasser Al-Qatami, Ahmed Al-Ajmi</b> : un fichier par verset, donc le verset surligné est toujours le bon ; aucun repère mot à mot n’est publié pour ces enregistrements.</p>
         <p><b>Par verset, Yasser Al-Dossari</b> : repères publiés par MP3Quran pour son enregistrement.</p>
         <p><b>Par verset, Mohamed Al-Luhaidan</b> : aucun fournisseur ne publie de repères pour cette voix (vérifié auprès de MP3Quran, Quran.com et QUL). Ils ont été calculés pour chaque fichier exact, en alignant son audio sur trois récitations découpées verset par verset (EveryAyah : Saoud Al-Shuraim, Abdurrahman As-Sudais, Maher Al-Muaiqly). Une limite n’est retenue que si elle tombe dans une pause réelle du fichier et que les références concordent ; sinon les versets qu’elle sépare sont surlignés ensemble, jamais coupés au hasard, et un verset qu’on ne peut pas isoler est lu par Al-Husary (annoncé). Une sourate qui ne passe pas les contrôles reste sans suivi.</p>
         <p><b>Mot à mot, Mohamed Al-Luhaidan</b> : couverture 0 %. Aucun repère mot à mot n’existe pour cet enregistrement et l’appli n’en invente pas : pas de mot surligné avec cette voix.</p>
@@ -4224,6 +4255,17 @@ ACT['confirm-yes'] = async () => {
 };
 
 /* --- Récitateur, rappel, hors connexion, sauvegarde --- */
+ACT['reciter-sample'] = (el) => {
+  const rid = el.dataset.rid; if (!RECITERS[rid]) return;
+  const refresh = () => { const t = topPage(); if (t && t.name === 'settings') renderPage(false); };
+  if (UI.sampleRid === rid) { UI.sampleRid = null; stopAudio(); refresh(); return; }
+  UI.sampleRid = rid; refresh();
+  const end = () => { if (UI.sampleRid === rid) { UI.sampleRid = null; refresh(); } };
+  runSequence([1, 2, 3].map((a) => ({ s: 1, a, rid })), { ctx: 'sample', cycles: 1, onPhase: (ph, info) => {
+    if (ph === 'error') { toast(audioErrorText(info.error), true); end(); }
+    if (ph === 'done') end();
+  } }).then((ok) => { if (ok === false) end(); }, end);
+};
 ACT['reciter-test'] = () => { runSequence([{ s: 1, a: 1 }], { ctx: 'test', cycles: 1, onPhase: (ph, info) => { if (ph === 'error') toast(audioErrorText(info.error), true); } }); };
 const remindRule = () => (prefs().remindFreq === 'daily' ? 'RRULE:FREQ=DAILY' : 'RRULE:FREQ=WEEKLY');
 ACT['remind-ics'] = async () => {
@@ -4546,7 +4588,7 @@ async function boot() {
 /* Retour sur la page depuis l'historique : on rafraîchit */
 window.addEventListener('pageshow', (e) => { if (!e.persisted) return; refreshAgendaDB(); scheduleRender(); resumeSync(); });
 /* Accès pour le banc d'essai automatisé (aucune donnée réelle) */
-window.__QR = { Store, Content, Player, Sync, UI, prefs, put, MERGE, syncNow, connectAccount, sameData, reciterId, selfKnown, dueReviews, buildSession, scheduleAfter, refreshMilestones, progressOf, verseChunks, searchSuras, versesOfPage, pageOfVerse, surahState, milestoneCount, stopAudio, Groups, loadGroups, unitStat, setStatus, whereAmI, suraKnown, juzParts, suraParts, allParts, curUnit, activeGoal, suraUnits, pathFlat, goalDays, goalDue, unitName, todoW, SURA_ORDER, FILES, fileOf, setToday: (iso) => { _todayOverride = iso; scheduleRender(); }, renderAll };
+window.__QR = { Store, Content, Player, Sync, UI, prefs, put, MERGE, RECITERS, syncNow, connectAccount, sameData, reciterId, selfKnown, dueReviews, buildSession, scheduleAfter, refreshMilestones, progressOf, verseChunks, searchSuras, versesOfPage, pageOfVerse, surahState, milestoneCount, stopAudio, Groups, loadGroups, unitStat, setStatus, whereAmI, suraKnown, juzParts, suraParts, allParts, curUnit, activeGoal, suraUnits, pathFlat, goalDays, goalDue, unitName, todoW, SURA_ORDER, FILES, fileOf, setToday: (iso) => { _todayOverride = iso; scheduleRender(); }, renderAll };
 boot();
 
 })();

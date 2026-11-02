@@ -425,6 +425,16 @@ body.is-immersive .page__inner { padding-top: calc(16px + env(safe-area-inset-to
 .opt__t { display: flex; flex-direction: column; gap: 2px; flex: 1; }
 .opt__t b { font-weight: 600; }
 .opt__t small { font-size: 13.5px; color: var(--ink-3); }
+/* Réglages : les voix (toute la ligne pour choisir, ▶ pour écouter le début d'Al-Fatiha) */
+.rc-h { margin: 16px 2px 6px; font-size: 15px; font-weight: 600; color: var(--ink-2); }
+.rc-h:first-child { margin-top: 4px; }
+.rc-sub { margin: -2px 2px 8px; }
+.rc { display: flex; align-items: center; gap: 6px; }
+.rc__pick { flex: 1; min-width: 0; }
+.rc__style { font-weight: 500; font-size: 13.5px; color: var(--ink-3); }
+.opt__t small.rc__tech { font-size: 12.5px; }
+.rc__play { width: 48px; height: 48px; background: var(--surface-2); color: var(--green-ink); }
+.rc__play.is-playing { background: var(--primary); color: var(--on-primary); }
 .opt--static { cursor: default; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .chip { min-height: 38px; padding: 0 14px; border-radius: 999px; background: var(--surface); border: 1.5px solid var(--line-strong); font-size: 14.5px; font-weight: 600; color: var(--soft-ink); }
