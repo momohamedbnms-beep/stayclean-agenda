@@ -1,8 +1,9 @@
-"""« Mémoriser » juz par juz, groupe par groupe, et « Mes progrès » en carte des 30 juz.
+"""« Mémoriser » : l'onglet (sourate par sourate, voir aussi sourates.py), la vue par juz et par groupes, et « Mes progrès »
+en carte des 30 juz.
 Statuts déclarés seulement (Pas encore, J'apprends, Je connais) : ouvrir, écouter ou lancer une séance ne change rien.
 Pas de minutes ni de « un peu chaque jour ». Données fictives, audio remplacé par un son local, aucun service réel."""
 from qa import *
-import sys, json
+import sys, json, re
 
 checks = []
 def check(name, cond, extra=''):
@@ -23,19 +24,21 @@ with sync_playwright() as p:
     check('premier lancement : aucune question « combien de minutes »', pg.locator('.sheet').count() == 0 and pg.locator('[data-act="minutes-save"]').count() == 0)
     home = norm(pg.locator('#tab-learn').inner_text())
     check('onglet « Mémoriser » : titre et principe', 'Mémoriser le Coran' in home and 'rien ne change tout seul' in home, home[:120].replace('\n', ' | '))
-    check('ni « un peu chaque jour », ni minutes', 'Un peu chaque jour' not in home and 'min' not in home.replace('minutes', '').split('Ton parcours')[0] and 'Environ' not in home, '')
+    check('ni « un peu chaque jour », ni minutes', 'Un peu chaque jour' not in home and not re.search(r'\d\s*min\b|minutes', home) and 'Environ' not in home, '')
     check('barre du bas : « Mémoriser »', 'Mémoriser' in pg.locator('.nav__tab[data-tab="learn"]').inner_text())
-    check('Où j’en suis : Al-Fatiha, pour commencer, avec les 3 états', 'Al-Fatiha' in pg.locator('.mz-now').inner_text() and 'Pour commencer' in pg.locator('.mz-now').inner_text() and pg.locator('.mz-now .mz-seg__b').count() == 3)
-    check('la méthode en 4 étapes, ouverte au début', pg.locator('details.mz-method[open] .mz-steps li').count() == 4)
-    order = e.js("() => [...document.querySelectorAll('#tab-learn .mz-path [data-act=\"mz-juz\"]')].map((b) => Number(b.dataset.j))")
-    check('parcours : Al-Fatiha puis les juz 30, 29… 1', pg.locator('#tab-learn .mz-row--fat').count() == 1 and order == list(range(30, 0, -1)), order[:5])
+    mom = norm(pg.locator('#tab-learn .mz-moment').inner_text())
+    check('ta sourate : Al-Fatiha, « Prochaine sourate », Commencer ou Je la connais déjà', 'Al-Fatiha' in mom and 'Prochaine sourate' in mom and pg.locator('#tab-learn .mz-moment [data-act="mz-start"]').count() == 1 and pg.locator('#tab-learn .mz-moment [data-act="mz-cur-known"]').count() == 1, mom[:120])
+    check('la méthode en 4 étapes', pg.locator('#tab-learn details.mz-method .mz-steps li').count() == 4)
     e.shot('M1-memoriser')
+    pg.click('#tab-learn [data-page="mz-path"]'); pg.wait_for_timeout(500)
+    order = e.js("() => [...document.querySelectorAll('.page .mz-path [data-act=\"mz-juz\"]')].map((b) => Number(b.dataset.j))")
+    check('« Par juz et par groupes » : Al-Fatiha puis les juz 30, 29… 1', pg.locator('.page .mz-row--fat').count() == 1 and order == list(range(30, 0, -1)), order[:5])
     # --- ouvrir, écouter : aucun statut ne change ---
-    pg.click('#tab-learn .mz-row--fat .mz-row__main'); pg.wait_for_timeout(1200)
+    pg.click('.page .mz-row--fat .mz-row__main'); pg.wait_for_timeout(1200)
     check('Al-Fatiha s’ouvre dans le lecteur', pg.locator('.page .verse').count() == 7)
     pg.click('.page [data-act="reader-play"]'); pg.wait_for_timeout(1500)
     pg.click('.page [data-act="back"]'); pg.wait_for_timeout(400)
-    check('lire et écouter Al-Fatiha : toujours « Pas encore »', st(e, 1) == 'none' and 'Pas encore' in pg.locator('.mz-row--fat').inner_text())
+    check('lire et écouter Al-Fatiha : toujours « Pas encore »', st(e, 1) == 'none' and 'Pas encore' in pg.locator('.page .mz-row--fat').inner_text())
     # --- anciennes données : « en apprentissage » d'office → Pas encore ; « à 100 % » → Je connais ---
     e.js("""async () => { const Q = window.__QR;
       await Q.put('progress', 's78', { s: 78, startedAt: '2026-10-27', level: 1, nextA: 3, nextC: 0, listened: [1, 2], worked: [1, 2], solo: [], m: {}, known: false });
@@ -46,7 +49,7 @@ with sync_playwright() as p:
     check('ancienne version : récitée en séance sans être marquée → « Pas encore » (rien d’office)', st(e, 93) == 'none')
     check('ancienne version : « Je la connais à 100 % » → « Je connais »', st(e, 109) == 'known')
     # --- un juz, un groupe ---
-    pg.click('#tab-learn [data-act="mz-juz"][data-j="30"]'); pg.wait_for_timeout(600)
+    pg.click('.page [data-act="mz-juz"][data-j="30"]'); pg.wait_for_timeout(600)
     gorder = e.js("() => [...document.querySelectorAll('.page .mz-gcard')].map((b) => Number(b.dataset.i))")
     check('juz 30 : 8 groupes, du groupe 8 (sourates courtes) au groupe 1', gorder == list(range(239, 231, -1)), gorder)
     deb = e.js("() => window.__QR.Groups.d.juz[29].debut")
@@ -76,29 +79,30 @@ with sync_playwright() as p:
     stat = e.js("() => window.__QR.unitStat(window.__QR.Groups.d.groups[239].r)")
     check('groupe 8 : en cours, 4 sourates connues (21 versets sur 79)', stat['st'] == 'learning' and stat['kn'] == 21 and stat['n'] == 79, stat)
     e.shot('M3-groupe8')
-    # séance guidée : facultative, sur la première sourate pas encore connue du groupe ; ne change aucun statut
-    check('bouton « Séance guidée · commence par Al-Kawthar »', 'commence par Al-Kawthar' in pg.locator('.page [data-act="mz-guided"]').inner_text(), pg.locator('.page [data-act="mz-guided"]').inner_text())
+    # séance guidée : facultative, sur la première sourate pas encore connue du groupe (ordre du parcours) ; ne change aucun statut
+    check('bouton « Séance guidée · commence par Al-Massad » (après An-Nas, Al-Falaq, Al-Ikhlas)', 'commence par Al-Massad' in pg.locator('.page [data-act="mz-guided"]').inner_text(), pg.locator('.page [data-act="mz-guided"]').inner_text())
     pg.click('.page [data-act="mz-guided"]'); pg.wait_for_timeout(1200)
-    check('séance guidée : ouverte sur la première sourate à apprendre (Al-Kawthar, ordre conseillé)', pg.locator('.page--session').count() == 1 and e.js("() => window.__QR.Store.session && window.__QR.Store.session.items.some((x) => x.s === 108)"), e.js("() => window.__QR.Store.session && window.__QR.Store.session.items.map((x) => x.s)"))
+    check('séance guidée : ouverte sur la première sourate à apprendre (Al-Massad, ordre du parcours)', pg.locator('.page--session').count() == 1 and e.js("() => window.__QR.Store.session && window.__QR.Store.session.items.some((x) => x.s === 111)"), e.js("() => window.__QR.Store.session && window.__QR.Store.session.items.map((x) => x.s)"))
     pg.click('.page--session [data-act="session-close"]'); pg.wait_for_timeout(500)
     while pg.locator('.page [data-act="back"]').count():
         pg.click('.page [data-act="back"]'); pg.wait_for_timeout(300)
     check('après la séance : Al-Qari’a toujours « J’apprends » (rien d’office)', st(e, 101) == 'learning')
     # groupe 7 entier : « Je connais »
     pg.click('.nav__tab[data-tab="learn"]'); pg.wait_for_timeout(300)
-    pg.click('#tab-learn [data-act="mz-juz"][data-j="30"]'); pg.wait_for_timeout(500)
+    pg.click('#tab-learn [data-page="mz-path"]'); pg.wait_for_timeout(500)
+    pg.click('.page [data-act="mz-juz"][data-j="30"]'); pg.wait_for_timeout(500)
     pg.click('.page [data-act="mz-group"][data-i="238"]'); pg.wait_for_timeout(500)
     pg.click('.page .mz-mine [data-act="mz-set-group"][data-st="known"]'); pg.wait_for_timeout(600)
     check('groupe 7 : « Je connais » → ses 7 sourates connues', all(st(e, s) == 'known' for s in range(94, 101)))
     # groupe suivant / précédent dans le parcours
     pg.click('.page .mz-pn [data-act="mz-group"]:has-text("Groupe suivant")'); pg.wait_for_timeout(500)
-    check('« Groupe suivant » : juz 30, groupe 6 (sans empiler les pages)', 'groupe 6' in pg.locator('.page .topbar__title').inner_text() and e.js("() => window.__QR.UI.pages.length") == 2)
+    check('« Groupe suivant » : juz 30, groupe 6 (sans empiler les pages)', 'groupe 6' in pg.locator('.page .topbar__title').inner_text() and e.js("() => window.__QR.UI.pages.length") == 3)
     pg.click('.page [data-act="back"]'); pg.wait_for_timeout(400)
     juz_txt = norm(pg.locator('.page .mz-stat').inner_text())
     check('juz 30 : « 1 groupe connu sur 8 » et pourcentage', '1 groupe connu sur 8' in juz_txt and '% connu' in juz_txt, juz_txt)
     # tout le juz 29 : J'apprends, puis Pas encore, puis Annuler
     pg.click('.page [data-act="back"]'); pg.wait_for_timeout(300)
-    pg.click('#tab-learn [data-act="mz-juz"][data-j="29"]'); pg.wait_for_timeout(500)
+    pg.click('.page [data-act="mz-juz"][data-j="29"]'); pg.wait_for_timeout(500)
     pg.click('.page [data-act="sheet"][data-sheet="mz-bulk"]'); pg.wait_for_timeout(400)
     check('« Marquer tout le juz » : 3 choix', pg.locator('.sheet [data-act="mz-bulk-go"]').count() == 3)
     pg.click('.sheet [data-act="mz-bulk-go"][data-st="known"]'); pg.wait_for_timeout(700)
@@ -106,9 +110,11 @@ with sync_playwright() as p:
     pg.click('#toasts [data-act="toast-action"]'); pg.wait_for_timeout(700)
     check('« Annuler » : juz 29 revient à « Pas encore »', e.js("() => window.__QR.unitStat(window.__QR.juzParts(29)).st") == 'none' and e.js("() => !window.__QR.Store.mem.progress.has('s67')"))
     pg.click('.page [data-act="back"]'); pg.wait_for_timeout(300)
-    # --- Où j'en suis : le groupe en cours ---
-    now = norm(pg.locator('#tab-learn .mz-now').inner_text())
-    check('Où j’en suis : « Tu apprends » le groupe 8 du juz 30', 'Tu apprends' in now and 'groupe 8' in now, now[:140].replace('\n', ' | '))
+    pg.click('.page [data-act="back"]'); pg.wait_for_timeout(300)
+    # --- ta sourate : la première du parcours que tu ne connais pas (Al-Fatiha), puis celles en cours ---
+    now = norm(pg.locator('#tab-learn .mz-moment').inner_text())
+    nx = e.js("() => [...document.querySelectorAll('#tab-learn .mz-next__r')].map((b) => Number(b.dataset.s))")
+    check('ta sourate : Al-Fatiha (pas encore connue), ensuite Al-Massad, An-Nasr, Al-Kawthar', 'Al-Fatiha' in now and 'Prochaine sourate' in now and nx == [111, 110, 108], (now[:80], nx))
     # --- lecteur : fin de sourate, 3 états ---
     pg.click('.nav__tab[data-tab="read"]'); pg.wait_for_timeout(400)
     row = pg.locator('#readList .srow[data-s="112"]').inner_text()
@@ -141,7 +147,7 @@ with sync_playwright() as p:
     pg.click('.page [data-act="back"]'); pg.wait_for_timeout(300)
     # --- carte de l'agenda : rien de quotidien ---
     sm = json.loads(e.js("() => localStorage.getItem('qr.summary.v1')"))
-    check('résumé pour l’agenda : % connu et groupe en cours', sm.get('v') == 2 and sm.get('name') == 'juz 30, groupe 8' and sm.get('learning') is True and sm.get('pct'), sm)
+    check('résumé pour l’agenda : % connu et prochaine sourate', sm.get('v') == 2 and sm.get('name') == 'Al-Fatiha' and sm.get('learning') is False and sm.get('pct'), sm)
     # --- réglages : plus de « temps par jour » ; rappel facultatif, chaque semaine par défaut ---
     pg.click('#tab-progress .topbar [data-page="settings"]'); pg.wait_for_timeout(500)
     stxt = pg.locator('.page').inner_text()

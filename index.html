@@ -1993,7 +1993,11 @@ function qrResume() {
       if (r.done) return '<span class="pst">✓ Tout le Coran marqué connu</span>';
       var bits = [];
       if (r.pct) bits.push(esc(r.pct) + " % du Coran connu");
-      if (r.name) bits.push((r.learning ? "En cours : " : "Prochaine étape : ") + esc(r.name));
+      if (r.name) {
+        var due = "";
+        if (r.learning && /^\d{4}-\d{2}-\d{2}$/.test(r.due || "")) { var p = r.due.split("-"); due = " (objectif " + new Intl.DateTimeFormat("fr-BE", { day: "numeric", month: "short", timeZone: "UTC" }).format(Date.UTC(+p[0], +p[1] - 1, +p[2])) + ")"; }
+        bits.push((r.learning ? "En cours : " : "Prochaine sourate : ") + esc(r.name) + due);
+      }
       return bits.length ? '<span class="pst">' + bits.join(" · ") + "</span>" : "";
     }
     if (r.date === auj && r.done) return '<span class="pst">✓ Séance faite aujourd’hui</span>';

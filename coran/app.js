@@ -361,7 +361,10 @@ function versesOfPage(p) {
    téléchargés et tes enregistrements restent uniquement sur l'appareil. */
 const KINDS = ['prefs', 'pos', 'fav', 'attempt', 'progress', 'review'];
 const QR_TABLE = 'qr_items';
-const DEFAULT_PATH_START = [1, 112, 113, 114, 108, 103, 109];
+/* Ordre proposé, sourate par sourate : Al-Fatiha, puis de la fin du Coran vers le début (An-Nas, Al-Falaq,
+   Al-Ikhlas… An-Naba, puis 77 → 67, et ainsi de suite jusqu'à Al-Baqara). C'est l'ordre le plus suivi par les
+   enseignants ; aucun hadith n'impose d'ordre, et tu peux toujours choisir une autre sourate. */
+const SURA_ORDER = [1].concat(Array.from({ length: 113 }, (_, k) => 114 - k));
 const DEFAULT_PREFS = {
   ambiance: 'vert',          // vert | papier | nuit
   readDisplay: 'ar_tl_fr',   // ar | fr | ar_fr | ar_tl | ar_tl_fr (dernier choix du lecteur libre)
@@ -376,7 +379,8 @@ const DEFAULT_PREFS = {
   basmalaAudio: true,        // lire la basmala au début d'une sourate (lecture continue)
   tlNoteSeen: false,
   path: null,                // ordre du parcours (null = proposition par défaut)
-  current: null,             // sourate en cours d'apprentissage
+  current: null,             // sourate de la séance guidée (suit ta sourate du moment)
+  pace: 'normal',            // rythme des objectifs : doux | normal | soutenu
   remindTime: '19:00',
   remindFreq: 'weekly',       // rappel facultatif : weekly | daily
 };
@@ -1282,14 +1286,8 @@ const MILESTONES = [
   'Je l’ai récitée à nouveau sans aide au moins une semaine après la première réussite complète.',
 ];
 
-/* --- Parcours proposé : Al-Fatiha, puis des sourates courtes de Juz Amma, puis le reste de Juz Amma
-   des plus courtes aux plus longues (nombre de mots du texte). Proposition modifiable. --- */
-function defaultPath() {
-  const idx = Content.index; if (!idx) return DEFAULT_PATH_START.slice();
-  const rest = idx.suras.filter((s) => s.n >= 78 && !DEFAULT_PATH_START.includes(s.n)).sort((a, b) => a.words - b.words || b.n - a.n).map((s) => s.n);
-  return DEFAULT_PATH_START.concat(rest);
-}
-function learningPath() { return defaultPath(); }
+/* --- Parcours proposé : voir SURA_ORDER (Al-Fatiha, puis 114, 113… 2) --- */
+function learningPath() { return SURA_ORDER.slice(); }
 
 /* --- Progression par sourate (kind « progress », id « sN ») --- */
 function emptyProgress(s) { return { s, startedAt: null, level: 1, nextA: 1, nextC: 0, listened: [], worked: [], solo: [], chunkSolo: {}, chunkWorked: {}, m: {}, known: false, teacher: null, lastAt: null }; }
@@ -1319,8 +1317,10 @@ function mergeDates(x, y) { const o = Object.assign({}, x || {}); for (const [k,
 /* Une même sourate sur deux appareils (téléphone et Mac) : tout ce qui a été fait d'un côté ou de l'autre est gardé
    (versets écoutés, travaillés, récités sans aide, jalons). Pour le statut que tu as déclaré (Pas encore, J'apprends,
    Je connais), ton choix le plus récent compte ; une version qui n'a jamais reçu de statut n'efface pas celui de
-   l'autre. Le reste (où reprendre la séance guidée, niveau, mention de l'enseignant) vient de la version la plus récente. */
+   l'autre. Ton objectif (goal) : le dernier fixé ou modifié compte (goal.at). Le reste (où reprendre la séance guidée,
+   niveau, dernière révision, mention de l'enseignant) vient de la version la plus récente. */
 const ST_KEYS = ['kv', 'lr', 'kvAt', 'stAt', 'self'];
+const goalAt = (g) => (g && typeof g === 'object' ? Number(g.at) || 0 : -1);
 const hasStatus = (p) => Array.isArray(p.kv) || Array.isArray(p.lr) || !!p.self;
 MERGE.progress = (a, b, la, lb) => {
   const ta = String(a.lastAt || ''); const tb = String(b.lastAt || '');
@@ -1341,6 +1341,9 @@ MERGE.progress = (a, b, la, lb) => {
   }
   out.m = mergeDates(a.m, b.m);
   out.startedAt = [a.startedAt, b.startedAt].filter(Boolean).sort()[0] || null;
+  const ga = goalAt(a.goal); const gb = goalAt(b.goal);
+  if (ga < 0 && gb < 0) delete out.goal;
+  else out.goal = clone(ga > gb ? a.goal : gb > ga ? b.goal : (newer.goal || a.goal || b.goal));
   return out;
 };
 function markListened(s, a) {
@@ -1483,20 +1486,16 @@ function estimateItem(it) {
   if (it.type === 'review') return 1.2 + 0.35 * Math.max(0, (it.a2 || 0) - (it.a1 || 0));
   return 2.6;
 }
+/* Sourate de la séance guidée : celle que tu as choisie (séance sur un groupe), sinon ta sourate du moment */
 function currentSurah() {
   const cur = prefs().current;
   if (cur && cur >= 1 && cur <= 114 && !suraKnown(cur)) return cur;
-  const w = Groups.d ? whereAmI() : null;
-  if (w && w.u) return firstToLearn(w.u.parts)[0];
+  const c = curUnit(); if (c && c.r) return c.r[0];
   for (const n of learningPath()) { if (!suraKnown(n)) return n; }
   return cur || 1;
 }
-/* Ordre des sourates du parcours (Al-Fatiha, juz 30 des plus courtes aux plus longues, puis juz 29 à 1) */
-function pathSuras() {
-  if (!Groups.d) return learningPath();
-  const out = []; for (const u of pathUnits()) for (const [n] of learnOrder(u.parts)) if (!out.includes(n)) out.push(n);
-  return out;
-}
+/* Ordre des sourates du parcours (Al-Fatiha, puis 114, 113… 2) */
+function pathSuras() { return learningPath(); }
 function nextInPath(after) {
   const path = pathSuras(); const i = path.indexOf(after);
   for (let k = i + 1; k < path.length; k++) { if (!suraKnown(path[k])) return path[k]; }
@@ -1565,7 +1564,7 @@ function homeAction() {
 
 /* ===== Interface : briques communes ===== */
 const TABS = ['learn', 'read', 'arabe', 'progress'];
-const UI = { tab: 'learn', pages: [], sheets: [], renderQueued: false, splashGone: false, q: '', readSeg: 'suras', learnMeaning: false, busy: false };
+const UI = { tab: 'learn', pages: [], sheets: [], renderQueued: false, splashGone: false, q: '', readSeg: 'suras', learnMeaning: false, busy: false, open: {} };
 const AMBIANCES = {
   vert: { label: 'Vert doux', theme: '#E7F4EB', dark: false },
   papier: { label: 'Papier', theme: '#FAF8F1', dark: false },
@@ -1773,9 +1772,9 @@ function saveSummary() {
   if (!Store.ready || !Content.index) return;
   try {
     if (!Groups.d) return;
-    const w = whereAmI(); const T = unitStat(allParts());
-    const name = w && w.u ? (w.u.kind === 'sura' ? suraTitle(w.u.s) : `juz ${w.u.g.j}, groupe ${w.u.g.k}`) : '';
-    localStorage.setItem('qr.summary.v1', JSON.stringify({ v: 2, uid: Store.uid, date: todayISO(), name, learning: !!(w && w.kind === 'learning'), done: !!(w && w.kind === 'done'), pct: T.kn ? pctTxt(T.pct) : '', at: Date.now() }));
+    const c = curUnit(); const T = unitStat(allParts());
+    // ta sourate du moment (et la date de ton objectif), sinon la prochaine du parcours
+    localStorage.setItem('qr.summary.v1', JSON.stringify({ v: 2, uid: Store.uid, date: todayISO(), name: c.r ? unitName(c.r) : '', learning: c.kind === 'goal', due: c.kind === 'goal' ? goalDue(c.g) : '', done: c.kind === 'done', pct: T.kn ? pctTxt(T.pct) : '', at: Date.now() }));
   } catch (e) { /* facultatif */ }
 }
 const saveSummarySoon = debounce(saveSummary, 800);
@@ -1899,20 +1898,337 @@ async function setStatus(parts, st) {
     const full = rgCount(kv, 1, N) === N;
     if (full && !p.self) p.self = { date: today, pct: 100 };
     if (!full && p.self) delete p.self;
+    // ton objectif sur cette sourate : atteint quand ses versets sont tous connus ; « Pas encore » l'annule
+    const g = p.goal;
+    if (g && !g.end && isNum(g.a1) && isNum(g.a2)) {
+      if (rgCount(kv, g.a1, g.a2) === g.a2 - g.a1 + 1) p.goal = Object.assign({}, g, { end: today, at: Date.now() });
+      else if (st === 'none' && rs.some(([x, y]) => x <= g.a2 && y >= g.a1)) p.goal = Object.assign({}, g, { end: today, cancel: true, at: Date.now() });
+    }
     await saveProgress(p);
   }
   return before;
 }
 async function undoStatus(before) {
   // l'annulation est elle-même un choix : elle porte l'heure d'aujourd'hui, pour l'emporter aussi sur tes autres appareils
-  for (const [s, data] of before) { if (data) await put('progress', 's' + s, Object.assign({}, data, { stAt: Date.now() })); else await del('progress', 's' + s); }
+  const now = Date.now();
+  for (const [s, data] of before) {
+    if (!data) { await del('progress', 's' + s); continue; }
+    const d = Object.assign({}, data, { stAt: now });
+    const cur = Store.mem.progress.get('s' + s);
+    if (d.goal) d.goal = Object.assign({}, d.goal, { at: now });
+    else if (cur && cur.goal) d.goal = Object.assign({}, cur.goal, { end: todayISO(), cancel: true, at: now });
+    await put('progress', 's' + s, d);
+  }
+  if (before.cur !== undefined && prefs().current !== before.cur) await setPrefs({ current: before.cur });
 }
+/* Changer un statut, avec « Annuler ». Si cela termine ta sourate du moment, la suivante du parcours commence
+   (statut « J'apprends » et un objectif) : c'est ce que tu as demandé en disant « Je la connais ». */
 async function applyStatus(parts, st, name) {
+  const g0 = st === 'known' ? activeGoal() : null;
+  const cur0 = prefs().current;
   const before = await setStatus(parts, st);
+  before.cur = cur0;
+  let more = '';
+  if (g0 && isKnownR(g0.r)) {
+    const took = daysBetween(g0.g.start, todayISO()) + 1;
+    more = ` Apprise en ${took} ${plural(took, 'jour', 'jours')}.`;
+    const nx = upcoming({ r: g0.r }, 1)[0];
+    if (nx) { const g = await startUnit(nx, before); more += ` Ensuite : ${unitName(nx)}, objectif ${dayName(goalDue(g))}.`; }
+  }
   const t = unitStat(parts);
   renderAll();
-  toast(`${name} : ${stLabel(t)}.`, false, { label: 'Annuler', fn: async () => { await undoStatus(before); renderAll(); toast('Changement annulé.'); } });
+  toast(`${name} : ${stLabel(t)}.${more}`, false, { label: 'Annuler', fn: async () => { await undoStatus(before); renderAll(); toast('Changement annulé.'); } });
 }
+
+/* ===== Sourate par sourate : ta sourate du moment, son objectif, la suivante =====
+   Ta sourate du moment : celle de ton objectif en cours ; sans objectif, la première du parcours (SURA_ORDER) que tu
+   ne connais pas encore. Objectif, enregistré dans la progression de la sourate :
+   goal = { a1, a2, start, days, at, end?, cancel? } (versets visés, premier jour, nombre de jours, moment du choix).
+   Il est proposé d'après la longueur (mots du texte) et ton rythme, et tu peux changer la date. Il est atteint quand
+   tu marques ces versets « Je connais » ; la suivante commence alors. Une sourate qui demanderait plus d'un mois au
+   rythme normal est découpée en parties de taille voisine, sur les versets (ex. Al-Mulk : 2 parties).
+   Révision : rev = dernier jour où tu as dit l'avoir récitée de mémoire. Rien ne change sans ton geste. */
+const PACES = { doux: { w: 4, label: 'Tranquille' }, normal: { w: 6, label: 'Normal' }, soutenu: { w: 10, label: 'Soutenu' } };
+const PART_MAX_W = 186;   // ≈ 31 jours au rythme normal : au-delà, la sourate est découpée en parties
+const PART_W = 180;       // taille visée d'une partie (≈ un mois au rythme normal)
+const paceKey = () => (PACES[prefs().pace] ? prefs().pace : 'normal');
+const goalDays = (w, k) => clamp(Math.ceil(Math.max(1, w) / PACES[k || paceKey()].w), 2, 365);
+/* Un objectif de N jours compte le jour où tu commences : commencé lundi, 5 jours → objectif vendredi */
+const goalDue = (g) => addDays(g.start, clamp(Math.round(Number(g.days)) || 1, 1, 3650) - 1);
+const goalMinDue = (g) => { const t = todayISO(); return g.start > t ? g.start : t; };   // au plus tôt : aujourd'hui
+const sameR = (x, y) => !!(x && y && x[0] === y[0] && x[1] === y[1] && x[2] === y[2]);
+const Units = { by: new Map(), flat: null };
+/* Les parties d'une sourate (une seule pour la plupart) : coupes au verset le plus proche d'un découpage régulier en mots */
+function suraUnits(s) {
+  if (Units.by.has(s)) return Units.by.get(s);
+  const N = ayasOf(s); const pre = Groups.pre && Groups.pre[s];
+  if (!N || !pre) return [[s, 1, N]];
+  const W = pre[N]; const out = [];
+  if (W <= PART_MAX_W) out.push([s, 1, N]);
+  else {
+    const k = Math.ceil(W / PART_W); let a = 1;
+    for (let i = 1; i <= k && a <= N; i++) {
+      if (i === k) { out.push([s, a, N]); break; }
+      const target = (W * i) / k; let b = a;
+      while (b < N && Math.abs(pre[b + 1] - target) <= Math.abs(pre[b] - target)) b++;
+      b = Math.max(a, Math.min(b, N - (k - i)));
+      out.push([s, a, b]); a = b + 1;
+    }
+  }
+  Units.by.set(s, out); return out;
+}
+function pathFlat() {
+  if (Units.flat) return Units.flat;
+  const out = []; for (const s of SURA_ORDER) for (const r of suraUnits(s)) out.push(r);
+  if (Groups.pre) Units.flat = out;
+  return out;
+}
+const unitW = (r) => rgWords(r[0], [[r[1], r[2]]], r[1], r[2]);
+const todoW = (r) => unitW(r) - rgWords(r[0], knownRanges(r[0]), r[1], r[2]);
+const isKnownR = (r) => rgCount(knownRanges(r[0]), r[1], r[2]) === r[2] - r[1] + 1;
+function unitPart(r) { const us = suraUnits(r[0]); return { k: us.findIndex((u) => sameR(u, r)), n: us.length }; }
+function unitName(r) {
+  const { k, n } = unitPart(r);
+  if (n > 1 && k >= 0) return `${suraTitle(r[0])}, partie ${k + 1} sur ${n}`;
+  return r[1] === 1 && r[2] === ayasOf(r[0]) ? suraTitle(r[0]) : `${suraTitle(r[0])} ${r[1]}–${r[2]}`;
+}
+function unitVerses(r) { const n = r[2] - r[1] + 1; return r[1] === 1 && r[2] === ayasOf(r[0]) ? `${n} ${plural(n, 'verset', 'versets')}` : `versets ${r[1]} à ${r[2]}`; }
+/* Une durée lisible : « 5 jours », « 2 semaines », « 1 mois » */
+function fmtDur(n) {
+  if (n <= 10) return `${n} ${plural(n, 'jour', 'jours')}`;
+  if (n <= 24) { const w = Math.round(n / 7); return `${w} ${plural(w, 'semaine', 'semaines')}`; }
+  return `${Math.max(1, Math.round(n / 30))} mois`;
+}
+const _fMY = new Intl.DateTimeFormat('fr-BE', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+function dayAgo(iso) { const n = daysBetween(iso, todayISO()); return n <= 0 ? 'aujourd’hui' : n === 1 ? 'hier' : `il y a ${n} jours`; }
+/* Ton objectif en cours (le dernier fixé, s'il n'est ni atteint ni annulé) */
+function activeGoal() {
+  let best = null;
+  for (const p of Store.mem.progress.values()) {
+    const g = p && p.goal;
+    if (!g || g.end || !(p.s >= 1 && p.s <= 114) || !isNum(g.a1) || !isNum(g.a2) || !validISO(g.start)) continue;
+    const r = [p.s, g.a1, g.a2]; if (isKnownR(r)) continue;
+    if (!best || goalAt(g) > goalAt(best.g)) best = { r, g };
+  }
+  return best;
+}
+/* Première partie du parcours que tu ne connais pas encore */
+function firstTodo(skip) { for (const r of pathFlat()) { if (!sameR(r, skip) && !isKnownR(r)) return r; } return null; }
+function curUnit() {
+  const a = activeGoal(); if (a) return { kind: 'goal', r: a.r, g: a.g };
+  const r = firstTodo(); return r ? { kind: 'next', r } : { kind: 'done' };
+}
+/* Ce qui vient après : la suite de la même sourate (si elle est en parties), puis le parcours */
+function upcoming(c, n) {
+  const out = []; const cr = c && c.r;
+  const push = (r) => { if (out.length < n && !sameR(r, cr) && !isKnownR(r) && !out.some((x) => sameR(x, r))) out.push(r); };
+  if (cr) for (const r of suraUnits(cr[0])) push(r);
+  for (const r of pathFlat()) { if (out.length >= n) break; push(r); }
+  return out;
+}
+/* Commencer une sourate (ou une partie) : « J'apprends » et un objectif à partir d'aujourd'hui */
+async function startUnit(r, before) {
+  const [s, a1, a2] = r;
+  if (before && !before.has(s)) before.set(s, Store.mem.progress.has('s' + s) ? clone(Store.mem.progress.get('s' + s)) : null);
+  await setStatus([r], 'learning');
+  const p = progressOf(s);
+  p.goal = { a1, a2, start: todayISO(), days: goalDays(todoW(r)), at: Date.now() };
+  if (!p.startedAt) p.startedAt = todayISO();
+  await saveProgress(p);
+  if (prefs().current !== s) await setPrefs({ current: s });
+  return p.goal;
+}
+/* « À ce rythme, tout le juz ʿAmma vers mai 2027 » */
+function projection(c) {
+  if (!c || !c.r) return '';
+  const s0 = c.r[0]; const today = todayISO();
+  let has; let name;
+  if (s0 === 1 || s0 >= 78) { has = (s) => s === 1 || s >= 78; name = 'tout le juz ʿAmma'; }
+  else if (s0 >= 67) { has = (s) => s >= 67 && s <= 77; name = 'tout le juz 29 (Tabarak)'; }
+  else if (suraUnits(s0).length > 1) { has = (s) => s === s0; name = `toute la sourate ${suraTitle(s0)}`; }
+  else return '';
+  // d = dernier jour de travail prévu ; chaque partie suivante commence le lendemain
+  let d = c.kind === 'goal' ? (goalDue(c.g) > today ? goalDue(c.g) : today) : addDays(today, goalDays(todoW(c.r)) - 1);
+  let more = 0;
+  for (const r of pathFlat()) { if (has(r[0]) && !sameR(r, c.r) && !isKnownR(r)) { d = addDays(d, goalDays(todoW(r))); more++; } }
+  if (!more) return '';
+  return `À ce rythme, ${name} ${daysBetween(today, d) <= 45 ? 'vers le ' + dDM(d) : 'vers ' + _fMY.format(isoToUTC(d))}.`;
+}
+function goalDots(g) {
+  const days = clamp(Math.round(Number(g.days)) || 1, 1, 3650); if (days > 31) return '';
+  const day = daysBetween(g.start, todayISO()) + 1;
+  return `<ol class="mz-days${days > 14 ? ' mz-days--many' : ''}" aria-hidden="true">${Array.from({ length: days }, (_, i) => `<li${i + 1 < day ? ' class="is-past"' : i + 1 === day ? ' class="is-today"' : ''}></li>`).join('')}</ol>`;
+}
+function momentCard(c) {
+  if (c.kind === 'done') return `<section class="mz-moment mz-moment--done" data-anchor="moment"><p class="mz-moment__k">${icon('award', 'sm')}Ta sourate du moment</p><h2 class="mz-moment__t">Tu as marqué tout le Coran comme connu</h2><p class="mz-moment__s">Continue de le réciter pour le garder.</p></section>`;
+  const r = c.r; const s = r[0]; const m = suraMeta(s); const { k, n } = unitPart(r); const t = unitStat([r]);
+  let kicker; let body; let acts;
+  if (c.kind === 'goal') {
+    const today = todayISO(); const due = goalDue(c.g); const left = daysBetween(today, due);
+    const day = clamp(daysBetween(c.g.start, today) + 1, 1, c.g.days);
+    const when = left > 0 ? `Objectif ${dayName(due)}` : left === 0 ? 'Objectif aujourd’hui' : `Objectif dépassé de ${-left} ${plural(-left, 'jour', 'jours')}`;
+    kicker = 'Ta sourate du moment';
+    body = `${goalDots(c.g)}<p class="mz-moment__goal${left < 0 ? ' is-late' : ''}">${icon('calendar', 'sm')}<span><b>${esc(when)}</b><small>${left < 0 ? 'Prends le temps qu’il faut : tu peux repousser la date.' : left === 0 ? `Jour ${day} sur ${c.g.days} : le dernier` : `Jour ${day} sur ${c.g.days}`}</small></span></p>`;
+    acts = `<div class="mz-moment__acts">
+          <button type="button" class="btn btn--soft" data-act="open-reader" data-s="${s}" data-a="${r[1]}">${icon('book-open', 'sm')}Étudier</button>
+          <button type="button" class="btn btn--primary" data-act="mz-cur-known">${icon('check', 'sm')}Je la connais</button></div>
+        <div class="mz-moment__more">
+          <button type="button" data-act="mz-guided-sura" data-s="${s}" data-a1="${r[1]}" data-a2="${r[2]}">${icon('headphones', 'sm')}Séance guidée</button>
+          <button type="button" data-act="sheet" data-sheet="mz-goal">${icon('calendar', 'sm')}Changer la date</button>
+          <button type="button" data-act="sheet" data-sheet="mz-pick">${icon('shuffle', 'sm')}Autre sourate</button></div>`;
+  } else {
+    const begun = t.kn > 0 || t.ln > 0;
+    kicker = begun ? 'Tu l’as commencée' : 'Prochaine sourate';
+    body = `<p class="mz-moment__goal">${icon('calendar', 'sm')}<span><b>Objectif proposé : ${esc(fmtDur(goalDays(todoW(r))))}</b><small>D’après sa longueur et ton rythme (${esc(PACES[paceKey()].label.toLowerCase())}). Tu pourras changer la date.</small></span></p>`;
+    acts = `<div class="mz-moment__acts mz-moment__acts--col">
+          <button type="button" class="btn btn--primary" data-act="mz-start" data-s="${s}" data-a1="${r[1]}" data-a2="${r[2]}">${icon('play', 'sm')}Commencer</button>
+          <button type="button" class="btn btn--soft" data-act="mz-cur-known">${icon('check', 'sm')}${begun ? 'Je la connais' : 'Je la connais déjà'}</button></div>
+        <div class="mz-moment__more mz-moment__more--2">
+          <button type="button" data-act="open-reader" data-s="${s}" data-a="${r[1]}">${icon('book-open', 'sm')}L’écouter et la lire</button>
+          <button type="button" data-act="sheet" data-sheet="mz-pick">${icon('shuffle', 'sm')}Autre sourate</button></div>`;
+  }
+  return `<section class="mz-moment mz-moment--${c.kind}" data-anchor="moment" data-s="${s}">
+      <p class="mz-moment__k">${icon('target', 'sm')}${esc(kicker)}</p>
+      <p class="mz-moment__ar" lang="ar" dir="rtl" translate="no">${esc(m.ar)}</p>
+      <h2 class="mz-moment__t">${esc(m.name)}${n > 1 ? `<span class="mz-moment__part">partie ${k + 1} sur ${n}</span>` : ''}</h2>
+      <p class="mz-moment__s">${m.sub ? esc(m.sub) + ' · ' : ''}sourate ${s} · ${esc(unitVerses(r))}${t.kn && t.st !== 'known' ? ` · ${t.kn} déjà ${plural(t.kn, 'connu', 'connus')}` : ''}</p>
+      ${body}
+      ${acts}
+    </section>`;
+}
+function nextHTML(c) {
+  const list = upcoming(c, 3); if (!list.length) return '';
+  const proj = projection(c);
+  return `<section class="mz-next" data-anchor="next">
+      <h2 class="sec-title">${icon('route', 'sm')}Ensuite</h2>
+      <ol class="mz-next__l">${list.map((r) => `<li><button type="button" class="mz-next__r" data-act="open-reader" data-s="${r[0]}" data-a="${r[1]}">${suraBadge(r[0])}<span><b>${esc(unitName(r))}</b><small>${esc(unitVerses(r))} · ≈ ${esc(fmtDur(goalDays(todoW(r))))}</small></span></button></li>`).join('')}</ol>
+      ${proj ? `<p class="fine mz-next__proj">${icon('calendar', 'sm')}<span>${esc(proj)}</span></p>` : ''}
+    </section>`;
+}
+/* Réviser : les sourates connues que tu n'as pas récitées depuis le plus longtemps */
+function revSince(s) {
+  const p = Store.mem.progress.get('s' + s) || {};
+  return validISO(p.rev) ? p.rev : validISO(p.kvAt) ? p.kvAt : p.self && validISO(p.self.date) ? p.self.date : '';
+}
+function revHTML() {
+  const ks = SURA_ORDER.filter((s) => suraKnown(s)); if (!ks.length) return '';
+  const today = todayISO();
+  const list = ks.map((s, i) => ({ s, d: revSince(s), i })).sort((a, b) => a.d.localeCompare(b.d) || a.i - b.i).slice(0, 3);
+  return `<section class="mz-rev" data-anchor="rev">
+      <h2 class="sec-title">${icon('repeat', 'sm')}Réviser</h2>
+      <p class="fine">Récite-les de mémoire (dans ta prière, par exemple), puis touche « Récitée ». Celles que tu n’as pas récitées depuis le plus longtemps passent en premier.</p>
+      <ul class="mz-rev__l">${list.map(({ s, d }) => {
+        const p = Store.mem.progress.get('s' + s) || {}; const rev = validISO(p.rev) ? p.rev : '';
+        const sub = rev ? `Récitée ${dayAgo(rev)}` : d ? `Cochée ${dayAgo(d)}` : 'Connue';
+        return `<li class="mz-rev__r${rev === today ? ' is-done' : ''}">${suraBadge(s)}<span class="mz-rev__t"><b>${esc(suraTitle(s))}</b><small>${esc(sub)}</small></span>${rev === today ? `<span class="mz-rev__ok">${icon('check', 'sm')}Faite</span>` : `<button type="button" class="btn btn--soft btn--sm" data-act="mz-rev" data-s="${s}">${icon('check', 'sm')}Récitée</button>`}</li>`;
+      }).join('')}</ul>
+    </section>`;
+}
+function mineHTML() {
+  const n = SURA_ORDER.filter((s) => suraKnown(s)).length;
+  if (!n) return `<section class="mz-setup" data-anchor="setup">
+      <p class="mz-setup__t">${icon('check-circle', 'sm')}D’abord, coche ce que tu connais déjà</p>
+      <p class="mz-setup__p">Touche les sourates que tu sais par cœur (Al-Fatiha, An-Nas, Al-Ikhlas…). L’appli te propose ensuite la suivante, avec un objectif.</p>
+      <button type="button" class="btn btn--primary btn--block" data-act="open-page" data-page="mz-suras">${icon('check-circle', 'sm')}Cocher mes sourates</button>
+    </section>`;
+  return `<button type="button" class="link-row mz-mine-row" data-act="open-page" data-page="mz-suras" data-anchor="mine">${icon('check-circle', 'sm')}<span>Les sourates que je connais<small class="link-row__sub">${n} ${plural(n, 'sourate', 'sourates')} sur 114 · touche pour en cocher ou en décocher</small></span>${icon('chev-r', 'sm')}</button>`;
+}
+/* Conseils : l'ordre, les objectifs, la méthode des enseignants, les hadiths (références vérifiables) */
+const HADITHS = [
+  ['Le meilleur d’entre vous est celui qui apprend le Coran et l’enseigne.', 'Rapporté par ʿUthmân ibn ʿAffân · Al-Bukhârî, n° 5027'],
+  ['Celui qui récite le Coran avec aisance sera avec les nobles et vertueux anges scribes ; et celui qui le récite en butant, avec peine, aura une double récompense.', 'Rapporté par ʿÂʾisha · Muslim, n° 798 ; Al-Bukhârî, n° 4937 (formulation voisine)'],
+  ['Entretenez le Coran : par Celui qui tient mon âme dans Sa main, il s’échappe plus vite que les chameaux de leurs entraves.', 'Rapporté par Abû Mûsâ al-Ashʿarî · Al-Bukhârî, n° 5033 ; Muslim, n° 791'],
+  ['Les œuvres les plus aimées d’Allah sont les plus régulières, même si elles sont peu nombreuses.', 'Rapporté par ʿÂʾisha · Al-Bukhârî, n° 6464 ; Muslim, n° 783'],
+  ['Les Compagnons apprenaient dix versets auprès du Prophète (paix et salut sur lui) et ne passaient pas aux dix suivants avant d’avoir appris ce qu’ils contiennent de savoir et de pratique.', 'Rapporté par Abû ʿAbd ar-Rahmân as-Sulamî · Musnad Ahmad, n° 23482 (chaîne jugée bonne)'],
+];
+function adviceHTML(open) {
+  const ex = (s) => fmtDur(goalDays(suraMeta(s).words, 'normal'));
+  const isOpen = UI.open.mzAdvice !== undefined ? UI.open.mzAdvice : open;
+  return `<details class="mz-advice" data-keep="mzAdvice" data-anchor="advice"${isOpen ? ' open' : ''}>
+      <summary>${icon('lightbulb', 'sm')}<span>Quel ordre suivre, et comment ?<small>Ce que conseillent les enseignants, et les hadiths</small></span>${icon('chev-d', 'sm')}</summary>
+      <div class="mz-advice__b">
+        <h3>L’ordre proposé</h3>
+        <p>Al-Fatiha d’abord : on la récite dans chaque unité de la prière (« Pas de prière pour celui qui ne récite pas la Fatiha », Al-Bukhârî n° 756, Muslim n° 394). Puis le juz ʿAmma en partant de la fin : An-Nas, Al-Falaq, Al-Ikhlas… jusqu’à An-Naba ; puis le juz 29, et ainsi de suite vers le début du Coran.</p>
+        <p>C’est l’ordre le plus suivi dans les mosquées et les écoles coraniques : les sourates courtes viennent d’abord, tu peux les réciter dans tes prières, et chaque sourate apprise donne de l’élan pour la suivante. Aucun hadith n’impose d’ordre : tu peux choisir une autre sourate quand tu veux.</p>
+        <h3>Des objectifs à ta mesure</h3>
+        <p>L’objectif dépend de la longueur de la sourate. Au rythme normal : Ad-Dhuha (11 versets) en ${ex(93)}, Al-Layl (21 versets) en ${ex(92)}, An-Naba (40 versets) en ${ex(78)}. Une sourate plus longue est découpée en parties d’environ un mois. Tu choisis ton rythme et tu peux changer la date.</p>
+        <h3>Conseils d’enseignants</h3>
+        <ul class="mz-advice__l">
+          <li>Écoute la sourate plusieurs fois avec un récitateur reconnu avant de l’apprendre.</li>
+          <li>Lis le sens en français : on retient mieux ce qu’on comprend.</li>
+          <li>Récite ta nouvelle sourate dans tes prières : c’est la meilleure révision.</li>
+          <li>Passe à la suivante quand tu la récites sans regarder et sans hésiter.</li>
+          <li>Récite régulièrement les anciennes : sans révision, elles s’en vont.</li>
+          <li>Fais-toi écouter par quelqu’un qui récite bien : l’appli ne vérifie pas ta prononciation.</li>
+        </ul>
+        <h3>Ce que disent les hadiths</h3>
+        <ul class="mz-hadiths">${HADITHS.map(([q, src]) => `<li><blockquote>« ${esc(q)} »</blockquote><small>${esc(src)}</small></li>`).join('')}</ul>
+        <p class="fine">Ce ne sont ni les conseils d’un imam ni une fatwa : ce sont des pratiques courantes chez les enseignants et des hadiths connus, avec leurs références pour vérifier. Pour ta récitation (tajwîd) ou une question religieuse, demande à quelqu’un de qualifié.</p>
+      </div>
+    </details>`;
+}
+/* --- Mes sourates : la liste à cocher --- */
+const SURA_SECTIONS = [
+  ['amma', 'Al-Fatiha et le juz ʿAmma', SURA_ORDER.filter((s) => s === 1 || s >= 78)],
+  ['j29', 'Juz 29 · Tabarak', SURA_ORDER.filter((s) => s >= 67 && s <= 77)],
+  ['rest', 'Les autres sourates', SURA_ORDER.filter((s) => s >= 2 && s <= 66)],
+];
+function knowRow(s) {
+  const m = suraMeta(s); const t = unitStat(suraParts(s)); const on = t.st === 'known';
+  return `<li><button type="button" class="mz-k${on ? ' is-on' : ''}" data-act="mz-know" data-s="${s}" aria-pressed="${on}" data-anchor="k${s}">
+      <span class="mz-k__n" aria-hidden="true">${s}</span>
+      <span class="mz-k__t"><b>${esc(m.name)}</b><small>${m.sub ? esc(m.sub) + ' · ' : ''}${m.ayas} versets</small></span>
+      ${!on && t.st !== 'none' ? `<span class="mz-chip mz-chip--${t.st}">${esc(stLabel(t))}</span>` : ''}
+      <span class="mz-k__box" aria-hidden="true">${icon('check', 'sm')}</span></button></li>`;
+}
+PAGES['mz-suras'] = {
+  label: () => 'Mes sourates',
+  render() {
+    if (!Content.index) return pageHead('Mes sourates') + '<div class="loading"><span class="spin"></span></div>';
+    const n = SURA_ORDER.filter((s) => suraKnown(s)).length;
+    return `${pageHead('Mes sourates')}
+      <p class="lede">Touche une sourate que tu sais par cœur pour la cocher, et touche-la encore pour la décocher. L’appli te propose la suivante d’après ce que tu coches.</p>
+      <p class="mz-kcount"><b>${n}</b> ${plural(n, 'sourate connue', 'sourates connues')} sur 114</p>
+      ${SURA_SECTIONS.map(([key, title, list], i) => {
+        const kn = list.filter((s) => suraKnown(s)).length; const keep = 'mzs-' + key;
+        const open = UI.open[keep] !== undefined ? UI.open[keep] : (i === 0 || kn > 0);
+        return `<details class="mz-ks" data-keep="${keep}"${open ? ' open' : ''}><summary><span class="mz-ks__t"><b>${esc(title)}</b><small>${kn} sur ${list.length}</small></span>${icon('chev-d', 'sm')}</summary>
+          <ul class="mz-klist">${list.map((s) => knowRow(s)).join('')}</ul></details>`;
+      }).join('')}`;
+  },
+};
+/* --- Changer la date de ton objectif, ton rythme --- */
+SHEETS['mz-goal'] = {
+  render() {
+    const c = curUnit();
+    if (c.kind !== 'goal') return { title: 'Ton objectif', body: '<p class="sub">Tu n’as pas d’objectif en cours. Touche « Commencer » sur ta prochaine sourate.</p>' };
+    const today = todayISO(); const due = goalDue(c.g); const left = daysBetween(today, due);
+    const pk = paceKey(); const w = todoW(c.r);
+    return { title: `Ton objectif : ${unitName(c.r)}`, body: `
+      <p class="sub">Commencée ${esc(dayName(c.g.start))}. Choisis la date à laquelle tu veux la connaître, ou repars de l’objectif proposé.</p>
+      <div class="mz-due">
+        <button type="button" class="icon-btn" data-act="mz-goal-step" data-d="-1" aria-label="Un jour plus tôt"${due <= goalMinDue(c.g) ? ' disabled' : ''}>${icon('minus')}</button>
+        <p class="mz-due__d" aria-live="polite"><b>${esc(dFull(due))}</b><small>${left > 1 ? `dans ${left} jours` : left === 1 ? 'demain' : left === 0 ? 'aujourd’hui' : `dépassée de ${-left} ${plural(-left, 'jour', 'jours')}`}</small></p>
+        <button type="button" class="icon-btn" data-act="mz-goal-step" data-d="1" aria-label="Un jour plus tard">${icon('plus')}</button>
+      </div>
+      <div class="row-btns mz-due__q"><button type="button" class="chip" data-act="mz-goal-step" data-d="7">+ 1 semaine</button><button type="button" class="chip" data-act="mz-goal-set" data-n="${goalDays(w)}">${esc(fmtDur(goalDays(w)))} à partir d’aujourd’hui</button></div>
+      <h3 class="sheet__h">Ton rythme</h3>
+      <p class="sub">Il sert à proposer les objectifs des prochaines sourates. Pour celle-ci, au même rythme :</p>
+      <div class="opts">${Object.entries(PACES).map(([key, P]) => `<button type="button" class="opt${pk === key ? ' is-on' : ''}" data-act="set-pref" data-k="pace" data-v="${key}" aria-pressed="${pk === key}"><span class="opt__dot" aria-hidden="true">${pk === key ? icon('check', 'sm') : ''}</span><span class="opt__t"><b>${esc(P.label)}</b><small>${esc(unitName(c.r))} en ${esc(fmtDur(goalDays(w, key)))}</small></span></button>`).join('')}</div>
+      <div class="sheet__acts"><button type="button" class="btn btn--primary btn--block" data-act="sheet-close">OK</button></div>` };
+  },
+};
+/* --- Choisir une autre sourate (elle devient ta sourate du moment) --- */
+SHEETS['mz-pick'] = {
+  render() {
+    const a = activeGoal();
+    const list = SURA_ORDER.filter((s) => !suraKnown(s) && !(a && a.r[0] === s));
+    return { title: 'Choisir une autre sourate', body: `
+      <p class="sub">Elle devient ta sourate du moment, avec un objectif. Ensuite, l’appli reprend l’ordre proposé.</p>
+      <ul class="slist slist--pick">${list.map((s) => { const m = suraMeta(s); const us = suraUnits(s); const r = us.find((u) => !isKnownR(u)) || us[0];
+        return `<li><button type="button" class="srow" data-act="mz-start" data-s="${s}" data-a1="${r[1]}" data-a2="${r[2]}">${suraBadge(s)}<span class="srow__main"><span class="srow__name">${esc(m.name)}</span><span class="srow__sub">${m.ayas} versets · ≈ ${esc(fmtDur(goalDays(todoW(r))))}${us.length > 1 ? ` (partie ${us.indexOf(r) + 1} sur ${us.length})` : ''}</span></span><span class="srow__ar" lang="ar" dir="rtl" translate="no">${esc(m.ar)}</span></button></li>`; }).join('')}</ul>` };
+  },
+};
 /* --- Le parcours conseillé : Al-Fatiha, puis le juz 30 des sourates les plus courtes aux plus longues
    (groupe 8 → 1), puis les juz 29 à 1, chacun du groupe 1 au groupe 8. Tout reste ouvert. --- */
 function pathUnits() {
@@ -1945,12 +2261,11 @@ function unitSub(u, t) {
 const groupUnit = (i) => ({ kind: 'group', i, g: Groups.d.groups[i], parts: Groups.d.groups[i].r });
 const juzOrder = (n) => Groups.d.path.filter((x) => x.t === 'g' && Groups.d.groups[x.i].j === n).map((x) => x.i);
 const juzName = (n) => (n === 30 ? 'Juz ʿAmma' : '');
-/* Ordre conseillé à l'intérieur d'un groupe pour la séance guidée : dans le juz 30, Al-Ikhlas, Al-Falaq, An-Nas,
-   Al-Kawthar, Al-ʿAsr, Al-Kafirun d'abord, puis les plus courtes ; ailleurs, l'ordre du mushaf */
+/* Ordre conseillé à l'intérieur d'un groupe pour la séance guidée : celui du parcours (Al-Fatiha, puis de la fin
+   du Coran vers le début) ; à l'intérieur d'une sourate, du premier au dernier verset */
 function learnOrder(parts) {
-  const pri = (n) => { const i = DEFAULT_PATH_START.indexOf(n); return i >= 0 ? i : 99; };
-  const w = (n) => (n >= 78 && suraMeta(n) ? suraMeta(n).words : 0);
-  return parts.slice().sort((a, b) => (a[0] >= 78 && b[0] >= 78 ? pri(a[0]) - pri(b[0]) || w(a[0]) - w(b[0]) : 0) || a[0] - b[0] || a[1] - b[1]);
+  const pos = (n) => SURA_ORDER.indexOf(n);
+  return parts.slice().sort((a, b) => pos(a[0]) - pos(b[0]) || a[1] - b[1]);
 }
 /* Première sourate à apprendre d'un ensemble (pour la séance guidée) */
 function firstToLearn(parts) { for (const r of learnOrder(parts)) { const t = unitStat([r]); if (t.st !== 'known') return r; } return parts[0]; }
@@ -1959,31 +2274,15 @@ function groupsLoading(root) {
   swapHTML(root, topbarMain() + (Groups.err ? `<div class="empty">${icon('alert', 'lg')}<p>Les groupes de mémorisation n’ont pas pu être chargés (réseau).</p><button type="button" class="btn btn--primary" data-act="mz-retry">Réessayer</button></div>` : '<div class="loading"><span class="spin"></span></div>'));
 }
 const METHOD = [
-  ['Écoute', 'Écoute le groupe en suivant le texte. « Aa » change l’affichage : arabe, phonétique, français.'],
+  ['Écoute', 'Écoute la sourate plusieurs fois en suivant le texte. « Aa » change l’affichage : arabe, phonétique, français.'],
   ['Répète', 'Verset par verset : le casque propose un verset en boucle (3, 5 ou 10 fois) ou un groupe de versets.'],
   ['Récite sans regarder', 'Livre fermé, puis vérifie avec le texte. Reprends ce qui a coincé.'],
-  ['Marque « Je connais »', 'Quand tu le récites sans erreur. Reviens le réciter de temps en temps pour le garder.'],
+  ['Touche « Je la connais »', 'Quand tu la récites sans regarder et sans erreur : la suivante t’est proposée. Récite les anciennes de temps en temps pour les garder.'],
 ];
 function methodHTML(open) {
-  return `<details class="mz-method"${open ? ' open' : ''}><summary>${icon('lightbulb', 'sm')}<span>La méthode, étape par étape</span>${icon('chev-d', 'sm')}</summary>
+  if (UI.open.mzMethod !== undefined) open = UI.open.mzMethod;
+  return `<details class="mz-method" data-keep="mzMethod"${open ? ' open' : ''}><summary>${icon('lightbulb', 'sm')}<span>La méthode, étape par étape</span>${icon('chev-d', 'sm')}</summary>
       <ol class="mz-steps">${METHOD.map(([t, d], k) => `<li><span class="mz-steps__n">${k + 1}</span><span><b>${esc(t)}</b><small>${esc(d)}</small></span></li>`).join('')}</ol></details>`;
-}
-function nowCard(w) {
-  if (!w) return '';
-  if (w.kind === 'done') return `<section class="mz-now mz-now--known"><p class="mz-now__k">${icon('award', 'sm')}Où j’en suis</p><h2 class="mz-now__t">Tu as marqué tout le Coran comme connu</h2><p class="mz-now__p">Continue de le réciter pour le garder.</p></section>`;
-  const u = w.u; const t = w.t;
-  const k = w.kind === 'learning' ? 'Tu apprends' : w.kind === 'partial' ? 'Tu as commencé' : 'Prochaine étape';
-  const kicker = u.kind === 'sura' ? 'Pour commencer' : `Juz ${u.g.j} · groupe ${u.g.k} sur 8${u.g.j === 30 && u.g.k === 8 ? ' · les sourates les plus courtes' : ''}`;
-  const prog = t.kn ? `${t.kn} ${plural(t.kn, 'verset connu', 'versets connus')} sur ${t.n}` : t.ln ? 'Marqué « J’apprends »' : 'Rien de marqué connu pour l’instant';
-  const open = u.kind === 'sura' ? `data-act="open-reader" data-s="${u.s}" data-a="1"` : `data-act="mz-group" data-i="${u.i}"`;
-  return `<section class="mz-now mz-now--${t.st}" data-anchor="now">
-      <p class="mz-now__k">${icon('target', 'sm')}Où j’en suis · ${esc(k)}</p>
-      <div class="mz-now__row">${u.kind === 'sura' ? suraBadge(u.s) : `<span class="mz-jn" aria-hidden="true">${u.g.j}</span>`}
-        <div><p class="mz-now__c">${esc(kicker)}</p><h2 class="mz-now__t">${esc(unitTitle(u))}</h2><p class="mz-now__s">${esc(unitSub(u, t))}</p></div></div>
-      ${mzBar(t.pct)}<p class="mz-now__p">${esc(prog)}${w.others > 0 ? ` · et ${w.others} ${plural(w.others, 'autre groupe', 'autres groupes')} en cours` : ''}</p>
-      <button type="button" class="btn btn--primary btn--xl" ${open}>${icon('book-open')}<span>${u.kind === 'sura' ? 'Étudier Al-Fatiha' : 'Étudier ce groupe'}</span></button>
-      ${u.kind === 'sura' ? `<div class="mz-now__set">${seg3(t.st, `data-s="${u.s}"`, 'mz-set-sura')}</div>` : ''}
-    </section>`;
 }
 function seg3(cur, attrs, act) {
   return `<div class="mz-seg" role="radiogroup" aria-label="Où tu en es">${['none', 'learning', 'known'].map((k) => `<button type="button" class="mz-seg__b mz-seg__b--${k}${cur === k ? ' is-on' : ''}" role="radio" aria-checked="${cur === k}" data-act="${act}" data-st="${k}" ${attrs}>${icon(ST[k].icon, 'sm')}<span>${esc(ST[k].label)}</span></button>`).join('')}</div>`;
@@ -2002,37 +2301,51 @@ function guidedHTML() {
     </section>`;
 }
 
-/* --- Onglet « Mémoriser » --- */
+/* --- Onglet « Mémoriser » : sourate par sourate --- */
 function renderLearn() {
   const root = $('#tab-learn');
   if (!Content.index) { swapHTML(root, topbarMain() + (Content.indexError ? bootError() : '<div class="loading"><span class="spin"></span></div>')); return; }
   if (!Groups.d) { groupsLoading(root); return; }
-  const w = whereAmI(); const fat = unitStat(suraParts(1));
-  const anyMarked = Content.index.suras.some((m) => { const p = Store.mem.progress.get('s' + m.n); return p && (Array.isArray(p.kv) || Array.isArray(p.lr) || p.self); });
+  const c = curUnit();
+  const anyKnown = SURA_ORDER.some((s) => suraKnown(s));
   swapHTML(root, `${topbarMain()}
     <section class="hero mz-hero">
-      <div class="hero__text"><h1 class="hero__title">Mémoriser le Coran</h1><p class="hero__note">Juz par juz, groupe par groupe. C’est toi qui dis ce que tu connais : rien ne change tout seul.</p></div>
+      <div class="hero__text"><h1 class="hero__title">Mémoriser le Coran</h1><p class="hero__note">Sourate par sourate, à ton rythme. C’est toi qui dis ce que tu connais : rien ne change tout seul.</p></div>
       <img class="hero__art" src="coran/livre-sur-pupitre.webp" alt="" width="768" height="768" decoding="async">
     </section>
     ${syncBanner()}
-    ${nowCard(w)}
     ${!Store.idbOk ? `<p class="notice notice--warn">${icon('alert')}<span>Ce navigateur n’enregistre pas ta progression (navigation privée ou stockage plein). Ouvre l’appli depuis son icône, ou exporte une sauvegarde dans les réglages.</span></p>` : ''}
-    ${methodHTML(!anyMarked)}
-    <h2 class="sec-title mz-h">${icon('route', 'sm')}Ton parcours, juz par juz</h2>
-    <p class="fine">Ordre conseillé : Al-Fatiha, puis le juz 30 en commençant par les sourates les plus courtes, puis les juz 29, 28… jusqu’au juz 1. Tu peux ouvrir n’importe quel juz.</p>
-    <ol class="mz-path">
-      <li><div class="mz-row mz-row--fat"><button type="button" class="mz-row__main" data-act="open-reader" data-s="1" data-a="1">${suraBadge(1)}<span class="mz-row__t"><b>Al-Fatiha</b><small>7 versets · pour commencer</small></span></button>
-        <button type="button" class="mz-chip mz-chip--${fat.st} mz-chip--btn" data-act="mz-cycle" data-s="1" data-a1="1" data-a2="7" aria-label="Al-Fatiha : ${esc(stLabel(fat))}. Toucher pour changer.">${icon(ST[fat.st].icon, 'sm')}${esc(stLabel(fat))}</button></div></li>
-      ${Array.from({ length: 30 }, (_, k) => 30 - k).map((n) => {
-        const t = unitStat(juzParts(n)); const gk = juzOrder(n).filter((i) => unitStat(Groups.d.groups[i].r).st === 'known').length;
-        return `<li><button type="button" class="mz-row mz-row--${t.st}" data-act="mz-juz" data-j="${n}" data-anchor="j${n}">
-            <span class="mz-jn${t.st === 'known' ? ' is-known' : ''}" aria-hidden="true">${n}</span>
-            <span class="mz-row__t"><b>Juz ${n}${juzName(n) ? ` · ${juzName(n)}` : ''}</b><small>${t.kn ? `${esc(pctTxt(t.pct))} % · ${gk} ${plural(gk, 'groupe connu', 'groupes connus')} sur 8` : t.ln ? 'En cours' : '8 groupes'}</small>${t.kn ? mzBar(t.pct, 'sm') : ''}</span>
-            ${t.st === 'learning' ? stChip(t) : ''}${icon('chev-r', 'sm')}</button></li>`;
-      }).join('')}
-    </ol>
+    ${anyKnown ? '' : mineHTML()}
+    ${momentCard(c)}
+    ${nextHTML(c)}
+    ${revHTML()}
+    ${anyKnown ? mineHTML() : ''}
+    ${adviceHTML(!anyKnown)}
+    ${methodHTML(false)}
+    <button type="button" class="link-row mz-path-row" data-act="open-page" data-page="mz-path">${icon('layers', 'sm')}<span>Par juz et par groupes<small class="link-row__sub">Al-Fatiha et les 30 juz, chacun en 8 groupes</small></span>${icon('chev-r', 'sm')}</button>
     ${guidedHTML()}`);
 }
+/* --- Par juz et par groupes : Al-Fatiha, puis les juz 30, 29… 1 --- */
+PAGES['mz-path'] = {
+  label: () => 'Par juz',
+  render() {
+    if (!Groups.d) { loadGroups().catch(() => {}); return pageHead('Par juz et par groupes') + '<div class="loading"><span class="spin"></span></div>'; }
+    const fat = unitStat(suraParts(1));
+    return `${pageHead('Par juz et par groupes')}
+      <p class="lede">Une autre façon de voir ton avancée : un juz contient 8 groupes d’environ deux pages et demie. Tu peux ouvrir n’importe quel juz.</p>
+      <ol class="mz-path">
+        <li><div class="mz-row mz-row--fat"><button type="button" class="mz-row__main" data-act="open-reader" data-s="1" data-a="1">${suraBadge(1)}<span class="mz-row__t"><b>Al-Fatiha</b><small>7 versets · pour commencer</small></span></button>
+          <button type="button" class="mz-chip mz-chip--${fat.st} mz-chip--btn" data-act="mz-cycle" data-s="1" data-a1="1" data-a2="7" aria-label="Al-Fatiha : ${esc(stLabel(fat))}. Toucher pour changer.">${icon(ST[fat.st].icon, 'sm')}${esc(stLabel(fat))}</button></div></li>
+        ${Array.from({ length: 30 }, (_, k) => 30 - k).map((n) => {
+          const t = unitStat(juzParts(n)); const gk = juzOrder(n).filter((i) => unitStat(Groups.d.groups[i].r).st === 'known').length;
+          return `<li><button type="button" class="mz-row mz-row--${t.st}" data-act="mz-juz" data-j="${n}" data-anchor="j${n}">
+              <span class="mz-jn${t.st === 'known' ? ' is-known' : ''}" aria-hidden="true">${n}</span>
+              <span class="mz-row__t"><b>Juz ${n}${juzName(n) ? ` · ${juzName(n)}` : ''}</b><small>${t.kn ? `${esc(pctTxt(t.pct))} % · ${gk} ${plural(gk, 'groupe connu', 'groupes connus')} sur 8` : t.ln ? 'En cours' : '8 groupes'}</small>${t.kn ? mzBar(t.pct, 'sm') : ''}</span>
+              ${t.st === 'learning' ? stChip(t) : ''}${icon('chev-r', 'sm')}</button></li>`;
+        }).join('')}
+      </ol>`;
+  },
+};
 
 /* --- Un juz : ses 8 groupes --- */
 function groupCard(i) {
@@ -3430,7 +3743,63 @@ async function startGuided(r, btn) {
   await startSession(btn);
 }
 ACT['mz-guided'] = async (el) => { if (!(await needGroups())) return; const g = Groups.d.groups[Number(el.dataset.i)]; if (!g) return; await startGuided(firstToLearn(g.r), el); };
-ACT['mz-guided-sura'] = async (el) => { const s = Number(el.dataset.s); if (!(s >= 1 && s <= 114)) return; await startGuided([s, 1, ayasOf(s)], el); };
+ACT['mz-guided-sura'] = async (el) => {
+  const s = Number(el.dataset.s); if (!(s >= 1 && s <= 114)) return;
+  const N = ayasOf(s); const a1 = clamp(Number(el.dataset.a1) || 1, 1, N); const a2 = clamp(Number(el.dataset.a2) || N, a1, N);
+  await startGuided([s, a1, a2], el);
+};
+/* --- Sourate par sourate --- */
+const validR = (r) => r[0] >= 1 && r[0] <= 114 && r[1] >= 1 && r[2] >= r[1] && r[2] <= ayasOf(r[0]);
+/* « Je la connais » sur ta sourate du moment (ou « Je la connais déjà » sur la prochaine) */
+ACT['mz-cur-known'] = async () => {
+  if (!(await needGroups())) return;
+  const c = curUnit(); if (!c.r) return;
+  await applyStatus([c.r], 'known', unitName(c.r));
+};
+/* « Commencer » (ou choisir une autre sourate) : elle devient ta sourate du moment, avec un objectif */
+ACT['mz-start'] = async (el) => {
+  if (!(await needGroups())) return;
+  const s = Number(el.dataset.s); const us = s >= 1 && s <= 114 ? suraUnits(s) : null; if (!us) return;
+  let r = el.dataset.a1 ? [s, Number(el.dataset.a1), Number(el.dataset.a2)] : (us.find((u) => !isKnownR(u)) || us[0]);
+  if (!validR(r)) return;
+  closeAllSheets();
+  const before = new Map(); before.cur = prefs().current;
+  const a = activeGoal();
+  if (a && !sameR(a.r, r)) {   // l'objectif précédent est mis de côté (sa sourate garde « J'apprends »)
+    before.set(a.r[0], clone(Store.mem.progress.get('s' + a.r[0])));
+    const p = progressOf(a.r[0]); p.goal = Object.assign({}, p.goal, { end: todayISO(), cancel: true, at: Date.now() }); await saveProgress(p);
+  }
+  const g = await startUnit(r, before);
+  renderAll();
+  toast(`${unitName(r)} : c’est parti, objectif ${dayName(goalDue(g))}.`, false, { label: 'Annuler', fn: async () => { await undoStatus(before); renderAll(); toast('Changement annulé.'); } });
+};
+/* Mes sourates : cocher, décocher */
+ACT['mz-know'] = async (el) => {
+  const s = Number(el.dataset.s); if (!(s >= 1 && s <= 114)) return;
+  if (!(await needGroups())) return;
+  await applyStatus(suraParts(s), suraKnown(s) ? 'none' : 'known', suraTitle(s));
+};
+/* Réviser : « Récitée » (aujourd'hui) */
+ACT['mz-rev'] = async (el) => {
+  const s = Number(el.dataset.s); if (!(s >= 1 && s <= 114) || !suraKnown(s)) return;
+  const old = clone(Store.mem.progress.get('s' + s));
+  const p = progressOf(s); p.rev = todayISO(); await saveProgress(p);
+  renderAll();
+  toast(`${suraTitle(s)} : récitée aujourd’hui.`, false, { label: 'Annuler', fn: async () => { await put('progress', 's' + s, Object.assign({}, old, { lastAt: nowStamp() })); renderAll(); toast('Changement annulé.'); } });
+};
+/* Changer la date de ton objectif : un jour plus tôt ou plus tard, une semaine de plus, ou l'objectif proposé à partir d'aujourd'hui */
+async function setGoalDue(due) {
+  const a = activeGoal(); if (!a) return;
+  const p = progressOf(a.r[0]); const min = goalMinDue(p.goal); if (due < min) due = min;
+  p.goal = Object.assign({}, p.goal, { days: daysBetween(p.goal.start, due) + 1, at: Date.now() });
+  await saveProgress(p); renderAll(); refreshSheet();
+}
+ACT['mz-goal-step'] = async (el) => {
+  const a = activeGoal(); if (!a) return;
+  const today = todayISO(); const due = goalDue(a.g); const d = Number(el.dataset.d) || 0;
+  await setGoalDue(addDays(due < today ? today : due, d));
+};
+ACT['mz-goal-set'] = async (el) => { const n = clamp(Number(el.dataset.n) || 7, 1, 365); await setGoalDue(addDays(todayISO(), n - 1)); };
 
 /* --- Lecteur --- */
 ACT['open-reader'] = (el) => { if (UI.pages.some((p) => p.name === 'session')) return; openReader(el.dataset.s, el.dataset.a, { replace: el.dataset.replace === '1', mode: el.dataset.mode === 'page' ? 'page' : (prefs().readMode === 'page' && !el.dataset.a ? 'page' : 'verse') }); };
@@ -3758,6 +4127,9 @@ function wire() {
     if (t.id === 'pickSearch') { const s = topSheet(); if (s) { s.props.q = t.value; const list = $('#sheets .slist--pick'); if (list) { const res = searchSuras(t.value); list.innerHTML = res.suras.map((m) => `<li><button type="button" class="srow" data-act="pick-sura" data-s="${m.n}">${suraBadge(m.n)}<span class="srow__main"><span class="srow__name">${esc(m.name)}</span><span class="srow__sub">${m.ayas} versets</span></span><span class="srow__ar" lang="ar" dir="rtl" translate="no">${esc(m.ar)}</span></button></li>`).join(''); } } }
     if (t.id === 'favLabel') { const s = topSheet(); if (s) s.props.label = t.value; }
   });
+  // sections repliables : ce que tu as ouvert ou fermé reste ainsi quand l'écran se redessine (seulement ton geste,
+  // pas l'ouverture par défaut)
+  document.addEventListener('click', (e) => { const sm = e.target.closest && e.target.closest('summary'); const d = sm && sm.parentElement; if (d && d.tagName === 'DETAILS' && d.dataset.keep) UI.open[d.dataset.keep] = !d.open; });
   document.addEventListener('submit', (e) => {
     const f = e.target.closest('[data-form]'); if (!f) return; e.preventDefault();
     if (f.dataset.form === 'sign-in') {
@@ -3959,7 +4331,7 @@ async function boot() {
 /* Retour sur la page depuis l'historique : on rafraîchit */
 window.addEventListener('pageshow', (e) => { if (!e.persisted) return; refreshAgendaDB(); scheduleRender(); resumeSync(); });
 /* Accès pour le banc d'essai automatisé (aucune donnée réelle) */
-window.__QR = { Store, Content, Player, Sync, UI, prefs, put, MERGE, syncNow, connectAccount, sameData, reciterId, selfKnown, dueReviews, buildSession, scheduleAfter, refreshMilestones, progressOf, verseChunks, searchSuras, versesOfPage, pageOfVerse, surahState, milestoneCount, stopAudio, Groups, loadGroups, unitStat, setStatus, whereAmI, suraKnown, juzParts, suraParts, allParts, setToday: (iso) => { _todayOverride = iso; scheduleRender(); }, renderAll };
+window.__QR = { Store, Content, Player, Sync, UI, prefs, put, MERGE, syncNow, connectAccount, sameData, reciterId, selfKnown, dueReviews, buildSession, scheduleAfter, refreshMilestones, progressOf, verseChunks, searchSuras, versesOfPage, pageOfVerse, surahState, milestoneCount, stopAudio, Groups, loadGroups, unitStat, setStatus, whereAmI, suraKnown, juzParts, suraParts, allParts, curUnit, activeGoal, suraUnits, pathFlat, goalDays, goalDue, unitName, todoW, SURA_ORDER, setToday: (iso) => { _todayOverride = iso; scheduleRender(); }, renderAll };
 boot();
 
 })();

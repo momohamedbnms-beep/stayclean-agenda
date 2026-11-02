@@ -716,3 +716,110 @@ a.btn { text-decoration: none; }
 .mz-ar__c > .i { flex: none; margin-top: 2px; color: var(--green-ink); }
 :root[data-ambiance="nuit"] .mz-ar__c > .i { color: var(--primary); }
 .mz-ar__c .ar-t { font-size: 1.3em; line-height: 1.2; }
+
+/* Sourate par sourate : ta sourate du moment (le nom arabe en grand, l'objectif en jours), ensuite, réviser */
+.mz-moment { position: relative; isolation: isolate; overflow: hidden; margin: 18px 0 14px; padding: 16px 16px 14px; border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-1); }
+.mz-moment::before { content: ''; position: absolute; z-index: 1; left: 0; right: 0; top: 0; height: 4px; background: var(--mz-k); }
+.mz-moment--goal::before { background: var(--mz-l-line); }
+/* l'étoile à huit branches des numéros de sourate, en grand derrière le nom arabe (décor, sous le texte) */
+.mz-moment::after { content: ''; position: absolute; z-index: -1; right: -40px; top: -34px; width: 176px; height: 176px; background: var(--mint); pointer-events: none;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath d='M20 1 25.56 6.56 33.44 6.56 33.44 14.44 39 20 33.44 25.56 33.44 33.44 25.56 33.44 20 39 14.44 33.44 6.56 33.44 6.56 25.56 1 20 6.56 14.44 6.56 6.56 14.44 6.56Z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath d='M20 1 25.56 6.56 33.44 6.56 33.44 14.44 39 20 33.44 25.56 33.44 33.44 25.56 33.44 20 39 14.44 33.44 6.56 33.44 6.56 25.56 1 20 6.56 14.44 6.56 6.56 14.44 6.56Z'/%3E%3C/svg%3E") center / contain no-repeat; }
+:root[data-ambiance="papier"] .mz-moment::after { background: #F4EEDD; }
+:root[data-ambiance="nuit"] .mz-moment::after { background: rgba(127, 209, 168, 0.07); }
+.mz-moment__k { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13.5px; font-weight: 700; color: var(--green-ink); }
+.mz-moment--goal .mz-moment__k { color: var(--mz-l); }
+.mz-moment__ar { margin: 2px 0 0; font-family: var(--ar-font); font-size: 46px; line-height: 1.55; color: var(--ar-color); text-align: right; }
+.mz-moment__t { margin: -6px 0 2px; font-size: 25px; line-height: 1.2; font-weight: 600; letter-spacing: -0.01em; }
+.mz-moment__part { display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: var(--pill); background: var(--surface-2); color: var(--ink-2); font-size: 13px; font-weight: 600; letter-spacing: 0; vertical-align: 4px; }
+.mz-moment__s { margin: 0; font-size: 14px; color: var(--ink-3); }
+.mz-days { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.mz-days li { width: 12px; height: 12px; border-radius: 50%; background: var(--surface-3); }
+.mz-days li.is-past { background: var(--mz-k); }
+.mz-days li.is-today { background: var(--mz-l-bg); box-shadow: inset 0 0 0 3px var(--mz-l-line); }
+.mz-days--many { gap: 5px; }
+.mz-days--many li { width: 9px; height: 9px; }
+.mz-days--many li.is-today { box-shadow: inset 0 0 0 2.5px var(--mz-l-line); }
+.mz-moment__goal { display: flex; gap: 8px; align-items: flex-start; margin: 12px 0 0; }
+.mz-moment__goal > .i { flex: none; margin-top: 2px; color: var(--green-ink); }
+.mz-moment__goal > span { display: flex; flex-direction: column; gap: 1px; }
+.mz-moment__goal b { font-size: 15.5px; font-weight: 600; }
+.mz-moment__goal small { font-size: 13.5px; line-height: 1.4; color: var(--ink-3); }
+.mz-moment__goal.is-late > .i, .mz-moment__goal.is-late b { color: var(--mz-l); }
+.mz-moment__acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+.mz-moment__acts--col { grid-template-columns: 1fr; }
+.mz-moment__acts .btn { padding: 0 12px; }
+@media (max-width: 350px) { .mz-moment__acts { grid-template-columns: 1fr; } }
+.mz-moment__more { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 10px -6px -6px; }
+.mz-moment__more--2 { grid-template-columns: repeat(2, 1fr); }
+.mz-moment__more > button { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px; min-height: 58px; padding: 6px 4px; border: 0; border-radius: var(--r-sm); background: none; color: var(--green-ink); font: inherit; font-size: 13px; font-weight: 600; line-height: 1.2; text-align: center; cursor: pointer; }
+.mz-moment__more > button:hover { background: var(--active-bg); }
+.mz-moment--done .mz-moment__t { margin-top: 8px; font-size: 21px; }
+.mz-setup { margin: 16px 0 4px; padding: 16px; border-radius: var(--r-lg); background: var(--soft); display: grid; gap: 8px; }
+.mz-setup__t { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; font-weight: 600; color: var(--soft-ink); }
+.mz-setup__p { margin: 0 0 4px; color: var(--ink-2); line-height: 1.45; }
+.mz-next, .mz-rev { margin: 24px 0 6px; }
+.mz-next__l { list-style: none; margin: 0; padding: 0; position: relative; }
+.mz-next__l::before { content: ''; position: absolute; left: 24px; top: 26px; bottom: 26px; width: 2px; border-radius: 2px; background: var(--line-strong); }
+.mz-next__r { position: relative; width: 100%; display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 5px 4px 5px 3px; border: 0; border-radius: var(--r-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.mz-next__r:hover { background: var(--active-bg); }
+.mz-next__r > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.mz-next__r b { font-size: 15.5px; font-weight: 600; }
+.mz-next__r small { font-size: 13px; color: var(--ink-3); }
+.mz-next__proj { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 0; }
+.mz-next__proj > .i { flex: none; margin-top: 3px; }
+.mz-rev__l { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.mz-rev__r { display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 7px 8px 7px 6px; border-radius: var(--r-md); background: var(--surface); box-shadow: var(--shadow-1); }
+.mz-rev__r.is-done { background: var(--ok-bg); box-shadow: none; }
+.mz-rev__t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mz-rev__t b { font-size: 15.5px; font-weight: 600; }
+.mz-rev__t small { font-size: 13px; color: var(--ink-3); }
+.mz-rev__r.is-done .mz-rev__t small { color: var(--ink-2); }
+.mz-rev__ok { display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; color: var(--ok-ink); font-size: 14px; font-weight: 600; }
+.mz-mine-row { margin-top: 22px; }
+.mz-path-row { margin-top: 10px; }
+.mz-advice { margin: 18px 0 0; border-radius: var(--r-md); background: var(--surface-2); }
+.mz-advice summary { display: flex; align-items: center; gap: 8px; padding: 13px 14px; font-weight: 600; cursor: pointer; list-style: none; }
+.mz-advice summary::-webkit-details-marker { display: none; }
+.mz-advice summary > span { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.mz-advice summary small { font-size: 13px; font-weight: 400; color: var(--ink-3); }
+.mz-advice summary > svg:first-child { color: var(--green-ink); }
+.mz-advice summary > svg:last-child, .mz-ks summary > svg { transition: transform .2s var(--ease); }
+.mz-advice[open] summary > svg:last-child, .mz-ks[open] summary > svg { transform: rotate(180deg); }
+.mz-advice__b { padding: 0 16px 14px; }
+.mz-advice__b h3 { margin: 16px 0 6px; font-size: 15.5px; font-weight: 600; color: var(--ink); }
+.mz-advice__b h3:first-child { margin-top: 4px; }
+.mz-advice__b p { margin: 0 0 8px; max-width: 64ch; font-size: 15px; line-height: 1.55; color: var(--ink-2); }
+.mz-advice__l { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 64ch; list-style: disc; font-size: 15px; line-height: 1.5; color: var(--ink-2); }
+.mz-advice__l li::marker { color: var(--green-ink); }
+.mz-hadiths { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
+.mz-hadiths li { padding: 12px 14px; border-radius: var(--r-sm); background: var(--surface); box-shadow: inset 3px 0 0 var(--gold); }
+.mz-hadiths blockquote { margin: 0; max-width: 62ch; font-size: 15px; line-height: 1.55; color: var(--ink); }
+.mz-hadiths small { display: block; margin-top: 6px; font-size: 12.5px; color: var(--ink-3); }
+.mz-advice__b > .fine { margin-top: 4px; }
+/* Mes sourates : la liste à cocher */
+.mz-kcount { margin: 6px 0 12px; color: var(--ink-2); }
+.mz-kcount b { margin-right: 4px; font-size: 26px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.mz-ks { margin: 10px 0; border-radius: var(--r-md); background: var(--surface-2); }
+.mz-ks summary { display: flex; align-items: center; gap: 8px; min-height: 54px; padding: 8px 14px; cursor: pointer; list-style: none; }
+.mz-ks summary::-webkit-details-marker { display: none; }
+.mz-ks__t { flex: 1; display: flex; flex-direction: column; }
+.mz-ks__t b { font-weight: 600; }
+.mz-ks__t small { font-size: 13px; color: var(--ink-3); }
+.mz-klist { list-style: none; margin: 0; padding: 0 6px 6px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.mz-k { width: 100%; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 7px 10px 7px 4px; border: 0; border-radius: var(--r-sm); background: var(--surface); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.mz-k__n { flex: none; width: 34px; text-align: center; font-size: 14px; font-weight: 700; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.mz-k__t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mz-k__t b { font-size: 15.5px; font-weight: 600; }
+.mz-k__t small { overflow: hidden; font-size: 12.5px; color: var(--ink-3); white-space: nowrap; text-overflow: ellipsis; }
+.mz-k .mz-chip { padding: 3px 8px; font-size: 12px; }
+.mz-k__box { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; box-shadow: inset 0 0 0 2px var(--line-strong); color: transparent; transition: background .15s var(--ease); }
+.mz-k.is-on .mz-k__box { background: var(--mz-k); color: var(--mz-k-ink); box-shadow: none; }
+.mz-k.is-on .mz-k__n { color: var(--green-ink); }
+/* Changer la date de l'objectif */
+.mz-due { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0 10px; padding: 6px; border-radius: var(--r-md); background: var(--surface-2); }
+.mz-due__d { flex: 1; margin: 0; display: flex; flex-direction: column; text-align: center; }
+.mz-due__d b { font-size: 18px; font-weight: 600; }
+.mz-due__d small { font-size: 13.5px; color: var(--ink-3); }
+.mz-due__q { margin: 0 0 6px; }
+.sheet__h { margin: 18px 0 4px; font-size: 16px; font-weight: 600; }

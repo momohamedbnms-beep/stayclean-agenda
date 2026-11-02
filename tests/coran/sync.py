@@ -133,7 +133,7 @@ with sync_playwright() as p:
     check('après « Run » : « C’est fait, vérifier » → synchronisé, feuille fermée, bandeau parti', state(e) == 'synced' and pg.locator('#sheets .inst').count() == 0 and pg.locator('#tab-learn .sync-banner').count() == 0, state(e))
     check('compte relié : propriétaire = utilisateur', e.js("() => window.__QR.Store.owner") == UID)
     # « Le vérifier en la récitant » (détail d'Al-Fatiha), puis « Je connais » proposé en fin de séance
-    pg.click('#tab-learn .mz-row--fat .mz-row__main'); pg.wait_for_timeout(1200)
+    pg.click('#tab-learn .mz-moment [data-act="open-reader"][data-s="1"]'); pg.wait_for_timeout(1200)
     pg.click('.page .self-card [data-page="sura-progress"]'); pg.wait_for_timeout(500)
     pg.click('.page [data-act="known-start"]'); pg.wait_for_timeout(600)
     pg.click('[data-act="recited"]'); pg.wait_for_timeout(200)
@@ -154,8 +154,8 @@ with sync_playwright() as p:
     # ---------- 2. Appareil B : stockage vide, même compte ----------
     e = Env(p, supabase=setup)
     pg = e.open(); pg.wait_for_timeout(2500)
-    check('appareil B : progression retrouvée (séance guidée sur Al-Ikhlas)', 'Al-Ikhlas' in pg.locator('#tab-learn .mz-guided').inner_text(), pg.locator('#tab-learn .mz-guided').inner_text())
-    check('appareil B : Où j’en suis = juz 30, groupe 8 (Al-Fatiha connue)', 'groupe 8' in pg.locator('#tab-learn .mz-now').inner_text())
+    check('appareil B : progression retrouvée (séance guidée sur An-Nas)', 'An-Nas' in pg.locator('#tab-learn .mz-guided').inner_text(), pg.locator('#tab-learn .mz-guided').inner_text())
+    check('appareil B : prochaine sourate = An-Nas (Al-Fatiha connue)', 'An-Nas' in pg.locator('#tab-learn .mz-moment').inner_text() and 'Prochaine sourate' in pg.locator('#tab-learn .mz-moment').inner_text())
     pg.click('.nav__tab[data-tab="progress"]'); pg.wait_for_timeout(400)
     check('appareil B : Al-Fatiha « Je connais »', 'Je connais' in pg.locator('#tab-progress .mz-fat').inner_text())
     e.shot('B1-progress')

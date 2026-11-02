@@ -1,4 +1,4 @@
-var V = "stayclean-agenda-cache-v44";
+var V = "stayclean-agenda-cache-v45";
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 self.addEventListener("install", function (e) {
   self.skipWaiting();
@@ -45,6 +45,9 @@ self.addEventListener("fetch", function (e) {
   );
 });
 
+/* v45 (02/11/2026) — Mon Coran : « Mémoriser » sourate par sourate (ta sourate du moment avec un objectif en jours,
+   « Je la connais » passe à la suivante, liste « Mes sourates » à cocher, réviser, conseils et hadiths sur l'ordre) ;
+   la carte de l'agenda affiche la sourate en cours et son objectif. Même règle « réseau d'abord ». */
 /* v44 (29/10/2026) — Mon Coran : « Ton coach » (ce que tu rates souvent, lettres confondues, aujourd'hui, évolution),
    révision ciblée, examen de mes points faibles ; fiches de révision à jour (10 ou 15 questions). Même règle « réseau d'abord ». */
 /* v43 (29/10/2026) — Mon Coran : la progression suit sur tous les appareils (connexion au compte dans Mon Coran,

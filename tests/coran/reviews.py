@@ -61,14 +61,14 @@ with sync_playwright() as p:
     check('jalon 1 non coché sans écoute', not pr['m'].get('1'))
     r = rev(e, 's1')
     check('révision de la sourate à J+1', r and r['due'] == day(1) and r['first'] == day(0), r)
-    check('parcours : sourate suivante = Al-Ikhlas', e.js("() => window.__QR.prefs().current") == 112)
+    check('parcours : sourate suivante = An-Nas (de la fin du Coran vers le début)', e.js("() => window.__QR.prefs().current") == 114)
     while e.js("() => window.__QR.Store.session && !window.__QR.Store.session.done") and step(pg) in ('after', 'link-after', 'link-intro'):
         pg.click('.sess__acts [data-act="step-continue"]'); pg.wait_for_timeout(300)
     check('fin de séance : « Marquer « Je connais » » proposé, rien d’office', pg.locator('.done .mz-offer [data-act="mz-set-sura"][data-s="1"]').count() == 1 and e.js("() => window.__QR.surahState(1)") == 'none')
     pg.click('.done .mz-offer [data-act="mz-set-sura"][data-s="1"]'); pg.wait_for_timeout(500)
     check('marquée à ta demande : Al-Fatiha « Je connais »', e.js("() => window.__QR.surahState(1)") == 'known')
     finish(e)
-    check('séance guidée suivante : sur Al-Ikhlas', 'Al-Ikhlas' in pg.locator('#tab-learn .mz-guided').inner_text(), pg.locator('#tab-learn .mz-guided').inner_text())
+    check('séance guidée suivante : sur An-Nas', 'An-Nas' in pg.locator('#tab-learn .mz-guided').inner_text(), pg.locator('#tab-learn .mz-guided').inner_text())
     e.shot('51-home-next')
     # Mes progrès
     pg.click('.nav__tab[data-tab="progress"]'); pg.wait_for_timeout(400)

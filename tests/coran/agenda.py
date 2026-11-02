@@ -31,7 +31,7 @@ with sync_playwright() as p:
     pg.click('#tab-learn .topbar [data-act="go-agenda"]'); pg.wait_for_timeout(1800)
     check('retour à l’agenda', pg.url.endswith('index.html') or pg.url.endswith('/'), pg.url)
     pill = e.js("() => { const c = document.querySelector('.pcard.qr .pst'); return c ? c.textContent : null }")
-    check('carte : résumé écrit par Mon Coran (prochaine étape, rien de quotidien)', pill and 'Prochaine étape : Al-Fatiha' in pill and 'aujourd' not in pill, pill)
+    check('carte : résumé écrit par Mon Coran (prochaine sourate, rien de quotidien)', pill and 'Prochaine sourate : Al-Fatiha' in pill and 'aujourd' not in pill, pill)
     e.shot('81-agenda-portal-after')
     # la carte Mes Calories / Ma Paperasse n'ont pas bougé
     check('MES CALORIES toujours présente', e.js("() => !!document.querySelector('.pcard.cal')"))
