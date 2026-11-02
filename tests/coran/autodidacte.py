@@ -11,7 +11,9 @@ def check(name, cond, extra=''):
 with sync_playwright() as p:
     e = Env(p)
     pg = e.open()
-    check('accueil : la méthode pour étudier seul, étape par étape', pg.locator('#tab-learn details.mz-method .mz-steps li').count() == 4)
+    pg.click('#tab-learn [data-page="mz-conseils"]'); pg.wait_for_timeout(500)
+    check('« Conseils et hadiths » : la méthode pour étudier seul, étape par étape', pg.locator('.page .mz-steps--page li').count() == 4)
+    pg.click('.page [data-act="back"]'); pg.wait_for_timeout(400)
     pg.click('.nav__tab[data-tab="read"]'); pg.wait_for_timeout(400)
     pg.fill('#readSearch', '112'); pg.wait_for_timeout(250)
     pg.click('#readList .srow[data-s="112"]'); pg.wait_for_timeout(1200)

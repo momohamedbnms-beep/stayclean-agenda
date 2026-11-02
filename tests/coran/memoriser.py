@@ -23,12 +23,12 @@ with sync_playwright() as p:
     # --- premier lancement : pas de question sur le temps, pas de « un peu chaque jour » ---
     check('premier lancement : aucune question « combien de minutes »', pg.locator('.sheet').count() == 0 and pg.locator('[data-act="minutes-save"]').count() == 0)
     home = norm(pg.locator('#tab-learn').inner_text())
-    check('onglet « Mémoriser » : titre et principe', 'Mémoriser le Coran' in home and 'rien ne change tout seul' in home, home[:120].replace('\n', ' | '))
+    check('onglet « Mémoriser » : titre et principe', 'Mémoriser le Coran' in home and 'Coche ce que tu connais' in home, home[:120].replace('\n', ' | '))
     check('ni « un peu chaque jour », ni minutes', 'Un peu chaque jour' not in home and not re.search(r'\d\s*min\b|minutes', home) and 'Environ' not in home, '')
     check('barre du bas : « Mémoriser »', 'Mémoriser' in pg.locator('.nav__tab[data-tab="learn"]').inner_text())
     mom = norm(pg.locator('#tab-learn .mz-moment').inner_text())
     check('ta sourate : Al-Fatiha, « Prochaine sourate », Commencer ou Je la connais déjà', 'Al-Fatiha' in mom and 'Prochaine sourate' in mom and pg.locator('#tab-learn .mz-moment [data-act="mz-start"]').count() == 1 and pg.locator('#tab-learn .mz-moment [data-act="mz-cur-known"]').count() == 1, mom[:120])
-    check('la méthode en 4 étapes', pg.locator('#tab-learn details.mz-method .mz-steps li').count() == 4)
+    check('la méthode en 4 étapes (page « Conseils et hadiths »)', pg.locator('#tab-learn [data-page="mz-conseils"]').count() == 1)
     e.shot('M1-memoriser')
     pg.click('#tab-learn [data-page="mz-path"]'); pg.wait_for_timeout(500)
     order = e.js("() => [...document.querySelectorAll('.page .mz-path [data-act=\"mz-juz\"]')].map((b) => Number(b.dataset.j))")
@@ -113,8 +113,9 @@ with sync_playwright() as p:
     pg.click('.page [data-act="back"]'); pg.wait_for_timeout(300)
     # --- ta sourate : la première du parcours que tu ne connais pas (Al-Fatiha), puis celles en cours ---
     now = norm(pg.locator('#tab-learn .mz-moment').inner_text())
-    nx = e.js("() => [...document.querySelectorAll('#tab-learn .mz-next__r')].map((b) => Number(b.dataset.s))")
-    check('ta sourate : Al-Fatiha (pas encore connue), ensuite Al-Massad, An-Nasr, Al-Kawthar', 'Al-Fatiha' in now and 'Prochaine sourate' in now and nx == [111, 110, 108], (now[:80], nx))
+    pg.click('#tab-learn .mz-tabs__b[data-tab="todo"]'); pg.wait_for_timeout(400)
+    nx = e.js("() => [...document.querySelectorAll('#tab-learn .mz-list .mz-li__main')].map((b) => Number(b.dataset.s))")[:4]
+    check('ta sourate : Al-Fatiha (pas encore connue), ensuite Al-Massad, An-Nasr, Al-Kawthar', 'Al-Fatiha' in now and 'Prochaine sourate' in now and nx == [1, 111, 110, 108], (now[:80], nx))
     # --- lecteur : fin de sourate, 3 états ---
     pg.click('.nav__tab[data-tab="read"]'); pg.wait_for_timeout(400)
     row = pg.locator('#readList .srow[data-s="112"]').inner_text()

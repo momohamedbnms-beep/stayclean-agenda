@@ -1,4 +1,5 @@
-"""« Mémoriser » (ta sourate du moment, ensuite, réviser, conseils, « Mes sourates », objectif), la vue par juz et
+"""« Mémoriser » (bilan, sourate en cours, listes À réviser / Connues / À apprendre, fiche d'une sourate, objectif,
+« Conseils et hadiths »), la vue par juz et
 « Mes progrès » : captures dans les trois ambiances et sur grand écran (contrôle visuel), plus contrôles automatiques :
 pas de débordement horizontal, contrastes, aucune erreur."""
 from qa import *
@@ -25,10 +26,21 @@ CONTRAST = """() => { const parse = (c) => (c.match(/[\\d.]+/g) || []).map(Numbe
   const blend = (fg, bg) => { const a = parse(fg); const b = parse(bg); if (a.length < 4) return fg; const k = a[3]; return `rgb(${a[0] * k + b[0] * (1 - k)}, ${a[1] * k + b[1] * (1 - k)}, ${a[2] * k + b[2] * (1 - k)})`; };
   const out = {};
   for (const sel of ['.mz-chip--known', '.mz-chip--learning', '.mz-chip--partial', '.mz-chip--none', '.mz-seg__b--known.is-on', '.mz-seg__b--learning.is-on', '.mz-tile--known .mz-tile__n', '.mz-tile--learning .mz-tile__p',
-      '.mz-moment__k', '.mz-moment__s', '.mz-moment__goal small', '.mz-moment__goal.is-late b', '.mz-moment__more > button', '.mz-next__r small', '.mz-rev__t small', '.mz-rev__ok', '.mz-setup__t', '.mz-advice summary small', '.mz-hadiths small', '.mz-k__n', '.mz-k__t small', '.mz-ks__t small', '.mz-due__d small', '.opt__t small']) {
+      '.mz-moment__k', '.mz-moment__s', '.mz-moment__goal small', '.mz-moment__goal.is-late b', '.mz-moment__more > button', '.mz-lede', '.mz-num span', '.mz-num--known b', '.mz-num--cur b', '.mz-num--rev b', '.mz-bilan__p',
+      '.mz-tabs__b:not(.is-on)', '.mz-tabs__b:not(.is-on) b', '.mz-tabs__b.is-on', '.mz-tabs__b.is-on b', '.mz-lists__hint', '.mz-li__t b', '.mz-li__t small', '.mz-li.is-cur .mz-li__t small', '.mz-li__b', '.mz-empty small', '.mz-next__proj',
+      '.mz-sh__s', '.mz-sh__st', '.mz-advice__b p', '.mz-hadiths small', '.mz-steps small', '.link-row__sub', '.mz-due__d small', '.opt__t small']) {
     const el = document.querySelector('#tab-learn ' + sel + ', #tab-progress ' + sel + ', #pages ' + sel + ', #sheets ' + sel); if (!el || !el.offsetParent) continue;
     const cs = getComputedStyle(el); const bg = bgOf(el);
     const a = lum(cs.color), b = lum(bg); out[sel] = Math.round(((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)) * 10) / 10; }
+  return out; }"""
+
+ICONS = """() => { const parse = (c) => (c.match(/[\\d.]+/g) || []).map(Number);
+  const lum = (c) => { const m = parse(c); const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(m[0]) + 0.7152 * f(m[1]) + 0.0722 * f(m[2]); };
+  const bgOf = (el) => { let e = el; while (e) { const m = parse(getComputedStyle(e).backgroundColor); if (m.length >= 3 && !(m.length === 4 && m[3] < 1)) return getComputedStyle(e).backgroundColor; e = e.parentElement; } return getComputedStyle(document.body).backgroundColor; };
+  const out = {};
+  for (const sel of ['.mz-li__ok', '.mz-li__ok.is-due', '.mz-tick', '.mz-num span']) {
+    const el = document.querySelector('#tab-learn ' + sel); if (!el || !el.offsetParent) continue;
+    const a = lum(getComputedStyle(el).color), b = lum(bgOf(el)); out[sel] = Math.round(((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)) * 10) / 10; }
   return out; }"""
 
 SEED = """async () => { const Q = window.__QR; await Q.loadGroups(); const G = Q.Groups.d;
@@ -46,20 +58,26 @@ with sync_playwright() as p:
         pg = e.open()
         e.js("(a) => window.__QR.put('prefs', 'main', Object.assign({}, window.__QR.prefs(), { ambiance: a }))", amb); pg.wait_for_timeout(300)
         e.js("(d) => window.__QR.setToday(d)", '2026-11-02'); pg.wait_for_timeout(200)
-        # premier lancement : rien de coché, conseils ouverts
+        # premier lancement : rien de coché, la liste « À apprendre » ouverte
         pg.evaluate("() => window.scrollTo(0, 0)")
         e.shot(f'ME-{amb}-depart')
-        pg.locator('#tab-learn .mz-advice').scroll_into_view_if_needed(); pg.wait_for_timeout(250)
+        pg.locator('#tab-learn .mz-lists').scroll_into_view_if_needed(); pg.wait_for_timeout(250)
+        e.shot(f'ME-{amb}-a-apprendre')
+        over = e.js(OVER); check(f'{amb} : départ et « À apprendre » sans débordement', not over, over)
+        cr = e.js(CONTRAST); check(f'{amb} : départ et « À apprendre », contrastes (≥ 4,5)', cr and min(cr.values()) >= 4.5, cr)
+        ic = e.js(ICONS); check(f'{amb} : départ, icônes et cases (≥ 3)', ic and min(ic.values()) >= 3, ic)
+        pg.click('#tab-learn [data-page="mz-conseils"]'); pg.wait_for_timeout(500)
         e.shot(f'ME-{amb}-conseils')
-        over = e.js(OVER); check(f'{amb} : départ et conseils sans débordement', not over, over)
-        cr = e.js(CONTRAST); check(f'{amb} : départ et conseils, contrastes (≥ 4,5)', cr and min(cr.values()) >= 4.5, cr)
+        over = e.js(OVER); check(f'{amb} : « Conseils et hadiths » sans débordement', not over, over)
+        cr = e.js(CONTRAST); check(f'{amb} : « Conseils et hadiths », contrastes (≥ 4,5)', cr and min(cr.values()) >= 4.5, cr)
+        pg.click('.page [data-act="back"]'); pg.wait_for_timeout(300)
         e.js(SEED); pg.wait_for_timeout(600)
         pg.click('#tab-learn .mz-moment [data-act="mz-start"]'); pg.wait_for_timeout(500)
         e.js("(d) => window.__QR.setToday(d)", '2026-11-04'); pg.wait_for_timeout(500)
         pg.evaluate("() => window.scrollTo(0, 0)")
         e.shot(f'ME-{amb}-memoriser')
-        pg.locator('#tab-learn .mz-rev').scroll_into_view_if_needed(); pg.wait_for_timeout(250)
-        e.shot(f'ME-{amb}-ensuite-reviser')
+        pg.locator('#tab-learn .mz-lists').scroll_into_view_if_needed(); pg.wait_for_timeout(250)
+        e.shot(f'ME-{amb}-listes')
         over = e.js(OVER); check(f'{amb} : Mémoriser sans débordement', not over, over)
         cr = e.js(CONTRAST); check(f'{amb} : Mémoriser, contrastes (≥ 4,5)', cr and min(cr.values()) >= 4.5, cr)
         pg.click('#tab-learn .mz-moment [data-sheet="mz-goal"]'); pg.wait_for_timeout(500)
@@ -71,11 +89,23 @@ with sync_playwright() as p:
         pg.evaluate("() => window.scrollTo(0, 0)")
         e.shot(f'ME-{amb}-depasse')
         cr = e.js(CONTRAST); check(f'{amb} : objectif dépassé, contrastes (≥ 4,5)', cr and min(cr.values()) >= 4.5, cr)
-        pg.click('#tab-learn .mz-mine-row'); pg.wait_for_timeout(500)
-        e.shot(f'ME-{amb}-mes-sourates')
-        over = e.js(OVER); check(f'{amb} : « Mes sourates » sans débordement', not over, over)
-        cr = e.js(CONTRAST); check(f'{amb} : « Mes sourates », contrastes (≥ 4,5)', cr and min(cr.values()) >= 4.5, cr)
-        pg.click('.page [data-act="back"]'); pg.wait_for_timeout(300)
+        pg.click('#tab-learn .mz-num--rev'); pg.wait_for_timeout(600)
+        e.shot(f'ME-{amb}-reviser')
+        over = e.js(OVER); check(f'{amb} : « À réviser » sans débordement', not over, over)
+        cr = e.js(CONTRAST); check(f'{amb} : « À réviser », contrastes (≥ 4,5)', cr and min(cr.values()) >= 4.5, cr)
+        ic = e.js(ICONS); check(f'{amb} : « À réviser », icônes (≥ 3)', ic and min(ic.values()) >= 3, ic)
+        pg.click('#tab-learn .mz-tabs__b[data-tab="known"]'); pg.wait_for_timeout(400)
+        pg.locator('#tab-learn .mz-lists').scroll_into_view_if_needed(); pg.wait_for_timeout(250)
+        e.shot(f'ME-{amb}-connues')
+        over = e.js(OVER); check(f'{amb} : « Connues » sans débordement', not over, over)
+        cr = e.js(CONTRAST); check(f'{amb} : « Connues », contrastes (≥ 4,5)', cr and min(cr.values()) >= 4.5, cr)
+        ic = e.js(ICONS); check(f'{amb} : « Connues », icônes (≥ 3)', ic and min(ic.values()) >= 3, ic)
+        pg.click('#tab-learn .mz-li__main[data-s="113"]'); pg.wait_for_timeout(500)
+        e.shot(f'ME-{amb}-fiche')
+        over = e.js(OVER); check(f'{amb} : fiche d’une sourate sans débordement', not over, over)
+        cr = e.js(CONTRAST); check(f'{amb} : fiche d’une sourate, contrastes (≥ 4,5)', cr and min(cr.values()) >= 4.5, cr)
+        pg.keyboard.press('Escape'); pg.wait_for_timeout(300)
+        pg.click('#tab-learn .mz-tabs__b[data-tab="todo"]'); pg.wait_for_timeout(400)
         pg.click('#tab-learn [data-page="mz-path"]'); pg.wait_for_timeout(500)
         pg.click('.page [data-act="mz-juz"][data-j="30"]'); pg.wait_for_timeout(600)
         e.shot(f'ME-{amb}-juz')

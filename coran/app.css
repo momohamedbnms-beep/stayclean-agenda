@@ -755,37 +755,9 @@ a.btn { text-decoration: none; }
 .mz-moment__more > button { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px; min-height: 58px; padding: 6px 4px; border: 0; border-radius: var(--r-sm); background: none; color: var(--green-ink); font: inherit; font-size: 13px; font-weight: 600; line-height: 1.2; text-align: center; cursor: pointer; }
 .mz-moment__more > button:hover { background: var(--active-bg); }
 .mz-moment--done .mz-moment__t { margin-top: 8px; font-size: 21px; }
-.mz-setup { margin: 16px 0 4px; padding: 16px; border-radius: var(--r-lg); background: var(--soft); display: grid; gap: 8px; }
-.mz-setup__t { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; font-weight: 600; color: var(--soft-ink); }
-.mz-setup__p { margin: 0 0 4px; color: var(--ink-2); line-height: 1.45; }
-.mz-next, .mz-rev { margin: 24px 0 6px; }
-.mz-next__l { list-style: none; margin: 0; padding: 0; position: relative; }
-.mz-next__l::before { content: ''; position: absolute; left: 24px; top: 26px; bottom: 26px; width: 2px; border-radius: 2px; background: var(--line-strong); }
-.mz-next__r { position: relative; width: 100%; display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 5px 4px 5px 3px; border: 0; border-radius: var(--r-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.mz-next__r:hover { background: var(--active-bg); }
-.mz-next__r > span:last-child { display: flex; flex-direction: column; min-width: 0; }
-.mz-next__r b { font-size: 15.5px; font-weight: 600; }
-.mz-next__r small { font-size: 13px; color: var(--ink-3); }
 .mz-next__proj { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 0; }
 .mz-next__proj > .i { flex: none; margin-top: 3px; }
-.mz-rev__l { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
-.mz-rev__r { display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 7px 8px 7px 6px; border-radius: var(--r-md); background: var(--surface); box-shadow: var(--shadow-1); }
-.mz-rev__r.is-done { background: var(--ok-bg); box-shadow: none; }
-.mz-rev__t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.mz-rev__t b { font-size: 15.5px; font-weight: 600; }
-.mz-rev__t small { font-size: 13px; color: var(--ink-3); }
-.mz-rev__r.is-done .mz-rev__t small { color: var(--ink-2); }
-.mz-rev__ok { display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; color: var(--ok-ink); font-size: 14px; font-weight: 600; }
-.mz-mine-row { margin-top: 22px; }
 .mz-path-row { margin-top: 10px; }
-.mz-advice { margin: 18px 0 0; border-radius: var(--r-md); background: var(--surface-2); }
-.mz-advice summary { display: flex; align-items: center; gap: 8px; padding: 13px 14px; font-weight: 600; cursor: pointer; list-style: none; }
-.mz-advice summary::-webkit-details-marker { display: none; }
-.mz-advice summary > span { flex: 1; display: flex; flex-direction: column; gap: 1px; }
-.mz-advice summary small { font-size: 13px; font-weight: 400; color: var(--ink-3); }
-.mz-advice summary > svg:first-child { color: var(--green-ink); }
-.mz-advice summary > svg:last-child, .mz-ks summary > svg { transition: transform .2s var(--ease); }
-.mz-advice[open] summary > svg:last-child, .mz-ks[open] summary > svg { transform: rotate(180deg); }
 .mz-advice__b { padding: 0 16px 14px; }
 .mz-advice__b h3 { margin: 16px 0 6px; font-size: 15.5px; font-weight: 600; color: var(--ink); }
 .mz-advice__b h3:first-child { margin-top: 4px; }
@@ -797,25 +769,6 @@ a.btn { text-decoration: none; }
 .mz-hadiths blockquote { margin: 0; max-width: 62ch; font-size: 15px; line-height: 1.55; color: var(--ink); }
 .mz-hadiths small { display: block; margin-top: 6px; font-size: 12.5px; color: var(--ink-3); }
 .mz-advice__b > .fine { margin-top: 4px; }
-/* Mes sourates : la liste à cocher */
-.mz-kcount { margin: 6px 0 12px; color: var(--ink-2); }
-.mz-kcount b { margin-right: 4px; font-size: 26px; color: var(--ink); font-variant-numeric: tabular-nums; }
-.mz-ks { margin: 10px 0; border-radius: var(--r-md); background: var(--surface-2); }
-.mz-ks summary { display: flex; align-items: center; gap: 8px; min-height: 54px; padding: 8px 14px; cursor: pointer; list-style: none; }
-.mz-ks summary::-webkit-details-marker { display: none; }
-.mz-ks__t { flex: 1; display: flex; flex-direction: column; }
-.mz-ks__t b { font-weight: 600; }
-.mz-ks__t small { font-size: 13px; color: var(--ink-3); }
-.mz-klist { list-style: none; margin: 0; padding: 0 6px 6px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
-.mz-k { width: 100%; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 7px 10px 7px 4px; border: 0; border-radius: var(--r-sm); background: var(--surface); color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.mz-k__n { flex: none; width: 34px; text-align: center; font-size: 14px; font-weight: 700; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.mz-k__t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.mz-k__t b { font-size: 15.5px; font-weight: 600; }
-.mz-k__t small { overflow: hidden; font-size: 12.5px; color: var(--ink-3); white-space: nowrap; text-overflow: ellipsis; }
-.mz-k .mz-chip { padding: 3px 8px; font-size: 12px; }
-.mz-k__box { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; box-shadow: inset 0 0 0 2px var(--line-strong); color: transparent; transition: background .15s var(--ease); }
-.mz-k.is-on .mz-k__box { background: var(--mz-k); color: var(--mz-k-ink); box-shadow: none; }
-.mz-k.is-on .mz-k__n { color: var(--green-ink); }
 /* Changer la date de l'objectif */
 .mz-due { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0 10px; padding: 6px; border-radius: var(--r-md); background: var(--surface-2); }
 .mz-due__d { flex: 1; margin: 0; display: flex; flex-direction: column; text-align: center; }
@@ -823,3 +776,54 @@ a.btn { text-decoration: none; }
 .mz-due__d small { font-size: 13.5px; color: var(--ink-3); }
 .mz-due__q { margin: 0 0 6px; }
 .sheet__h { margin: 18px 0 4px; font-size: 16px; font-weight: 600; }
+
+/* Mémoriser, en clair : le bilan (connues, en cours, à réviser), puis les listes par onglet */
+.mz-lede { margin: 2px 0 12px; max-width: 46ch; font-size: 15px; line-height: 1.45; color: var(--ink-2); }
+.mz-bilan { margin: 14px 0; padding: 12px 12px 12px; border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-1); }
+.mz-bilan__nums { display: grid; grid-template-columns: repeat(3, 1fr); margin-bottom: 12px; }
+.mz-num { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px 8px; border: 0; border-radius: var(--r-sm); background: none; color: inherit; font: inherit; cursor: pointer; }
+.mz-num + .mz-num::after { content: ''; position: absolute; left: 0; top: 16%; bottom: 16%; width: 1px; background: var(--line); }
+@media (hover: hover) { .mz-num:hover { background: var(--active-bg); } }
+.mz-num b { font-size: 36px; line-height: 1.05; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.mz-num span { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; color: var(--ink-2); }
+.mz-num span::before { content: ''; width: 9px; height: 9px; border-radius: 50%; }
+.mz-num--known b { color: var(--mz-k); }
+.mz-num--known span::before { background: var(--mz-k); }
+.mz-num--cur b { color: var(--mz-l); }
+.mz-num--cur span::before { background: var(--mz-l-line); }
+.mz-num--rev b { color: var(--rework-ink); }
+.mz-num--rev span::before { background: var(--rework-ink); }
+.mz-bilan__p { margin: 8px 2px 0; display: flex; flex-direction: column; gap: 1px; font-size: 13.5px; line-height: 1.4; color: var(--ink-3); }
+.mz-bilan__p b { color: var(--ink); }
+.mz-lists { margin: 22px 0 8px; }
+.mz-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 16px; background: var(--surface-2); }
+.mz-tabs__b { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 58px; padding: 6px 4px; border: 0; border-radius: 12px; background: none; color: var(--ink-2); font: inherit; font-size: 13.5px; font-weight: 600; line-height: 1.2; text-align: center; cursor: pointer; }
+.mz-tabs__b b { min-width: 24px; padding: 1px 7px; border-radius: 999px; background: var(--surface-3); color: var(--ink); font-size: 12.5px; text-align: center; font-variant-numeric: tabular-nums; }
+.mz-tabs__b.is-on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-1); }
+.mz-tabs__b.is-on b { background: var(--mz-k); color: var(--mz-k-ink); }
+.mz-lists__hint { margin: 10px 2px 8px; }
+.mz-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.mz-li { display: flex; align-items: center; gap: 6px; padding: 3px 8px 3px 3px; border-radius: var(--r-md); background: var(--surface); box-shadow: var(--shadow-1); }
+.mz-li.is-cur { box-shadow: inset 0 0 0 2px var(--mz-l-line), var(--shadow-1); }
+.mz-li__main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 4px; border: 0; border-radius: 12px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.mz-li__t { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.mz-li__t b { font-size: 15.5px; font-weight: 600; }
+.mz-li__t small { font-size: 13px; line-height: 1.35; color: var(--ink-3); }
+.mz-li.is-cur .mz-li__t small { color: var(--mz-l); font-weight: 600; }
+.mz-li__b { flex: none; }
+.mz-li__ok { flex: none; display: grid; place-items: center; width: 36px; height: 36px; color: var(--mz-k); }
+.mz-li__ok.is-due { color: var(--rework-ink); }
+.mz-tick { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border: 0; border-radius: 12px; background: var(--surface-2); box-shadow: inset 0 0 0 2px var(--line-strong); color: var(--ink-3); cursor: pointer; transition: background .15s var(--ease), color .15s var(--ease); }
+@media (hover: hover) { .mz-tick:hover { color: var(--mz-k); box-shadow: inset 0 0 0 2px var(--mz-k); } }
+.mz-tick:active { background: var(--mz-k); color: var(--mz-k-ink); }
+.mz-empty { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 10px; padding: 14px; border-radius: var(--r-md); background: var(--surface-2); line-height: 1.4; }
+.mz-empty > .i { flex: none; color: var(--green-ink); }
+.mz-empty span { display: flex; flex-direction: column; gap: 3px; }
+.mz-empty small { font-size: 14px; color: var(--ink-3); }
+.mz-links { display: grid; gap: 8px; }
+.mz-sh { margin: 0 0 12px; }
+.mz-sh__ar { margin: 0; font-family: var(--ar-font); font-size: 38px; line-height: 1.5; color: var(--ar-color); text-align: right; }
+.mz-sh__s { margin: 0; font-size: 14px; color: var(--ink-3); }
+.mz-sh__st { margin: 10px 0 0; padding: 10px 12px; border-radius: var(--r-sm); background: var(--surface-2); font-size: 14.5px; line-height: 1.45; color: var(--ink-2); }
+.mz-steps--page { padding: 0; margin: 4px 0 10px; }
+.page--mz-conseils .mz-advice__b { padding: 0 2px 8px; }
