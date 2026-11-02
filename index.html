@@ -48,6 +48,20 @@ header{background:#fff;border-bottom:1px solid var(--bordure);padding:calc(env(s
 .btn-main:disabled{background:#BBDCF3;box-shadow:none}
 nav{display:flex;gap:6px;padding:16px 16px 0}
 nav.deux{flex-direction:column;gap:6px}
+nav.bas{position:fixed;left:0;right:0;bottom:0;z-index:45;margin:0 auto;max-width:720px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;padding:6px 6px calc(env(safe-area-inset-bottom) + 8px);background:#fff;border-top:1px solid var(--bordure);box-shadow:0 -6px 20px rgba(15,34,51,.06)}
+nav.bas button{display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:0;border-radius:12px;padding:7px 2px 5px;font-size:11.5px;font-weight:700;color:#5B7387;overflow:visible}
+nav.bas button.on{color:var(--nuit);background:#EEF4F9}
+nav.bas button .navdot{position:absolute;top:2px;left:calc(50% + 6px);margin:0}
+body.probas{padding-bottom:calc(env(safe-area-inset-bottom) + 84px)}
+.plusliste{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.plusrow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:#fff;border:1px solid var(--bordure);border-radius:16px;padding:14px}
+.plusrow .pi{font-size:22px;width:36px;text-align:center}.plusrow .pt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.plusrow .pt small{color:var(--gris);font-size:12.5px}.plusrow .pc{font-size:22px;color:var(--gris)}
+.regles{margin:8px 0 4px;padding:10px 12px;border-radius:12px;background:#F0F6FB;border:1px solid #D6E5F1;font-size:13px;line-height:1.45}
+.lienmini{background:none;border:0;padding:0;color:#1479B8;font-weight:700;font-size:13px;text-decoration:underline}
+.otag{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:999px;vertical-align:middle}
+.o-site{background:#E2F3FB;color:#0E6A9A}.o-mail{background:#E6EEFB;color:#1F4FA3}.o-wa{background:#E3F6EA;color:#136C3A}.o-app{background:#EFEAFB;color:#5B3BA8}
+.jrow{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--bordure);padding:9px 2px;font-size:13px}
+.jrow .jd{color:var(--gris);font-size:12px}.jrow .jn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}.jrow .jp{text-align:right;font-weight:800}.jrow .jp small{display:block;font-weight:600;color:var(--gris);font-size:11px}
 nav.deux .r1,nav.deux .r2{display:flex;gap:6px}
 nav.deux button{padding:10px 2px;font-size:13px;font-weight:700}
 nav button{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;padding:10px 4px;border-radius:999px;font-size:13px;font-weight:700;background:#fff;border:1px solid var(--bordure)}
@@ -606,7 +620,7 @@ var DEFAULT_PRICING = {
 };
 
 var DEFAULT_SETTINGS = {
-  maxPerDay: 3,
+  maxPerDay: 2,
   morningStart: "09:00",
   afternoonStart: "14:00",
   defaultDuration: 120,
@@ -615,7 +629,7 @@ var DEFAULT_SETTINGS = {
   apiKey: "",
   sync: { url: "", anonKey: "" },
   reviewLink: "",
-  site: { actif: false, ouverture: "10:00", fermeture: "19:00", conseilles: ["10:00", "13:00", "16:00"], pas: 30, jours: [1, 2, 3, 4, 5, 6, 7], delaiJours: 1, horizonJours: 180, tampon: 30 },
+  site: { actif: false, ouverture: "10:00", fermeture: "18:00", dernierDepart: "15:00", conseilles: ["10:00", "13:00", "15:00"], pas: 30, jours: [1, 2, 3, 4, 6, 7], delaiJours: 1, horizonJours: 180, tampon: 30 },
   pricing: null,
   /* SOURCE UNIQUE des durées (minutes) : cette grille. L'agenda l'utilise
      pour placer les RDV et elle est publiée telle quelle vers le site
@@ -666,6 +680,16 @@ function mergeSettings(s) {
     }
     delete m.site.heures;
   }
+  /* v7 (3/11/2026, décision de Mohamed) : plus de réservation le vendredi, 2 réservations
+     par jour au maximum, départs entre 10h et 15h (fin du travail au plus tard 18h). Une fois. */
+  if ((m.site._v || 0) < 7) {
+    m.site.jours = m.site.jours.filter(function (j) { return j !== 5; });
+    m.site.ouverture = "10:00"; m.site.fermeture = "18:00"; m.site.dernierDepart = "15:00";
+    m.site.conseilles = ["10:00", "13:00", "15:00"];
+    m.maxPerDay = 2;
+    m.site._v = 7;
+  }
+  if (!m.site.dernierDepart) m.site.dernierDepart = "15:00";
   /* durées v2 (26/09/2026) : alignement agenda = site sur les durées
      validées par Mohamed. Une seule fois ; ses réglages ultérieurs sont respectés. */
   if ((m._durV || 0) < 2) {
@@ -2041,7 +2065,17 @@ var PRO_TABS = [["planning", "Planning"], ["messages", "Messages"], ["clients", 
 var PRO_TABS_1 = [["planning", "Planning"], ["messages", "Messages"], ["demandes", "Demandes"]];
 var PRO_TABS_2 = [["clients", "Clients"], ["devis", "Devis"], ["factures", "Factures"], ["revenus", "Revenus"]];
 var PERSO_TABS = [["tableau", "Tableau"], ["agenda", "Agenda"], ["taches", "Tâches"], ["docs", "Docs"]];
-var PRO_TAB_LABEL = { messages: "Messages", clients: "Clients", tableau: "Accueil", demandes: "Demandes du site", planning: "Planning", devis: "Devis", factures: "Factures", revenus: "Revenus", reglages: "Réglages" };
+var PRO_TAB_LABEL = { messages: "Messages", clients: "Clients", tableau: "Accueil", demandes: "Demandes", planning: "Planning", devis: "Devis", factures: "Factures", revenus: "Revenus", reglages: "Réglages", plus: "Plus" };
+/* 3/11/2026 (demande de Mohamed) : 4 onglets seulement en bas de l'écran ; Clients, Factures,
+   Messages et Réglages passent dans « Plus ». */
+var PRO_BAS = [
+  ["planning", "Planning", '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path>'],
+  ["demandes", "Demandes", '<path d="M22 12h-6l-2 3h-4l-2-3H2"></path><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"></path>'],
+  ["devis", "Devis", '<rect x="4" y="2" width="16" height="20" rx="2"></rect><path d="M8 6h8M8 10h2M12 10h2M16 10h0M8 14h2M12 14h2M8 18h8"></path>'],
+  ["revenus", "Revenus", '<path d="M3 3v18h18"></path><path d="M7 15l4-4 3 3 5-6"></path>'],
+  ["plus", "Plus", '<circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle>']
+];
+var PRO_PLUS = { clients: 1, factures: 1, messages: 1, reglages: 1, plus: 1 };
 var PERSO_TAB_LABEL = { tableau: "Tableau", agenda: "Agenda", taches: "Tâches", docs: "Docs & dossiers" };
 var CPT_TABS = [["apayer", "À payer"], ["situation", "Situation"], ["depenses", "Dépenses"], ["ventes", "Ventes"], ["tva", "TVA"], ["caisse", "Caisse"], ["revenus", "Mes revenus"], ["profil", "Profil"]];
 var CPT_TABS_1 = [["situation", "Situation"], ["apayer", "À payer"], ["ventes", "Ventes"], ["depenses", "Dépenses"]];
@@ -2090,15 +2124,38 @@ function renderChrome() {
       }).join("");
     }
     if (s === "pro") {
-      /* l'essentiel en haut, la gestion en dessous — deux rangées aérées */
-      nav.className = "deux";
-      nav.innerHTML = '<div class="r1">' + btns(PRO_TABS_1) + '</div><div class="r2">' + btns(PRO_TABS_2) + "</div>";
+      nav.className = "bas";
+      nav.innerHTML = PRO_BAS.map(function (t) {
+        var on = t[0] === "plus" ? !!PRO_PLUS[ui.tab] : ui.tab === t[0];
+        var pastille = (t[0] === "demandes" && nDem) ? '<i class="navdot">' + nDem + "</i>" : "";
+        return '<button class="' + (on ? "on" : "") + '" data-act="tab" data-tab="' + t[0] + '"' + (on ? ' aria-current="page"' : "") + '>' +
+          '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + t[2] + "</svg>" +
+          "<span>" + t[1] + "</span>" + pastille + "</button>";
+      }).join("");
     } else if (s === "cpt") {
       nav.className = "deux";
       nav.innerHTML = '<div class="r1">' + btns(CPT_TABS_1) + '</div><div class="r2">' + btns(CPT_TABS_2) + "</div>";
     } else nav.innerHTML = btns(tabs);
   }
-  if (fab) fab.style.display = "flex";
+  if (fab) fab.style.display = s === "pro" ? "none" : "flex";
+  if (cf && s === "pro") cf.style.display = "none"; /* plus d'assistant dans StayClean (3/11) */
+  document.body.classList.toggle("probas", s === "pro");
+}
+
+/* « Plus » : ce qui ne sert pas tous les jours (3/11/2026) */
+function renderPlus() {
+  var nCli = 0; try { nCli = (window.SCB && SCB.clients) ? SCB.clients().length : 0; } catch (e) {}
+  var L = [
+    ["clients", "👥", "Clients", nCli ? nCli + " clients · historique et paiements" : "Historique et paiements"],
+    ["factures", "🧾", "Factures", "Factures, notes de crédit, à payer"],
+    ["messages", "💬", "Messages", "Ancienne messagerie WhatsApp (lecture seule)"],
+    ["reglages", "⚙️", "Réglages", "Horaires, règles de réservation, prix, sauvegarde"]
+  ];
+  var h = '<div class="tdy-head"><h2>Plus</h2></div><div class="plusliste">';
+  L.forEach(function (x) {
+    h += '<button class="plusrow" data-act="tab" data-tab="' + x[0] + '"><span class="pi" aria-hidden="true">' + x[1] + '</span><span class="pt"><b>' + x[2] + "</b><small>" + x[3] + '</small></span><span class="pc" aria-hidden="true">›</span></button>';
+  });
+  return h + "</div>";
 }
 
 /* ---------------- Demandes venues du site stayclean.be ---------------- */
@@ -2111,37 +2168,78 @@ function demItemsHtml(dem) {
   return h;
 }
 
+function hTxt(x) { return String(x).replace(/:00$/, "h").replace(":", "h").replace(/^0/, ""); }
+/* Origine de chaque demande / RDV : pour tout retrouver (3/11/2026) */
+var ORIGINES = { site: ["Site", "o-site"], mail: ["Mail", "o-mail"], whatsapp: ["WhatsApp", "o-wa"], app: ["App", "o-app"], ia: ["WhatsApp (IA)", "o-wa"] };
+function origineDem(d) {
+  var m = String(d && d.message || "");
+  if (/R\u00e9serv\u00e9 avec l\u2019option e-mail|Réservé avec l'option e-mail|option e-mail/i.test(m)) return "mail";
+  if (/assistant|IA StayClean|cerveau/i.test(m)) return "ia";
+  return "site";
+}
+function origineBk(b) {
+  if (b.source === "site") {
+    var dm = b.demId != null ? findDem(b.demId) : null;
+    return dm ? origineDem(dm) : "site";
+  }
+  if (b.source === "whatsapp" || b.source === "mail") return b.source;
+  return "app";
+}
+function origineTag(o) { var x = ORIGINES[o] || ORIGINES.app; return '<span class="otag ' + x[1] + '">' + x[0] + "</span>"; }
+/* Journal : toutes les réservations (site, mail, app) des 60 derniers jours et à venir */
+function journalHtml() {
+  var lim = addDaysStr(todayStr(), -60), L = [], vusDem = {};
+  DB.bookings.forEach(function (b) {
+    if (!b.date || b.date < lim) return;
+    if (b.demId != null) vusDem[String(b.demId)] = true;
+    L.push({ date: b.date, heure: b.heure || "", nom: b.client || "Client", prix: b.total || 0, o: origineBk(b), st: b.statut === "annule" ? "Annulé" : b.statut === "termine" ? "Fait" : "Prévu", id: b.id });
+  });
+  (DB.dem || []).forEach(function (d) {
+    if (d.statut === "nouvelle" || vusDem[String(d.id)] || !d.jour || d.jour < lim) return;
+    L.push({ date: d.jour, heure: d.heure || "", nom: d.nom || "Client", prix: d.totalFinal != null ? d.totalFinal : (d.total || 0), o: origineDem(d), st: d.statut === "confirmee" ? "Confirmé" : d.statut === "refusee" ? "Refusé" : d.statut === "annulee" ? "Annulé" : d.statut });
+  });
+  if (!L.length) return "";
+  L.sort(function (a, b) { return (b.date + b.heure).localeCompare(a.date + a.heure); });
+  var n = { site: 0, mail: 0, app: 0, whatsapp: 0, ia: 0 };
+  L.forEach(function (x) { n[x.o] = (n[x.o] || 0) + 1; });
+  var h = '<section class="card tsec" style="margin-top:18px"><p class="k">Toutes les réservations <span class="cnt">' + L.length + "</span></p>" +
+    '<p class="note" style="margin:0 0 8px">60 derniers jours et à venir · ' + ["site", "mail", "app", "whatsapp"].filter(function (k) { return n[k]; }).map(function (k) { return n[k] + " " + ORIGINES[k][0]; }).join(" · ") + "</p>";
+  L.slice(0, 80).forEach(function (x) {
+    h += (x.id ? '<button class="jrow" data-act="detail" data-id="' + esc(x.id) + '">' : '<div class="jrow">') +
+      '<span class="jd tnum">' + esc(humanDate(x.date)) + (x.heure ? " · " + esc(x.heure) : "") + "</span>" +
+      '<span class="jn">' + esc(x.nom) + " " + origineTag(x.o) + "</span>" +
+      '<span class="jp tnum">' + euro(x.prix || 0) + '<small>' + esc(x.st) + "</small></span>" + (x.id ? "</button>" : "</div>");
+  });
+  return h + "</section>";
+}
+
 function renderDemandes() {
   var nouv = demNouvelles();
   var traitees = (DB.dem || []).filter(function (d) { return d.statut !== "nouvelle"; })
     .sort(function (a, b) { return (a.cree_le || "") < (b.cree_le || "") ? 1 : -1; }).slice(0, 8);
   var cfg = siteCfg();
-  var h = '<div class="tdy-head"><h2>Demandes du site</h2><span class="n">' + nouv.length + " à traiter</span></div>";
+  var h = '<div class="tdy-head"><h2>Demandes</h2><span class="n">' + nouv.length + " à traiter</span></div>";
+  var JC = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"], ferm = [];
+  for (var jj = 1; jj <= 7; jj++) if ((cfg.jours || []).indexOf(jj) === -1) ferm.push(JC[jj - 1]);
+  h += '<div class="regles"><b>Règles en ligne</b> · ' + DB.settings.maxPerDay + ' réservations par jour max · départs ' + esc(hTxt(cfg.ouverture || "10:00")) + "–" + esc(hTxt(cfg.dernierDepart || "15:00")) +
+    (ferm.length ? " · fermé : " + ferm.join(", ") : "") + ' <button class="lienmini" data-act="go-reglages">modifier</button></div>';
 
   if (!cfg.actif) {
     h += '<div class="disclaim">🔌 Les réservations en ligne ne sont pas encore activées. Va dans ⚙️ Réglages → « Réservations depuis le site » pour les allumer, une fois le script Supabase installé.</div>';
     return h;
   }
   h += '<button class="linkline" data-act="dem-refresh">🔄 Vérifier s’il y a de nouvelles demandes</button>';
-  var nExc = siteExceptions().length;
-  h += '<p class="qa-hint" style="text-align:center;margin-top:6px">Ton site accepte les réservations <b>sans limite de date</b> — seules tes ' + nExc + " journée" + (nExc > 1 ? "s" : "") + " occupée" + (nExc > 1 ? "s" : "") + " apparaissent complètes.</p>";
 
   if (!nouv.length) h += '<p class="libre" style="text-align:center;margin-top:22px;font-size:13px">Aucune demande en attente 👌</p>';
   nouv.forEach(function (d) {
     h += '<button class="demrow neuf" data-act="dem-open" data-id="' + esc(String(d.id)) + '">' +
-      '<span class="dh"><span class="dn">' + esc(d.nom || "Client") + '</span><span class="dp">' + euro(d.total || 0) + "</span></span>" +
+      '<span class="dh"><span class="dn">' + esc(d.nom || "Client") + " " + origineTag(origineDem(d)) + '</span><span class="dp">' + euro(d.total || 0) + "</span></span>" +
       '<span class="dq">📅 ' + humanDate(d.jour) + " à " + esc(d.heure) + "</span>" +
       '<span class="dq">📍 ' + esc(d.adresse || "adresse non fournie") + "</span>" +
       '<span class="dl">👉 À valider — vérifie la faisabilité et les frais de déplacement</span></button>';
   });
 
-  if (traitees.length) {
-    h += '<section class="card tsec" style="margin-top:18px"><p class="k">Déjà traitées <span class="cnt">' + traitees.length + "</span></p>";
-    traitees.forEach(function (d) {
-      h += '<div class="demline"><span>' + (d.statut === "confirmee" ? "✅ " : "✖️ ") + esc(d.nom || "Client") + " · " + humanDate(d.jour) + "</span><b class=\"tnum\">" + euro(d.totalFinal != null ? d.totalFinal : (d.total || 0)) + "</b></div>";
-    });
-    h += '<button class="linkline" data-act="dem-vider">🗑 Vider l’historique</button></section>';
-  }
+  h += journalHtml();
   h += '<div class="disclaim">Un créneau réservé sur le site est <b>bloqué immédiatement</b> pour que personne d’autre ne le prenne, mais le client sait qu’il attend ta confirmation. Si tu refuses, le créneau se rouvre automatiquement sur ton site.</div>';
   return h;
 }
@@ -3516,7 +3614,12 @@ function siteFenetresJour(jour) {
     libres = res;
   }
 
-  if (DB.bookings.filter(function (b) { return b.date === jour && b.statut !== "annule"; }).length >= DB.settings.maxPerDay) return [];
+  var nbJour = DB.bookings.filter(function (b) { return b.date === jour && b.statut !== "annule"; }).length +
+    demNouvelles().filter(function (d) { return d.jour === jour; }).length;
+  if (nbJour >= DB.settings.maxPerDay) return [];
+  /* jour fermé aux réservations en ligne (ex. vendredi) : rien à proposer */
+  var isoJ = ((new Date(jour + "T12:00:00").getDay() + 6) % 7) + 1;
+  if ((cfg.jours || []).indexOf(isoJ) === -1) return [];
 
   DB.bookings.forEach(function (b) {
     if (b.date !== jour || b.statut === "annule") return;
@@ -3625,6 +3728,8 @@ function sitePublierEtat() {
       conseilles: cfg.conseilles, pas: cfg.pas || 30, tampon: cfg.tampon || 30,
       durees: siteDurees(),
       joursSem: cfg.jours,
+      dernierDepart: cfg.dernierDepart || "15:00",
+      maxParJour: DB.settings.maxPerDay,
       delaiJours: Math.max(1, cfg.delaiJours || 1),
       dureeDefaut: DB.settings.defaultDuration || 120,
       maj: new Date().toISOString()
@@ -4754,6 +4859,7 @@ function renderReglages() {
     '<div class="set-row"><span>' + (SS.actif ? "🟢 Activées" : "⚫ Coupées") + '</span><button class="' + (SS.actif ? "b-cancel" : "b-done") + '" style="padding:9px 16px;border-radius:12px;font-weight:800" data-act="site-toggle">' + (SS.actif ? "Couper" : "Activer") + "</button></div>";
   if (SS.actif) {
     h += '<div class="set-row"><span>J\u2019ouvre \u00e0</span><input type="time" value="' + esc(SS.ouverture) + '" data-site="ouverture"></div>' +
+      '<div class="set-row"><span>Dernier d\u00e9part possible</span><input type="time" value="' + esc(SS.dernierDepart || "15:00") + '" data-site="dernierDepart"></div>' +
       '<div class="set-row"><span>Je termine au plus tard \u00e0</span><input type="time" value="' + esc(SS.fermeture) + '" data-site="fermeture"></div>' +
       '<div class="set-row"><span>Heures mises en avant</span><input value="' + esc(SS.conseilles.join(", ")) + '" data-site="conseilles" style="min-width:0;flex:1;max-width:170px" placeholder="10:00, 13:00, 16:00"></div>' +
       '<div class="set-row"><span>Autres d\u00e9parts toutes les (min)</span><input type="number" min="15" step="15" max="120" value="' + (SS.pas || 30) + '" data-site="pas"></div>' +
@@ -4882,6 +4988,7 @@ function renderMain() {
   else if (ui.tab === "factures") main.innerHTML = renderFactures();
   else if (ui.tab === "revenus") main.innerHTML = renderRevenus();
   else if (ui.tab === "reglages") main.innerHTML = renderReglages();
+  else if (ui.tab === "plus") main.innerHTML = renderPlus();
   else {
     /* 24/09 : le tableau de bord (devis en attente, en retard, factures) est retiré —
        StayClean s'ouvre directement sur le Planning. */
@@ -6433,7 +6540,7 @@ document.addEventListener("change", function (e) {
         .filter(function (x) { return /^\d{1,2}:\d{2}$/.test(x); })
         .map(function (x) { return pad(+x.split(":")[0]) + ":" + x.split(":")[1]; });
       S2.conseilles = hs.length ? hs.sort() : DEFAULT_SETTINGS.site.conseilles.slice();
-    } else if (siteF === "ouverture" || siteF === "fermeture") {
+    } else if (siteF === "ouverture" || siteF === "fermeture" || siteF === "dernierDepart") {
       if (/^\d{2}:\d{2}$/.test(t.value)) S2[siteF] = t.value;
     } else S2[siteF] = Math.max(0, Number(t.value) || 0);
     save(); renderMain();
