@@ -1,4 +1,4 @@
-var V = "stayclean-agenda-cache-v49";
+var V = "stayclean-agenda-cache-v50";
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 self.addEventListener("install", function (e) {
   self.skipWaiting();
@@ -45,6 +45,9 @@ self.addEventListener("fetch", function (e) {
   );
 });
 
+/* v50 (02/11/2026) — Mon Coran : apprendre les plus courtes d'abord (longueur réelle), le moins de versets d'abord ou
+   l'ordre des écoles ; date prévue de chaque sourate ; lecteur audio sur deux lignes sur téléphone. Même règle
+   « réseau d'abord ». */
 /* v49 (02/11/2026) — Mon Coran : 16 récitateurs — Maher Al-Muaiqly et les voix les plus aimées des auditeurs
    (EveryAyah, verset par verset), ▶ pour écouter chaque voix dans les réglages ; repères mot à mot quran-align pour
    6 d'entre elles (coran/data/timing/). Même règle « réseau d'abord ». */
