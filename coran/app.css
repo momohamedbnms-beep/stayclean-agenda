@@ -326,6 +326,9 @@ svg.i.lg { width: 30px; height: 30px; }
 .rate-btn:hover, .rate-btn:active { background: var(--soft); color: var(--soft-ink); }
 @media (max-width: 380px) { .player__in { padding-left: 12px; gap: 4px; } .rate-btn { min-width: 44px; } }
 body.has-player .page__inner { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+/* Sur les onglets (lecteur fermé, la récitation continue) : le lecteur se pose au-dessus de la barre du bas, sans la cacher */
+body.has-player:not(.has-page) .player { bottom: calc(90px + env(safe-area-inset-bottom, 0px)); }
+body.has-player:not(.has-page) .app { padding-bottom: calc(190px + env(safe-area-inset-bottom, 0px)); }
 
 /* ---------- Plein écran (immersif) ---------- */
 .immersive-exit { display: none; }
@@ -491,6 +494,9 @@ body.has-page .nav { display: none; }
 .toasts { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(96px + env(safe-area-inset-bottom, 0px)); z-index: 90; width: min(520px, calc(100% - 28px)); pointer-events: none; }
 body.has-page .toasts { bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
 body.has-player .toasts { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+body.has-player:not(.has-page) .toasts { bottom: calc(170px + env(safe-area-inset-bottom, 0px)); }
+/* Une feuille ouverte : le message passe en haut de l'écran, il ne couvre jamais ses boutons */
+body.has-sheet .toasts { top: calc(12px + env(safe-area-inset-top, 0px)); bottom: auto; }
 .toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 18px; background: #16302A; color: #EEF5F0; box-shadow: var(--shadow-2); font-size: 15px; line-height: 1.4; animation: up .25s var(--ease); }
 .toast.is-err { background: #5C1E16; }
 .toast__t { flex: 1; }

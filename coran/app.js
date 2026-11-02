@@ -1750,9 +1750,13 @@ function toast(msg, isErr, action) {
   Toast.timer = setTimeout(() => { el.remove(); Toast.action = null; }, isErr ? 6500 : action ? 6500 : 3200);
 }
 
+/* Retirer le message en cours (son « Annuler » ne vaut plus quand tu passes à autre chose) */
+function dismissToast() { clearTimeout(Toast.timer); Toast.action = null; const root = $('#toasts'); if (root) root.innerHTML = ''; }
+
 /* --- Feuilles (bottom sheets) --- */
 const SHEETS = {};
 function openSheet(name, props = {}) {
+  dismissToast();   // un message resté à l'écran couvrirait les boutons de la feuille (et son « Annuler » sous ton doigt)
   UI.sheets.push({ name, props, key: uid('s'), opener: document.activeElement });
   renderSheets();
   const s = $('#sheets .sheet-wrap:last-child .sheet');
@@ -2236,11 +2240,15 @@ function revInfo(s) {
   const due = last ? addDays(last, step) : today;
   return { s, here, since, rev, n, step, due, isDue: due <= today };
 }
-/* Mes sourates en chiffres : connues, en cours, à réviser, à apprendre */
-function mzBilan() {
+/* Mes sourates en chiffres : connues, en cours, à réviser, à apprendre.
+   « À apprendre » : ta sourate en cours (ou la prochaine) d'abord, puis celles que tu as commencées, puis l'ordre du parcours */
+function mzBilan(c) {
   const known = SURA_ORDER.filter((s) => suraKnown(s));
-  const todo = SURA_ORDER.filter((s) => !suraKnown(s));
-  const started = todo.filter((s) => { const t = unitStat(suraParts(s)); return t.st === 'learning' || t.st === 'partial'; });
+  const rest = SURA_ORDER.filter((s) => !suraKnown(s));
+  const started = rest.filter((s) => { const t = unitStat(suraParts(s)); return t.st === 'learning' || t.st === 'partial'; });
+  const cur = c && c.r && !suraKnown(c.r[0]) ? c.r[0] : null;
+  const first = (cur ? [cur] : []).concat(started.filter((s) => s !== cur));
+  const todo = first.concat(rest.filter((s) => !first.includes(s)));
   const infos = known.map((s) => revInfo(s));
   const rev = infos.filter((x) => x.isDue).sort((a, b) => a.due.localeCompare(b.due) || SURA_ORDER.indexOf(a.s) - SURA_ORDER.indexOf(b.s));
   const amma = SURA_ORDER.filter((s) => s === 1 || s >= 78);
@@ -2251,7 +2259,7 @@ function bilanHTML(B) {
   return `<section class="mz-bilan" data-anchor="bilan" aria-label="Mes sourates en chiffres">
       <div class="mz-bilan__nums">
         <button type="button" class="mz-num mz-num--known" data-act="mz-tab" data-tab="known"><b>${B.known.length}</b><span>${plural(B.known.length, 'connue', 'connues')}</span></button>
-        <button type="button" class="mz-num mz-num--cur" data-act="mz-scroll" data-to="moment"><b>${B.started.length}</b><span>en cours</span></button>
+        <button type="button" class="mz-num mz-num--cur" data-act="mz-tab" data-tab="todo"><b>${B.started.length}</b><span>en cours</span></button>
         <button type="button" class="mz-num mz-num--rev" data-act="mz-tab" data-tab="rev"><b>${B.rev.length}</b><span>à réviser</span></button>
       </div>
       ${mzBar(inAmma ? B.ammaK / B.ammaN : B.known.length / 114)}
@@ -2298,7 +2306,8 @@ function listsHTML(B, c) {
     body = B.known.length ? `<ul class="mz-list">${B.infos.map((x) => knownRow(x)).join('')}</ul>`
       : empty('Aucune sourate cochée pour l’instant.', 'Dans « À apprendre », touche ✓ à côté de celles que tu sais déjà par cœur.');
   } else {
-    hint = 'Dans l’ordre proposé, de la fin du Coran vers le début. Touche ✓ à côté de celles que tu connais déjà.';
+    hint = B.started.length ? 'En haut, celles en cours ; ensuite l’ordre proposé, de la fin du Coran vers le début. Touche ✓ à côté de celles que tu connais déjà.'
+      : 'Dans l’ordre proposé, de la fin du Coran vers le début. Touche ✓ à côté de celles que tu connais déjà.';
     const shown = UI.mzAll ? B.todo : B.todo.slice(0, MZ_SHOW); const proj = projection(c);
     body = B.todo.length ? `<ul class="mz-list">${shown.map((s) => todoRow(s, c)).join('')}</ul>
         ${B.todo.length > shown.length ? `<button type="button" class="btn btn--ghost btn--block" data-act="mz-all">Afficher les ${B.todo.length - shown.length} autres sourates</button>` : ''}
@@ -2331,7 +2340,8 @@ SHEETS['mz-sura'] = {
     } else {
       const us = suraUnits(s); const t = unitStat(suraParts(s));
       status = `${t.st === 'learning' || t.st === 'partial' ? 'Commencée' : 'Pas encore apprise'} · objectif proposé : ${fmtDur(goalDays(todoW(us.find((u) => !isKnownR(u)) || us[0])))}${us.length > 1 ? ` par partie (${us.length} parties)` : ''}`;
-      acts = opt('mz-start', 'play', 'Commencer cette sourate', 'Elle devient ta sourate en cours, avec un objectif')
+      const a = activeGoal();
+      acts = opt('mz-start', 'play', 'Commencer cette sourate', a && a.r[0] !== s ? `Elle devient ta sourate en cours ; ${unitName(a.r)} est mise en pause` : 'Elle devient ta sourate en cours, avec un objectif')
         + opt('mz-know', 'check', 'Je la connais déjà', 'Elle passe dans « Connues »')
         + opt('mz-open', 'book-open', 'L’écouter et la lire', '');
     }
@@ -2407,7 +2417,7 @@ SHEETS['mz-pick'] = {
     const a = activeGoal();
     const list = SURA_ORDER.filter((s) => !suraKnown(s) && !(a && a.r[0] === s));
     return { title: 'Choisir une autre sourate', body: `
-      <p class="sub">Elle devient ta sourate du moment, avec un objectif. Ensuite, l’appli reprend l’ordre proposé.</p>
+      <p class="sub">Elle devient ta sourate en cours, avec un objectif${a ? ` ; ${esc(unitName(a.r))} est mise en pause` : ''}. Ensuite, l’appli reprend l’ordre proposé.</p>
       <ul class="slist slist--pick">${list.map((s) => { const m = suraMeta(s); const us = suraUnits(s); const r = us.find((u) => !isKnownR(u)) || us[0];
         return `<li><button type="button" class="srow" data-act="mz-start" data-s="${s}" data-a1="${r[1]}" data-a2="${r[2]}">${suraBadge(s)}<span class="srow__main"><span class="srow__name">${esc(m.name)}</span><span class="srow__sub">${m.ayas} versets · ≈ ${esc(fmtDur(goalDays(todoW(r))))}${us.length > 1 ? ` (partie ${us.indexOf(r) + 1} sur ${us.length})` : ''}</span></span><span class="srow__ar" lang="ar" dir="rtl" translate="no">${esc(m.ar)}</span></button></li>`; }).join('')}</ul>` };
   },
@@ -2489,7 +2499,7 @@ function renderLearn() {
   const root = $('#tab-learn');
   if (!Content.index) { swapHTML(root, topbarMain() + (Content.indexError ? bootError() : '<div class="loading"><span class="spin"></span></div>')); return; }
   if (!Groups.d) { groupsLoading(root); return; }
-  const c = curUnit(); const B = mzBilan();
+  const c = curUnit(); const B = mzBilan(c);
   swapHTML(root, `${topbarMain()}
     <h1 class="screen-title">Mémoriser le Coran</h1>
     <p class="mz-lede">Coche ce que tu connais : l’appli te dit quoi apprendre et quoi réviser.</p>
@@ -3953,7 +3963,8 @@ ACT['mz-start'] = async (el) => {
   }
   const g = await startUnit(r, before);
   renderAll();
-  toast(`${unitName(r)} : c’est parti, objectif ${dayName(goalDue(g))}.`, false, { label: 'Annuler', fn: async () => { await undoStatus(before); renderAll(); toast('Changement annulé.'); } });
+  const paused = a && !sameR(a.r, r) ? ` ${unitName(a.r)} est mise en pause.` : '';
+  toast(`${unitName(r)} : c’est parti, objectif ${dayName(goalDue(g))}.${paused}`, false, { label: 'Annuler', fn: async () => { await undoStatus(before); renderAll(); toast('Changement annulé.'); } });
 };
 /* Mes sourates : cocher, décocher */
 ACT['mz-know'] = async (el) => {
