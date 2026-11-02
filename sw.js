@@ -1,4 +1,4 @@
-var V = "stayclean-agenda-cache-v45";
+var V = "stayclean-agenda-cache-v46";
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 self.addEventListener("install", function (e) {
   self.skipWaiting();
@@ -45,6 +45,9 @@ self.addEventListener("fetch", function (e) {
   );
 });
 
+/* v46 (02/11/2026) — Mon Coran : sauvegarde sans rien installer — tant que la table qr_items n'existe pas, la progression
+   suit sur tous les appareils via l'espace de fichiers privé du compte (bucket mp-files, dossier « mon-coran ») ;
+   bascule automatique vers la table dès qu'elle existe. Même règle « réseau d'abord ». */
 /* v45 (02/11/2026) — Mon Coran : « Mémoriser » sourate par sourate (ta sourate du moment avec un objectif en jours,
    « Je la connais » passe à la suivante, liste « Mes sourates » à cocher, réviser, conseils et hadiths sur l'ordre) ;
    la carte de l'agenda affiche la sourate en cours et son objectif. Même règle « réseau d'abord ». */

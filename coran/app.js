@@ -469,6 +469,8 @@ async function loadLocal(owner) {
     }
     Store.session = (await idbGet('kv', owner + '|session')) || null;
     Sync.since = (await idbGet('kv', owner + '|since')) || null;
+    const fs = await idbGet('kv', owner + '|files');   // sauvegarde dans l'espace de fichiers privé (voir FILES)
+    FILES.on = false; FILES.checkedAt = 0; FILES.used = !!(fs && fs.used); FILES.etags = fs && fs.etags && typeof fs.etags === 'object' ? fs.etags : {};
     Store.idbOk = true;
   } catch (e) { storageFailed(true); }
   Store.ready = true;
@@ -524,7 +526,7 @@ function canon(v) {
 const sameData = (a, b) => canon(a || {}) === canon(b || {});
 function dirtyCount() { let n = 0; Store.items.forEach((it) => { if (it.dirty) n++; }); return n; }
 function setSyncState(st, err) { Sync.state = st; Sync.error = err || null; scheduleRender(); }
-const settledState = () => (Sync.blocked.size ? 'outdated' : dirtyCount() ? 'pending' : 'synced');
+const settledState = () => (Sync.blocked.size && !FILES.on ? 'outdated' : dirtyCount() ? 'pending' : 'synced');
 function overlapISO(since) { const t = Date.parse(since); return Number.isFinite(t) ? new Date(t - 120000).toISOString() : since; }
 /* Une ligne reçue du compte, comparée à ce que l'appareil a déjà */
 function receiveRow(r) {
@@ -553,27 +555,132 @@ function receiveRow(r) {
   idbPut('items', idbItemKey(r.kind, r.id), it).catch(() => {});
   return true;
 }
+/* --- Sauvegarde sans rien installer : tant que la table qr_items n'existe pas sur le compte, la progression part dans
+   l'espace de fichiers privé du même compte, déjà installé pour Ma Paperasse (bucket « mp-files », dossier
+   « <ton identifiant>/mon-coran/ » ; ses règles RLS : toi seul y lis et y écris ; Ma Paperasse n'y regarde jamais).
+   Un fichier par nature (tentatives et réponses de l'arabe en 16 morceaux), chaque élément avec sa date de
+   modification. Envoi : on relit le fichier, on fusionne avec les mêmes règles que la table, on réécrit le tout.
+   Si deux appareils écrivent le même fichier au même moment, celui dont des éléments manquent les renvoie à la
+   synchro suivante : rien ne se perd. Toutes les 10 minutes, l'appli regarde si la table existe ; dès qu'elle
+   existe, elle y bascule seule et y envoie tout. --- */
+const FILES = { bucket: 'mp-files', on: false, used: false, etags: {}, checkedAt: 0 };
+const FILES_RECHECK = 10 * 60000;
+const FILE_SHARDS = { attempt: 16, ar_att: 16 };
+function strHash(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return Math.abs(h); }
+const fileOf = (kind, id) => (FILE_SHARDS[kind] ? `${kind}.${strHash(String(id)) % FILE_SHARDS[kind]}.json` : `${kind}.json`);
+const filesDir = () => `${Store.uid}/mon-coran`;
+function filesErr(error) {
+  if (!error) return { code: 'unknown' };
+  if (error.code && ['network', 'not_installed', 'session_expired', 'too_large', 'unavailable'].includes(error.code)) return error;
+  if (isNetErr(error)) return { code: 'network' };
+  const st = Number(error.status || 0); const sc = String(error.statusCode || ''); const msg = String(error.message || error.error || '');
+  if (st === 401 || /jwt|invalid token|exp claim/i.test(msg)) return { code: 'session_expired' };
+  if (st === 413 || sc === '413') return { code: 'too_large' };
+  if (st >= 500 || Number(sc) >= 500) return { code: 'unavailable', detail: msg };
+  return { code: 'not_installed', detail: msg };   // pas d'espace de fichiers privé utilisable (bucket absent, règles…) : on reste sur l'appareil
+}
+function filesSave() { idbPut('kv', Store.owner + '|files', { used: FILES.used, etags: FILES.etags }).catch(() => {}); }
+/* Un fichier : { id: { d: données, x: supprimé, lu: date de modification } } ; null s'il n'existe pas encore */
+async function filesRead(name) {
+  const { data, error } = await Host.sb.storage.from(FILES.bucket).download(`${filesDir()}/${name}`, { cacheNonce: Date.now() });
+  if (error) {
+    const msg = String(error.message || error.error || '');
+    if (!/bucket not found/i.test(msg) && (Number(error.status) === 404 || String(error.statusCode) === '404' || /object not found|not_found|not found/i.test(msg))) return null;
+    throw filesErr(error);
+  }
+  let j = null; try { j = JSON.parse(await data.text()); } catch (e) { /* fichier illisible : réécrit au prochain envoi */ }
+  return j && j.items && typeof j.items === 'object' ? j.items : {};
+}
+function receiveFileItems(kind, items) {
+  let changed = false;
+  for (const [id, x] of Object.entries(items)) {
+    if (!x || typeof x !== 'object') continue;
+    if (receiveRow({ kind, id, data: Object.assign({}, x.d && typeof x.d === 'object' ? x.d : {}, { _lu: Number(x.lu) || 0 }), deleted: !!x.x })) changed = true;
+  }
+  return changed;
+}
+function markDirty(it) { it.dirty = true; idbPut('items', idbItemKey(it.kind, it.id), it).catch(() => {}); }
+async function filesPull() {
+  const { data: list, error } = await Host.sb.storage.from(FILES.bucket).list(filesDir(), { limit: 1000 });
+  if (error) throw filesErr(error);
+  let changed = false; const present = new Set();
+  for (const f of list || []) {
+    const m = /^([a-z_]+)(?:\.\d+)?\.json$/.exec(f.name || ''); if (!m || !KINDS.includes(m[1])) continue;
+    present.add(f.name);
+    const tag = String((f.metadata && (f.metadata.eTag || f.metadata.etag)) || f.updated_at || '');
+    if (tag && FILES.etags[f.name] === tag) continue;
+    const items = await filesRead(f.name); if (!items) continue;
+    if (receiveFileItems(m[1], items)) changed = true;
+    // ce que cet appareil croyait envoyé mais qui manque dans le fichier (deux envois en même temps) repart
+    Store.items.forEach((it) => { if (it.kind === m[1] && !it.dirty && fileOf(it.kind, it.id) === f.name && !items[it.id]) markDirty(it); });
+    FILES.etags[f.name] = tag;
+  }
+  // éléments dont le fichier n'existe pas encore sur le compte : ils partent au prochain envoi
+  Store.items.forEach((it) => { if (!it.dirty && !present.has(fileOf(it.kind, it.id))) markDirty(it); });
+  filesSave();
+  return changed;
+}
+async function filesPush(dirty) {
+  const files = new Map();
+  for (const it of dirty) files.set(fileOf(it.kind, it.id), it.kind);
+  for (const [name, kind] of files) {
+    const remote = await filesRead(name);                      // ce qu'un autre appareil a pu écrire entre-temps
+    if (remote && receiveFileItems(kind, remote)) emitChange();
+    const out = {};
+    Store.items.forEach((it) => { if (it.kind === kind && fileOf(kind, it.id) === name) out[it.id] = { d: it.deleted ? {} : it.data, x: !!it.deleted, lu: it.lu || 0 }; });
+    const { error } = await Host.sb.storage.from(FILES.bucket).upload(`${filesDir()}/${name}`, JSON.stringify({ v: 1, kind, items: out }), { upsert: true, contentType: 'application/json', cacheControl: '0' });
+    if (error) throw filesErr(error);
+    for (const [id, x] of Object.entries(out)) {
+      const cur = Store.items.get(itemKey(kind, id));
+      if (cur && cur.dirty && (cur.lu || 0) === x.lu) { cur.dirty = false; idbPut('items', idbItemKey(kind, id), cur).catch(() => {}); }
+    }
+    delete FILES.etags[name];   // relu à la prochaine synchro (sans effet si rien n'a changé)
+  }
+  filesSave();
+}
+/* Pas de table : l'espace de fichiers privé prend le relais */
+function useFiles() { FILES.checkedAt = Date.now(); if (!FILES.on || !FILES.used) { FILES.on = true; FILES.used = true; filesSave(); } }
+/* La table existe (enfin) : tout ce qui n'était que dans les fichiers y part */
+function leaveFiles() {
+  const was = FILES.used; FILES.on = false;
+  if (!was) return;
+  FILES.used = false; filesSave();
+  Store.items.forEach((it) => { if (!it.dirty) markDirty(it); });
+}
+async function tablePull() {
+  const since = Sync.since; const all = [];
+  for (let from = 0; ; from += 1000) {
+    let q = Host.sb.from(QR_TABLE).select('kind,id,data,deleted,updated_at').eq('user_id', Store.uid).order('updated_at', { ascending: true }).range(from, from + 999);
+    q = since ? q.gte('updated_at', overlapISO(since)) : q.eq('deleted', false);
+    const { data, error } = await q;
+    if (error) throw sbErr(error, 'unavailable');
+    all.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  let changed = false;
+  for (const r of all) {
+    if (r.updated_at && (!Sync.since || Date.parse(r.updated_at) > Date.parse(Sync.since))) Sync.since = r.updated_at;
+    if (!KINDS.includes(r.kind)) continue;
+    if (receiveRow(r)) changed = true;
+  }
+  idbPut('kv', Store.owner + '|since', Sync.since).catch(() => {});
+  return changed;
+}
 async function pullNow() {
   if (!Host.sb || !Store.uid) return;
   if (Sync.pulling) return Sync.pulling;
   Sync.pulling = (async () => {
     try {
-      const since = Sync.since; const all = [];
-      for (let from = 0; ; from += 1000) {
-        let q = Host.sb.from(QR_TABLE).select('kind,id,data,deleted,updated_at').eq('user_id', Store.uid).order('updated_at', { ascending: true }).range(from, from + 999);
-        q = since ? q.gte('updated_at', overlapISO(since)) : q.eq('deleted', false);
-        const { data, error } = await q;
-        if (error) throw sbErr(error, 'unavailable');
-        all.push(...(data || []));
-        if (!data || data.length < 1000) break;
+      let changed;
+      if (FILES.on && Date.now() - FILES.checkedAt < FILES_RECHECK) changed = await filesPull();
+      else {
+        try { changed = await tablePull(); leaveFiles(); }
+        catch (e) {
+          if (sbErr(e, 'unavailable').code !== 'not_installed') throw e;
+          changed = await filesPull();
+          useFiles();
+        }
       }
-      let changed = false;
-      for (const r of all) {
-        if (r.updated_at && (!Sync.since || Date.parse(r.updated_at) > Date.parse(Sync.since))) Sync.since = r.updated_at;
-        if (!KINDS.includes(r.kind)) continue;
-        if (receiveRow(r)) changed = true;
-      }
-      idbPut('kv', Store.owner + '|since', Sync.since).catch(() => {});
       Sync.lastOk = Date.now(); Sync.refreshTried = false; Host.online = true;
       setSyncState(settledState());
       if (changed) emitChange();
@@ -602,24 +709,15 @@ function schedulePush() {
 async function pushNow() {
   if (!Host.sb || !Store.uid || ['not_installed', 'signedout', 'local'].includes(Sync.state)) return;
   if (Sync.pushing) { schedulePush(); return Sync.pushing; }
-  const dirty = []; Store.items.forEach((it) => { if (it.dirty && !Sync.blocked.has(it.kind)) dirty.push(it); });
+  const dirty = []; Store.items.forEach((it) => { if (it.dirty && (FILES.on || !Sync.blocked.has(it.kind))) dirty.push(it); });
   if (!dirty.length) { if (Sync.state === 'pending' || Sync.state === 'connecting') setSyncState(settledState()); return; }
   if (navigator.onLine === false) { setSyncState('offline'); return; }
   Sync.pushing = (async () => {
     try {
-      const byKind = new Map();
-      for (const it of dirty) { if (!byKind.has(it.kind)) byKind.set(it.kind, []); byKind.get(it.kind).push(it); }
-      for (const [kind, list] of byKind) {
-        for (let i = 0; i < list.length; i += 200) {
-          const batch = list.slice(i, i + 200);
-          const rows = batch.map((it) => ({ user_id: Store.uid, kind: it.kind, id: it.id, data: it.deleted ? { _lu: it.lu } : Object.assign({}, it.data, { _lu: it.lu }), deleted: !!it.deleted }));
-          const { error } = await Host.sb.from(QR_TABLE).upsert(rows, { onConflict: 'user_id,kind,id' });
-          if (error) { const err = sbErr(error, 'unavailable'); if (err.code === 'outdated') { Sync.blocked.add(kind); break; } throw err; }
-          for (const it of batch) {
-            const cur = Store.items.get(itemKey(it.kind, it.id));
-            if (cur && cur.lu === it.lu) { cur.dirty = false; idbPut('items', idbItemKey(it.kind, it.id), cur).catch(() => {}); }
-          }
-        }
+      if (FILES.on) await filesPush(dirty);
+      else {
+        try { await tablePush(dirty); }
+        catch (e) { if (sbErr(e, 'unavailable').code !== 'not_installed') throw e; await filesPush(dirty); useFiles(); }
       }
       Host.online = true; Sync.lastOk = Date.now();
       setSyncState(settledState());
@@ -632,6 +730,22 @@ async function pushNow() {
     } finally { Sync.pushing = null; }
   })();
   return Sync.pushing;
+}
+async function tablePush(dirty) {
+  const byKind = new Map();
+  for (const it of dirty) { if (!byKind.has(it.kind)) byKind.set(it.kind, []); byKind.get(it.kind).push(it); }
+  for (const [kind, list] of byKind) {
+    for (let i = 0; i < list.length; i += 200) {
+      const batch = list.slice(i, i + 200);
+      const rows = batch.map((it) => ({ user_id: Store.uid, kind: it.kind, id: it.id, data: it.deleted ? { _lu: it.lu } : Object.assign({}, it.data, { _lu: it.lu }), deleted: !!it.deleted }));
+      const { error } = await Host.sb.from(QR_TABLE).upsert(rows, { onConflict: 'user_id,kind,id' });
+      if (error) { const err = sbErr(error, 'unavailable'); if (err.code === 'outdated') { Sync.blocked.add(kind); break; } throw err; }
+      for (const it of batch) {
+        const cur = Store.items.get(itemKey(it.kind, it.id));
+        if (cur && cur.lu === it.lu) { cur.dirty = false; idbPut('items', idbItemKey(it.kind, it.id), cur).catch(() => {}); }
+      }
+    }
+  }
 }
 async function syncNow() { await pullNow(); await pushNow(); }
 /* Première connexion sur cet appareil : la progression faite sans compte est rattachée au compte. */
@@ -3394,6 +3508,7 @@ PAGES.settings = {
         <p class="sync-line sync-line--${sl.tone}">${icon(sl.tone === 'ok' ? 'cloud' : 'phone', 'sm')}<span>${esc(sl.text)}</span></p>
         ${!Store.idbOk ? `<p class="notice notice--warn">${icon('alert')}<span>Ce navigateur refuse le stockage local : ta progression risque de ne pas être gardée après fermeture. Ouvre l’appli depuis son icône, hors navigation privée.</span></p>` : ''}
         ${Store.uid && Host.email && ['synced', 'pending', 'offline'].includes(Sync.state) ? `<p class="fine">Compte : ${esc(Host.email)}</p>` : ''}
+        ${FILES.on && ['synced', 'pending', 'offline'].includes(Sync.state) ? '<p class="fine">Ta progression est gardée dans ton espace privé de fichiers, sur ton compte (rien à installer). Tes autres appareils la retrouvent de la même façon.</p>' : ''}
         <div class="row-btns">
           ${Sync.state === 'signedout' ? `<button type="button" class="btn btn--primary btn--sm" data-act="sheet" data-sheet="account">${icon('user-check', 'sm')}Me connecter</button>` : ''}
           ${['not_installed', 'outdated'].includes(Sync.state) ? `<button type="button" class="btn btn--primary btn--sm" data-act="sheet" data-sheet="sync-install">${icon('cloud', 'sm')}${Sync.state === 'outdated' ? 'Mettre à jour la sauvegarde' : 'Activer la sauvegarde en ligne'}</button>` : ''}
@@ -4087,7 +4202,7 @@ ACT['sync-copy-sql'] = async () => {
 };
 ACT['sync-check'] = async (el) => {
   const done = busy(el, 'Vérification…');
-  Sync.blocked.clear();
+  Sync.blocked.clear(); FILES.checkedAt = 0;   // regarder tout de suite si la table existe
   if (Host.sb && Store.uid) { setSyncState('connecting'); await syncNow(); } else await connectAccount();
   done();
   if (Sync.state === 'synced' || Sync.state === 'pending') { closeAllSheets(); toast('C’est activé : ta progression est envoyée sur ton compte et te suit sur tous tes appareils.'); }
@@ -4331,7 +4446,7 @@ async function boot() {
 /* Retour sur la page depuis l'historique : on rafraîchit */
 window.addEventListener('pageshow', (e) => { if (!e.persisted) return; refreshAgendaDB(); scheduleRender(); resumeSync(); });
 /* Accès pour le banc d'essai automatisé (aucune donnée réelle) */
-window.__QR = { Store, Content, Player, Sync, UI, prefs, put, MERGE, syncNow, connectAccount, sameData, reciterId, selfKnown, dueReviews, buildSession, scheduleAfter, refreshMilestones, progressOf, verseChunks, searchSuras, versesOfPage, pageOfVerse, surahState, milestoneCount, stopAudio, Groups, loadGroups, unitStat, setStatus, whereAmI, suraKnown, juzParts, suraParts, allParts, curUnit, activeGoal, suraUnits, pathFlat, goalDays, goalDue, unitName, todoW, SURA_ORDER, setToday: (iso) => { _todayOverride = iso; scheduleRender(); }, renderAll };
+window.__QR = { Store, Content, Player, Sync, UI, prefs, put, MERGE, syncNow, connectAccount, sameData, reciterId, selfKnown, dueReviews, buildSession, scheduleAfter, refreshMilestones, progressOf, verseChunks, searchSuras, versesOfPage, pageOfVerse, surahState, milestoneCount, stopAudio, Groups, loadGroups, unitStat, setStatus, whereAmI, suraKnown, juzParts, suraParts, allParts, curUnit, activeGoal, suraUnits, pathFlat, goalDays, goalDue, unitName, todoW, SURA_ORDER, FILES, fileOf, setToday: (iso) => { _todayOverride = iso; scheduleRender(); }, renderAll };
 boot();
 
 })();

@@ -4,7 +4,9 @@
 3. téléphone et Mac qui ont avancé chacun de leur côté (arabe : étapes, examens ; Coran : statuts, séance guidée)
    → tout est fusionné, rien n'est perdu, même quand les deux envoient en même temps ;
 4. appareil sans agenda ni session → « Me connecter » dans Mon Coran (mauvais mot de passe, puis le bon) ;
-5. installation ancienne (natures de l'arabe refusées) → le reste part, bandeau « Mettre à jour », puis tout part."""
+5. installation ancienne (natures de l'arabe refusées) → le reste part, bandeau « Mettre à jour », puis tout part ;
+6. table absente mais espace de fichiers privé du compte disponible (bucket mp-files) → tout suit quand même, sans rien
+   installer ; deux envois en même temps → rien ne se perd ; la table arrive → l'appli y bascule et y envoie tout."""
 from qa import *
 import sys, json, base64, time, urllib.parse, datetime
 
@@ -35,6 +37,9 @@ class Fake:
         self.posts = 0
         self.clock = 0
         self.logins = []
+        self.storage = False        # espace de fichiers privé (bucket mp-files) disponible ?
+        self.files = {}             # chemin → { body, etag, updated_at }
+        self.uploads = 0
     def now(self):
         self.clock += 1
         return (datetime.datetime(2026, 10, 27, 12, 0, 0) + datetime.timedelta(milliseconds=self.clock)).isoformat() + 'Z'
@@ -51,6 +56,30 @@ class Fake:
                 if body.get('password') != 'bon-mot-de-passe':
                     return route.fulfill(status=400, headers=cors, body=json.dumps({'code': 400, 'error_code': 'invalid_credentials', 'msg': 'Invalid login credentials'}))
             return route.fulfill(status=200, headers=cors, body=json.dumps(SESSION))
+        NO_BUCKET = json.dumps({'statusCode': '404', 'error': 'Bucket not found', 'message': 'Bucket not found'})
+        if u.path.startswith('/storage/v1/object/list/'):
+            if not self.storage or u.path.rsplit('/', 1)[-1] != 'mp-files': return route.fulfill(status=400, headers=cors, body=NO_BUCKET)
+            prefix = (json.loads(req.post_data or '{}').get('prefix') or '').strip('/')
+            assert prefix.split('/')[0] == UID, prefix
+            out = []
+            for path, f in sorted(self.files.items()):
+                d, _, name = path.rpartition('/')
+                if d == prefix: out.append({'name': name, 'id': 'f-' + name, 'updated_at': f['updated_at'], 'created_at': f['updated_at'], 'metadata': {'eTag': f['etag'], 'size': len(f['body']), 'mimetype': 'application/json'}})
+            return route.fulfill(status=200, headers=cors, body=json.dumps(out))
+        if u.path.startswith('/storage/v1/object/mp-files/'):
+            if not self.storage: return route.fulfill(status=400, headers=cors, body=NO_BUCKET)
+            path = urllib.parse.unquote(u.path[len('/storage/v1/object/mp-files/'):])
+            assert path.split('/')[0] == UID, path   # toujours dans le dossier du compte
+            if req.method == 'GET':
+                f = self.files.get(path)
+                if not f: return route.fulfill(status=400, headers=cors, body=json.dumps({'statusCode': '404', 'error': 'not_found', 'message': 'Object not found'}))
+                return route.fulfill(status=200, headers=cors, body=f['body'])
+            if req.method in ('POST', 'PUT'):
+                if path in self.files and req.headers.get('x-upsert') != 'true':
+                    return route.fulfill(status=400, headers=cors, body=json.dumps({'statusCode': '409', 'error': 'Duplicate', 'message': 'The resource already exists'}))
+                self.uploads += 1
+                self.files[path] = {'body': req.post_data or '', 'etag': '"%d"' % self.uploads, 'updated_at': self.now()}
+                return route.fulfill(status=200, headers=cors, body=json.dumps({'Id': 'f%d' % self.uploads, 'Key': 'mp-files/' + path}))
         if u.path.startswith('/rest/v1/qr_items'):
             if not self.installed:
                 return route.fulfill(status=404, headers=cors, body=json.dumps({'code': 'PGRST205', 'details': None, 'hint': None, 'message': "Could not find the table 'public.qr_items' in the schema cache"}))
@@ -258,7 +287,51 @@ with sync_playwright() as p:
     errs_o = real_errors(e.errors)
     e.close()
 
-    allerr = errs_a + errs_b + errs_pm + errs_n + errs_o
+    # ---------- 6. Table absente, espace de fichiers privé disponible : la progression suit sans rien installer ----------
+    fake.installed = False; fake.kinds = None; fake.storage = True; fake.rows.clear(); fake.files.clear()
+    PROG = f'{UID}/mon-coran/progress.json'
+    def fprog(): return json.loads(fake.files[PROG]['body'])['items'] if PROG in fake.files else {}
+    e = Env(p, supabase=setup)
+    pg = e.open(); pg.wait_for_timeout(2500)
+    check('appareil A, table absente : l’espace privé prend le relais (synchronisé, aucun bandeau)', state(e) == 'synced' and e.js("() => window.__QR.FILES.on") and pg.locator('#tab-learn .sync-banner').count() == 0, state(e))
+    e.js("""async () => { const Q = window.__QR; await Q.loadGroups(); await Q.setStatus([[112, 1, 4]], 'known');
+      await Q.put('ar_att', 'att-f1', { at: '2026-11-02T18:00:00Z', d: '2026-11-02', t: 'nom', sk: 'nom', lv: 1, key: 'L:ta', ok: 1, g: 'auto', mode: 'train' }); }""")
+    pg.wait_for_timeout(2500)
+    names = sorted(fake.files)
+    check('envoyé dans « mon-coran » du dossier privé : progress.json, un morceau de ar_att', PROG in fake.files and any('/mon-coran/ar_att.' in k for k in names) and all(k.startswith(UID + '/mon-coran/') for k in names), names)
+    check('fichier : Al-Ikhlas connue (versets 1 à 4), rien dans la table absente', (fprog().get('s112') or {}).get('d', {}).get('kv') == [[1, 4]] and not fake.rows)
+    pg.click('#tab-learn .topbar [data-page="settings"]'); pg.wait_for_timeout(500)
+    st6 = norm(pg.locator('.page').inner_text())
+    check('réglages : « Sauvegardé sur ton compte » et « espace privé de fichiers »', 'Sauvegardé sur ton compte' in st6 and 'espace privé de fichiers' in st6, st6[st6.find('Sauvegarde'):][:200])
+    errs_f = real_errors(e.errors)
+    e.close()
+
+    e = Env(p, supabase=setup)
+    pg = e.open(); pg.wait_for_timeout(3000)
+    check('appareil B (vide) : retrouve Al-Ikhlas et la réponse d’arabe depuis l’espace privé', e.js("() => window.__QR.suraKnown(112)") and e.js("() => window.__QR.Store.items.has('ar_att|att-f1')") and state(e) == 'synced', state(e))
+    e.js("async () => { const Q = window.__QR; await Q.loadGroups(); await Q.setStatus([[113, 1, 5]], 'known'); }"); pg.wait_for_timeout(2500)
+    check('appareil B : Al-Falaq ajoutée, Al-Ikhlas gardée dans le fichier', 's113' in fprog() and 's112' in fprog(), sorted(fprog()))
+    # envoi simultané d'un autre appareil qui réécrit le fichier sans Al-Falaq → B la renvoie à la synchro suivante
+    body = json.loads(fake.files[PROG]['body']); body['items'].pop('s113', None)
+    fake.files[PROG] = {'body': json.dumps(body), 'etag': '"course"', 'updated_at': fake.now()}
+    sync(e, 2500)
+    check('envoi simultané : l’élément écrasé est renvoyé, rien ne se perd', (fprog().get('s113') or {}).get('d', {}).get('kv') == [[1, 5]], sorted(fprog()))
+    # la table est enfin installée : l'appli y bascule d'elle-même et y envoie tout
+    fake.installed = True
+    e.js("() => { window.__QR.FILES.checkedAt = 0; }"); sync(e, 2500); sync(e, 1500)
+    check('table installée : bascule automatique, tout part dans la table', not e.js("() => window.__QR.FILES.on") and (fake.data('progress', 's112') or {}).get('kv') == [[1, 4]] and (fake.data('progress', 's113') or {}).get('kv') == [[1, 5]] and fake.data('ar_att', 'att-f1') and state(e) == 'synced', state(e))
+    errs_f += real_errors(e.errors)
+    e.close()
+
+    # sans table ni espace privé : comme avant, la progression reste sur l'appareil et l'appli propose de l'activer
+    fake.installed = False; fake.storage = False
+    e = Env(p, supabase=setup)
+    pg = e.open(); pg.wait_for_timeout(2500)
+    check('ni table ni espace privé : « Ta progression reste sur cet appareil » + « L’activer »', state(e) == 'not_installed' and pg.locator('#tab-learn .sync-banner [data-sheet="sync-install"]').count() == 1, state(e))
+    errs_f += real_errors(e.errors)
+    e.close()
+
+    allerr = errs_a + errs_b + errs_pm + errs_n + errs_o + errs_f
     print('ERRORS', allerr)
     check('aucune erreur JavaScript', not allerr, allerr[:3])
 
