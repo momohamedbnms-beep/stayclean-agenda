@@ -361,10 +361,33 @@ function versesOfPage(p) {
    téléchargés et tes enregistrements restent uniquement sur l'appareil. */
 const KINDS = ['prefs', 'pos', 'fav', 'attempt', 'progress', 'review'];
 const QR_TABLE = 'qr_items';
-/* Ordre proposé, sourate par sourate : Al-Fatiha, puis de la fin du Coran vers le début (An-Nas, Al-Falaq,
-   Al-Ikhlas… An-Naba, puis 77 → 67, et ainsi de suite jusqu'à Al-Baqara). C'est l'ordre le plus suivi par les
-   enseignants ; aucun hadith n'impose d'ordre, et tu peux toujours choisir une autre sourate. */
-const SURA_ORDER = [1].concat(Array.from({ length: 113 }, (_, k) => 114 - k));
+/* Ordre d'apprentissage (réglage « order », gardé et synchronisé). Al-Fatiha d'abord dans les trois (on la récite
+   dans chaque prière), puis :
+   - 'court'   : les plus courtes d'abord, d'après la longueur réelle du texte (nombre de mots) — proposé par défaut ;
+   - 'versets' : le moins de versets d'abord (à égalité, la plus courte) ;
+   - 'ecoles'  : l'ordre des écoles coraniques, de la fin du Coran vers le début (An-Nas, Al-Falaq… An-Naba, puis
+                 77 → 67, et ainsi de suite jusqu'à Al-Baqara).
+   Le nombre de versets trompe : Al-Mumtahina (13 versets, 348 mots) passerait avant Ash-Shams (15 versets, 54 mots).
+   Aucun hadith n'impose d'ordre, et tu peux toujours choisir une autre sourate. */
+const SURA_ORDER = [1].concat(Array.from({ length: 113 }, (_, k) => 114 - k));   // l'ordre des écoles
+const ORDERS = {
+  court: { label: 'Les plus courtes d’abord', short: 'les plus courtes d’abord' },
+  versets: { label: 'Le moins de versets d’abord', short: 'le moins de versets d’abord' },
+  ecoles: { label: 'L’ordre des écoles coraniques', short: 'l’ordre des écoles coraniques' },
+};
+const OrderCache = new Map();
+function orderKey() { const o = prefs().order; return ORDERS[o] ? o : 'court'; }
+function suraOrder(key) {
+  key = ORDERS[key] ? key : orderKey();
+  if (key === 'ecoles') return SURA_ORDER;
+  if (OrderCache.has(key)) return OrderCache.get(key);
+  if (!Content.index) return SURA_ORDER;   // avant le chargement de l'index : rien n'est affiché de toute façon
+  const m = (n) => suraMeta(n) || { ayas: 0, words: 0 };
+  const rest = Array.from({ length: 113 }, (_, k) => k + 2);
+  rest.sort(key === 'versets' ? (a, b) => m(a).ayas - m(b).ayas || m(a).words - m(b).words || b - a
+    : (a, b) => m(a).words - m(b).words || m(a).ayas - m(b).ayas || b - a);
+  const out = [1].concat(rest); OrderCache.set(key, out); return out;
+}
 const DEFAULT_PREFS = {
   ambiance: 'vert',          // vert | papier | nuit
   readDisplay: 'ar_tl_fr',   // ar | fr | ar_fr | ar_tl | ar_tl_fr (dernier choix du lecteur libre)
@@ -378,7 +401,8 @@ const DEFAULT_PREFS = {
   readGap: 0,                // secondes de silence entre les versets en lecture continue
   basmalaAudio: true,        // lire la basmala au début d'une sourate (lecture continue)
   tlNoteSeen: false,
-  path: null,                // ordre du parcours (null = proposition par défaut)
+  path: null,                // (ancien réglage, inutilisé)
+  order: 'court',            // ordre d'apprentissage : court | versets | ecoles (voir ORDERS)
   current: null,             // sourate de la séance guidée (suit ta sourate du moment)
   pace: 'normal',            // rythme des objectifs : doux | normal | soutenu
   remindTime: '19:00',
@@ -1416,8 +1440,8 @@ const MILESTONES = [
   'Je l’ai récitée à nouveau sans aide au moins une semaine après la première réussite complète.',
 ];
 
-/* --- Parcours proposé : voir SURA_ORDER (Al-Fatiha, puis 114, 113… 2) --- */
-function learningPath() { return SURA_ORDER.slice(); }
+/* --- Parcours proposé : dans l'ordre choisi (voir ORDERS) --- */
+function learningPath() { return suraOrder().slice(); }
 
 /* --- Progression par sourate (kind « progress », id « sN ») --- */
 function emptyProgress(s) { return { s, startedAt: null, level: 1, nextA: 1, nextC: 0, listened: [], worked: [], solo: [], chunkSolo: {}, chunkWorked: {}, m: {}, known: false, teacher: null, lastAt: null }; }
@@ -1627,7 +1651,7 @@ function currentSurah() {
   for (const n of learningPath()) { if (!suraKnown(n)) return n; }
   return cur || 1;
 }
-/* Ordre des sourates du parcours (Al-Fatiha, puis 114, 113… 2) */
+/* Ordre des sourates du parcours (l'ordre choisi) */
 function pathSuras() { return learningPath(); }
 function nextInPath(after) {
   const path = pathSuras(); const i = path.indexOf(after);
@@ -2095,6 +2119,8 @@ const goalDays = (w, k) => clamp(Math.ceil(Math.max(1, w) / PACES[k || paceKey()
 /* Un objectif de N jours compte le jour où tu commences : commencé lundi, 5 jours → objectif vendredi */
 const goalDue = (g) => addDays(g.start, clamp(Math.round(Number(g.days)) || 1, 1, 3650) - 1);
 const goalMinDue = (g) => { const t = todayISO(); return g.start > t ? g.start : t; };   // au plus tôt : aujourd'hui
+/* « objectif vendredi », « objectif aujourd'hui », « objectif dépassé de 3 jours » (comme sur la carte « En cours ») */
+function goalWhen(g) { const left = daysBetween(todayISO(), goalDue(g)); return left > 0 ? `objectif ${dayName(goalDue(g))}` : left === 0 ? 'objectif aujourd’hui' : `objectif dépassé de ${-left} ${plural(-left, 'jour', 'jours')}`; }
 const sameR = (x, y) => !!(x && y && x[0] === y[0] && x[1] === y[1] && x[2] === y[2]);
 const Units = { by: new Map(), flat: null };
 /* Les parties d'une sourate (une seule pour la plupart) : coupes au verset le plus proche d'un découpage régulier en mots */
@@ -2117,10 +2143,21 @@ function suraUnits(s) {
   Units.by.set(s, out); return out;
 }
 function pathFlat() {
-  if (Units.flat) return Units.flat;
-  const out = []; for (const s of SURA_ORDER) for (const r of suraUnits(s)) out.push(r);
-  if (Groups.pre) Units.flat = out;
+  const key = orderKey();
+  if (Units.flat && Units.flatKey === key) return Units.flat;
+  const out = []; for (const s of suraOrder()) for (const r of suraUnits(s)) out.push(r);
+  if (Groups.pre && Content.index) { Units.flat = out; Units.flatKey = key; }
   return out;
+}
+/* Sourates commencées (« J'apprends » ou connues en partie), dans l'ordre choisi */
+function startedSuras() { return suraOrder().filter((s) => { if (suraKnown(s)) return false; const t = unitStat(suraParts(s)); return t.st === 'learning' || t.st === 'partial'; }); }
+/* Ce qu'il reste à apprendre, partie par partie : d'abord les sourates commencées, puis le parcours (même ordre que
+   la liste « À apprendre » : la suivante proposée est toujours celle que tu vois en haut) */
+function todoUnits(skip) {
+  const st = new Set(startedSuras()); st.delete(1);   // Al-Fatiha reste la toute première tant qu'elle n'est pas sue
+  const flat = pathFlat().filter((r) => !isKnownR(r) && !sameR(r, skip));
+  const rank = (r) => (r[0] === 1 ? 0 : st.has(r[0]) ? 1 : 2);
+  return [0, 1, 2].flatMap((k) => flat.filter((r) => rank(r) === k));
 }
 const unitW = (r) => rgWords(r[0], [[r[1], r[2]]], r[1], r[2]);
 const todoW = (r) => unitW(r) - rgWords(r[0], knownRanges(r[0]), r[1], r[2]);
@@ -2151,8 +2188,8 @@ function activeGoal() {
   }
   return best;
 }
-/* Première partie du parcours que tu ne connais pas encore */
-function firstTodo(skip) { for (const r of pathFlat()) { if (!sameR(r, skip) && !isKnownR(r)) return r; } return null; }
+/* La prochaine partie à apprendre (une sourate commencée d'abord, sinon la suivante du parcours) */
+function firstTodo(skip) { return todoUnits(skip)[0] || null; }
 function curUnit() {
   const a = activeGoal(); if (a) return { kind: 'goal', r: a.r, g: a.g };
   const r = firstTodo(); return r ? { kind: 'next', r } : { kind: 'done' };
@@ -2162,7 +2199,7 @@ function upcoming(c, n) {
   const out = []; const cr = c && c.r;
   const push = (r) => { if (out.length < n && !sameR(r, cr) && !isKnownR(r) && !out.some((x) => sameR(x, r))) out.push(r); };
   if (cr) for (const r of suraUnits(cr[0])) push(r);
-  for (const r of pathFlat()) { if (out.length >= n) break; push(r); }
+  for (const r of todoUnits(cr)) { if (out.length >= n) break; push(r); }
   return out;
 }
 /* Commencer une sourate (ou une partie) : « J'apprends » et un objectif à partir d'aujourd'hui */
@@ -2178,9 +2215,17 @@ async function startUnit(r, before) {
   return p.goal;
 }
 /* « À ce rythme, tout le juz ʿAmma vers mai 2027 » */
-function projection(c) {
+function projection(c, B) {
   if (!c || !c.r) return '';
   const s0 = c.r[0]; const today = todayISO();
+  const when = (d) => (daysBetween(today, d) <= 45 ? 'vers le ' + dDM(d) : 'vers ' + _fMY.format(isoToUTC(d)));
+  if (orderKey() !== 'ecoles') {
+    // les plus courtes / le moins de versets : où tu en seras après les 10 suivantes de la liste
+    if (!B || !B.plan) return '';
+    const after = B.todo.filter((s) => s !== s0); const n = Math.min(10, after.length);
+    if (!n) return '';
+    return `À ce rythme, tu connaîtras ${n > 1 ? `les ${n} suivantes` : 'la suivante'} ${when(B.plan.get(after[n - 1]))}.`;
+  }
   let has; let name;
   if (s0 === 1 || s0 >= 78) { has = (s) => s === 1 || s >= 78; name = 'tout le juz ʿAmma'; }
   else if (s0 >= 67) { has = (s) => s >= 67 && s <= 77; name = 'tout le juz 29 (Tabarak)'; }
@@ -2259,19 +2304,41 @@ function revInfo(s) {
 /* Mes sourates en chiffres : connues, en cours, à réviser, à apprendre.
    « À apprendre » : ta sourate en cours (ou la prochaine) d'abord, puis celles que tu as commencées, puis l'ordre du parcours */
 function mzBilan(c) {
-  const known = SURA_ORDER.filter((s) => suraKnown(s));
-  const rest = SURA_ORDER.filter((s) => !suraKnown(s));
-  const started = rest.filter((s) => { const t = unitStat(suraParts(s)); return t.st === 'learning' || t.st === 'partial'; });
+  const order = suraOrder(); const pos = new Map(order.map((s, i) => [s, i]));
+  const known = order.filter((s) => suraKnown(s));
+  const rest = order.filter((s) => !suraKnown(s));
+  const started = startedSuras();
   const cur = c && c.r && !suraKnown(c.r[0]) ? c.r[0] : null;
-  const first = (cur ? [cur] : []).concat(started.filter((s) => s !== cur));
+  // comme la suivante proposée (todoUnits) : ta sourate en cours, Al-Fatiha si elle n'est pas sue, puis celles que tu as commencées
+  const first = (cur ? [cur] : []).concat(rest.includes(1) && cur !== 1 ? [1] : [], started.filter((s) => s !== cur && s !== 1));
   const todo = first.concat(rest.filter((s) => !first.includes(s)));
   const infos = known.map((s) => revInfo(s));
-  const rev = infos.filter((x) => x.isDue).sort((a, b) => a.due.localeCompare(b.due) || SURA_ORDER.indexOf(a.s) - SURA_ORDER.indexOf(b.s));
+  const rev = infos.filter((x) => x.isDue).sort((a, b) => a.due.localeCompare(b.due) || pos.get(a.s) - pos.get(b.s));
   const amma = SURA_ORDER.filter((s) => s === 1 || s >= 78);
-  return { known, todo, started, infos, rev, ammaN: amma.length, ammaK: amma.filter((s) => suraKnown(s)).length };
+  return { known, todo, started, infos, rev, ammaN: amma.length, ammaK: amma.filter((s) => suraKnown(s)).length, plan: mzPlan(todo, c) };
+}
+/* Le plan : pour chaque sourate à apprendre, le jour où elle devrait être sue si tu les apprends l'une après
+   l'autre, dans l'ordre de la liste, au rythme choisi (une estimation, qui bouge avec toi) */
+function mzPlan(todo, c) {
+  const today = todayISO(); const plan = new Map();
+  const cur = c && c.r && !suraKnown(c.r[0]) ? c.r[0] : null;
+  let d = c && c.kind === 'goal' ? (goalDue(c.g) > today ? goalDue(c.g) : today) : addDays(today, -1);
+  for (const s of todo) {
+    let days = 0;
+    for (const u of suraUnits(s)) { if (isKnownR(u) || (c && c.kind === 'goal' && sameR(u, c.r))) continue; days += goalDays(todoW(u)); }
+    if (s !== cur || c.kind !== 'goal' || days) d = addDays(d, days);
+    plan.set(s, d);
+  }
+  return plan;
+}
+const _fDMs = new Intl.DateTimeFormat('fr-BE', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+function planWhen(iso) {
+  const n = daysBetween(todayISO(), iso);
+  if (n <= 6) return n <= 0 ? 'aujourd’hui' : n === 1 ? 'd’ici demain' : 'd’ici ' + dayName(iso);
+  return n < 300 ? 'vers le ' + _fDMs.format(isoToUTC(iso)) : 'vers ' + _fMY.format(isoToUTC(iso));
 }
 function bilanHTML(B) {
-  const inAmma = B.ammaK < B.ammaN;
+  const inAmma = orderKey() === 'ecoles' && B.ammaK < B.ammaN; const T = unitStat(allParts());
   return `<section class="mz-bilan" data-anchor="bilan" aria-label="Mes sourates en chiffres">
       <div class="mz-bilan__nums">
         <button type="button" class="mz-num mz-num--known" data-act="mz-tab" data-tab="known"><b>${B.known.length}</b><span>${plural(B.known.length, 'connue', 'connues')}</span></button>
@@ -2279,12 +2346,12 @@ function bilanHTML(B) {
         <button type="button" class="mz-num mz-num--rev" data-act="mz-tab" data-tab="rev"><b>${B.rev.length}</b><span>à réviser</span></button>
       </div>
       ${mzBar(inAmma ? B.ammaK / B.ammaN : B.known.length / 114)}
-      <p class="mz-bilan__p">${inAmma ? `<span>Juz ʿAmma (avec Al-Fatiha) : <b>${B.ammaK}</b> sur ${B.ammaN}</span><span>Tout le Coran : <b>${B.known.length}</b> sourates sur 114</span>` : `<span>Tout le Coran : <b>${B.known.length}</b> sourates sur 114</span>`}</p>
+      <p class="mz-bilan__p">${inAmma ? `<span>Juz ʿAmma (avec Al-Fatiha) : <b>${B.ammaK}</b> sur ${B.ammaN}</span>` : ''}<span>Tout le Coran : <b>${B.known.length}</b> ${plural(B.known.length, 'sourate', 'sourates')} sur 114</span>${inAmma ? '' : `<span>Texte connu : <b>${esc(pctTxt(T.pct))} %</b> des mots du Coran</span>`}</p>
     </section>`;
 }
 function rowMain(s, sub) {
   const m = suraMeta(s);
-  return `<button type="button" class="mz-li__main" data-act="sheet" data-sheet="mz-sura" data-s="${s}">${suraBadge(s)}<span class="mz-li__t"><b>${esc(m.name)}</b><small>${esc(sub)}</small></span></button>`;
+  return `<button type="button" class="mz-li__main" data-act="sheet" data-sheet="mz-sura" data-s="${s}">${suraBadge(s)}<span class="mz-li__t"><b>${esc(m.name)}</b><small>${nbsp(esc(sub))}</small></span></button>`;
 }
 const sinceTxt = (x) => (x.since ? `${x.here ? 'Apprise' : 'Connue depuis'} le ${dDM(x.since)}` : 'Connue');
 function revRow(x) {
@@ -2295,13 +2362,15 @@ function revRow(x) {
 function knownRow(x) {
   return `<li class="mz-li" data-anchor="k${x.s}">${rowMain(x.s, `${sinceTxt(x)} · ${x.isDue ? 'à réviser' : 'révision ' + dayName(x.due)}`)}<span class="mz-li__ok${x.isDue ? ' is-due' : ''}" aria-hidden="true">${icon(x.isDue ? 'repeat' : 'check-circle', 'sm')}</span></li>`;
 }
-function todoRow(s, c) {
+function todoRow(s, c, B) {
   const m = suraMeta(s); const t = unitStat(suraParts(s)); const us = suraUnits(s); const isCur = !!(c && c.r && c.r[0] === s);
+  const when = B && B.plan && B.plan.has(s) && daysBetween(todayISO(), B.plan.get(s)) < 365 ? ` · ${planWhen(B.plan.get(s))}` : '';
+  const days = us.filter((r) => !isKnownR(r)).reduce((d, r) => d + goalDays(todoW(r)), 0);
   let sub;
-  if (isCur && c.kind === 'goal') sub = `En cours · objectif ${dayName(goalDue(c.g))}`;
-  else if (isCur) sub = `Prochaine sourate · ${m.ayas} versets`;
-  else if (t.st === 'learning' || t.st === 'partial') sub = t.kn ? `Commencée · ${t.kn} ${plural(t.kn, 'verset connu', 'versets connus')} sur ${t.n}` : 'Commencée';
-  else sub = `${m.ayas} versets · ≈ ${fmtDur(us.reduce((d, r) => d + goalDays(todoW(r)), 0))}${us.length > 1 ? ` (${us.length} parties)` : ''}`;
+  if (isCur && c.kind === 'goal') sub = `En cours · ${goalWhen(c.g)}`;
+  else if (isCur) sub = `Prochaine sourate · ${m.ayas} versets · ≈ ${fmtDur(days)}`;
+  else if (t.st === 'learning' || t.st === 'partial') sub = `Commencée${t.kn ? ` · ${t.kn} ${plural(t.kn, 'verset connu', 'versets connus')} sur ${t.n}` : ''}${when}`;
+  else sub = `${m.ayas} versets · ≈ ${fmtDur(days)}${us.length > 1 ? ` (${us.length} parties)` : ''}${when}`;
   return `<li class="mz-li${isCur ? ' is-cur' : ''}" data-anchor="t${s}">${rowMain(s, sub)}<button type="button" class="mz-tick" data-act="mz-know" data-s="${s}" aria-label="${esc(m.name)} : je la connais déjà">${icon('check', 'sm')}</button></li>`;
 }
 const MZ_SHOW = 12;
@@ -2322,16 +2391,18 @@ function listsHTML(B, c) {
     body = B.known.length ? `<ul class="mz-list">${B.infos.map((x) => knownRow(x)).join('')}</ul>`
       : empty('Aucune sourate cochée pour l’instant.', 'Dans « À apprendre », touche ✓ à côté de celles que tu sais déjà par cœur.');
   } else {
-    hint = B.started.length ? 'En haut, celles en cours ; ensuite l’ordre proposé, de la fin du Coran vers le début. Touche ✓ à côté de celles que tu connais déjà.'
-      : 'Dans l’ordre proposé, de la fin du Coran vers le début. Touche ✓ à côté de celles que tu connais déjà.';
-    const shown = UI.mzAll ? B.todo : B.todo.slice(0, MZ_SHOW); const proj = projection(c);
-    body = B.todo.length ? `<ul class="mz-list">${shown.map((s) => todoRow(s, c)).join('')}</ul>
+    const ok = orderKey();
+    const how = ok === 'court' ? 'de la plus courte à la plus longue' : ok === 'versets' ? 'du moins de versets au plus de versets' : 'l’ordre des écoles, de la fin du Coran vers le début';
+    hint = `${B.started.length ? `En haut, celles en cours ; ensuite ${how}` : how.charAt(0).toUpperCase() + how.slice(1)}. Touche ✓ à côté de celles que tu connais déjà.`;
+    const shown = UI.mzAll ? B.todo : B.todo.slice(0, MZ_SHOW); const proj = projection(c, B);
+    body = B.todo.length ? `<ul class="mz-list">${shown.map((s) => todoRow(s, c, B)).join('')}</ul>
         ${B.todo.length > shown.length ? `<button type="button" class="btn btn--ghost btn--block" data-act="mz-all">Afficher les ${B.todo.length - shown.length} autres sourates</button>` : ''}
         ${proj ? `<p class="fine mz-next__proj">${icon('calendar', 'sm')}<span>${esc(proj)}</span></p>` : ''}`
       : empty('Tu as coché tout le Coran comme connu.', 'Continue de le réciter pour le garder.');
   }
   return `<section class="mz-lists" data-anchor="lists">
       <div class="mz-tabs" role="tablist" aria-label="Mes sourates">${T.map(([k, l, n]) => `<button type="button" role="tab" class="mz-tabs__b${k === tab ? ' is-on' : ''}" aria-selected="${k === tab}" data-act="mz-tab" data-tab="${k}"><span>${l}</span><b>${n}</b></button>`).join('')}</div>
+      ${tab === 'todo' ? `<button type="button" class="mz-order" data-act="sheet" data-sheet="mz-order">${icon('list', 'sm')}<span class="mz-order__t">Ordre : <b>${esc(ORDERS[orderKey()].label)}</b></span><span class="mz-order__ch">Changer</span></button>` : ''}
       <p class="fine mz-lists__hint">${esc(hint)}</p>
       ${body}
     </section>`;
@@ -2351,7 +2422,7 @@ SHEETS['mz-sura'] = {
         + opt('mz-know', 'x', 'Je ne la connais plus', 'Elle repasse dans « À apprendre »');
     } else if (isCur && c.kind === 'goal') {
       const due = goalDue(c.g);
-      status = `Commencée ${dayName(c.g.start)} · objectif ${dayName(due)}`;
+      status = `Commencée ${dayName(c.g.start)} · ${goalWhen(c.g)}`;
       acts = opt('mz-open', 'book-open', 'Étudier', 'L’écouter et la lire') + opt('mz-cur-known', 'check', 'Je la connais', 'La suivante commence');
     } else {
       const us = suraUnits(s); const t = unitStat(suraParts(s));
@@ -2362,8 +2433,23 @@ SHEETS['mz-sura'] = {
         + opt('mz-open', 'book-open', 'L’écouter et la lire', '');
     }
     return { title: `${m.name} · sourate ${s}`, body: `
-      <div class="mz-sh"><p class="mz-sh__ar" lang="ar" dir="rtl" translate="no">${esc(m.ar)}</p><p class="mz-sh__s">${m.sub ? esc(m.sub) + ' · ' : ''}${m.ayas} versets</p><p class="mz-sh__st">${esc(status)}</p></div>
+      <div class="mz-sh"><p class="mz-sh__ar" lang="ar" dir="rtl" translate="no">${esc(m.ar)}</p><p class="mz-sh__s">${m.sub ? esc(m.sub) + ' · ' : ''}${m.ayas} versets</p><p class="mz-sh__st">${nbsp(esc(status))}</p></div>
       <div class="opts">${acts}</div>` };
+  },
+};
+/* Choisir l'ordre d'apprentissage */
+SHEETS['mz-order'] = {
+  render() {
+    const k0 = orderKey();
+    const first = (k) => suraOrder(k).filter((s) => s !== 1).slice(0, 5).map((s) => suraTitle(s)).join(', ');
+    const desc = {
+      court: `D’après la longueur réelle du texte : Al-Fatiha, puis ${first('court')}… Chaque sourate est à peine plus longue que la précédente.`,
+      versets: `D’après le nombre de versets : Al-Fatiha, puis ${first('versets')}… Attention : certaines ont peu de versets, mais très longs (Al-Mumtahina, 13 versets, est plus longue qu’Ash-Shams et ses 15 versets).`,
+      ecoles: `Le juz ʿAmma en partant de la fin : Al-Fatiha, puis ${first('ecoles')}… puis le juz 29, et ainsi de suite.`,
+    };
+    return { title: 'Dans quel ordre apprendre ?', body: `
+      <div class="opts" role="radiogroup" aria-label="Ordre d’apprentissage">${Object.keys(ORDERS).map((k) => `<button type="button" class="opt${k === k0 ? ' is-on' : ''}" role="radio" aria-checked="${k === k0}" data-act="mz-order-set" data-v="${k}"><span class="opt__dot" aria-hidden="true">${k === k0 ? icon('check', 'sm') : ''}</span><span class="opt__t"><b>${esc(ORDERS[k].label)}${k === 'court' ? ' <span class="rc__style">conseillé</span>' : ''}</b><small>${esc(desc[k])}</small></span></button>`).join('')}</div>
+      <p class="fine">Ta sourate en cours ne change pas : les suivantes suivent l’ordre choisi. Tu peux en changer quand tu veux.</p>` };
   },
 };
 /* Conseils : l'ordre, les objectifs, les révisions, la méthode, les hadiths (références vérifiables) */
@@ -2375,16 +2461,24 @@ const HADITHS = [
   ['Les Compagnons apprenaient dix versets auprès du Prophète (paix et salut sur lui) et ne passaient pas aux dix suivants avant d’avoir appris ce qu’ils contiennent de savoir et de pratique.', 'Rapporté par Abû ʿAbd ar-Rahmân as-Sulamî · Musnad Ahmad, n° 23482 (chaîne jugée bonne)'],
 ];
 /* Espaces insécables : « n° 756 », « 2 semaines » ne se coupent pas en fin de ligne */
-const nbsp = (t) => t.replace(/n° /g, 'n°\u00a0').replace(/(\d) (?=(?:jours?|semaines?|mois|versets?|fois)\b)/g, '$1\u00a0');
+const NB_UNIT = '(?:jours?|semaines?|mois|versets?|fois|janv(?:ier)?|févr(?:ier)?|mars|avr(?:il)?|mai|juin|juil(?:let)?|août|sept(?:embre)?|oct(?:obre)?|nov(?:embre)?|déc(?:embre)?)';
+const NB_RE = new RegExp(`(\\d) (?=${NB_UNIT}(?:[\\s.,;)]|$))`, 'g');
+const nbsp = (t) => t.replace(/n° /g, 'n°\u00a0').replace(NB_RE, '$1\u00a0').replace(/≈ /g, '≈\u00a0').replace(/ ·/g, '\u00a0·');
 PAGES['mz-conseils'] = {
   label: () => 'Conseils',
   render() {
     const ex = (s) => fmtDur(goalDays(suraMeta(s).words, 'normal'));
     return nbsp(`${pageHead('Conseils et hadiths')}
       <div class="mz-advice__b">
-        <h3>L’ordre proposé</h3>
-        <p>Al-Fatiha d’abord : on la récite dans chaque unité de la prière (« Pas de prière pour celui qui ne récite pas la Fatiha », Al-Bukhârî n° 756, Muslim n° 394). Puis le juz ʿAmma en partant de la fin : An-Nas, Al-Falaq, Al-Ikhlas… jusqu’à An-Naba ; puis le juz 29, et ainsi de suite vers le début du Coran.</p>
-        <p>C’est l’ordre le plus suivi dans les mosquées et les écoles coraniques : les sourates courtes viennent d’abord, tu peux les réciter dans tes prières, et chaque sourate apprise donne de l’élan pour la suivante. Aucun hadith n’impose d’ordre : tu peux choisir une autre sourate quand tu veux.</p>
+        <h3>L’ordre</h3>
+        <p>Al-Fatiha d’abord : on la récite dans chaque unité de la prière (« Pas de prière pour celui qui ne récite pas la Fatiha », Al-Bukhârî n° 756, Muslim n° 394). Ensuite, trois ordres possibles :</p>
+        <ul class="mz-advice__l">
+          <li><b>Les plus courtes d’abord</b> (conseillé) : rangées par longueur réelle du texte. Chaque sourate est à peine plus longue que la précédente : on progresse sans à-coups, et les premières se récitent vite dans la prière.</li>
+          <li><b>Le moins de versets d’abord</b> : simple, mais trompeur, car certains versets sont très longs : Al-Mumtahina (13 versets, 348 mots) passerait avant Ash-Shams (15 versets, 54 mots).</li>
+          <li><b>L’ordre des écoles coraniques</b> : le juz ʿAmma en partant de la fin (An-Nas, Al-Falaq, Al-Ikhlas… jusqu’à An-Naba), puis le juz 29, et ainsi de suite. C’est l’ordre le plus suivi dans les mosquées.</li>
+        </ul>
+        <p>Aucun hadith n’impose d’ordre : tu peux choisir une autre sourate quand tu veux. Ton ordre : <b>${esc(ORDERS[orderKey()].short)}</b>.</p>
+        <button type="button" class="link-row" data-act="sheet" data-sheet="mz-order">${icon('list', 'sm')}<span>Changer l’ordre</span>${icon('chev-r', 'sm')}</button>
         <h3>Des objectifs à ta mesure</h3>
         <p>L’objectif dépend de la longueur de la sourate. Au rythme normal : Ad-Dhuha (11 versets) en ${ex(93)}, Al-Layl (21 versets) en ${ex(92)}, An-Naba (40 versets) en ${ex(78)}. Une sourate plus longue est découpée en parties d’environ un mois. Tu choisis ton rythme et tu peux changer la date.</p>
         <h3>Les révisions</h3>
@@ -2431,7 +2525,7 @@ SHEETS['mz-goal'] = {
 SHEETS['mz-pick'] = {
   render() {
     const a = activeGoal();
-    const list = SURA_ORDER.filter((s) => !suraKnown(s) && !(a && a.r[0] === s));
+    const list = suraOrder().filter((s) => !suraKnown(s) && !(a && a.r[0] === s));
     return { title: 'Choisir une autre sourate', body: `
       <p class="sub">Elle devient ta sourate en cours, avec un objectif${a ? ` ; ${esc(unitName(a.r))} est mise en pause` : ''}. Ensuite, l’appli reprend l’ordre proposé.</p>
       <ul class="slist slist--pick">${list.map((s) => { const m = suraMeta(s); const us = suraUnits(s); const r = us.find((u) => !isKnownR(u)) || us[0];
@@ -2473,7 +2567,7 @@ const juzName = (n) => (n === 30 ? 'Juz ʿAmma' : '');
 /* Ordre conseillé à l'intérieur d'un groupe pour la séance guidée : celui du parcours (Al-Fatiha, puis de la fin
    du Coran vers le début) ; à l'intérieur d'une sourate, du premier au dernier verset */
 function learnOrder(parts) {
-  const pos = (n) => SURA_ORDER.indexOf(n);
+  const order = suraOrder(); const pos = (n) => order.indexOf(n);
   return parts.slice().sort((a, b) => pos(a[0]) - pos(b[0]) || a[1] - b[1]);
 }
 /* Première sourate à apprendre d'un ensemble (pour la séance guidée) */
@@ -4027,6 +4121,14 @@ ACT['mz-tab'] = (el) => {
   if (el.classList.contains('mz-num')) { const t = $('#tab-learn [data-anchor="lists"]'); if (t) t.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
 };
 ACT['mz-all'] = () => { UI.mzAll = true; renderAll(); };
+ACT['mz-order-set'] = async (el) => {
+  const k = el.dataset.v; if (!ORDERS[k]) return;
+  closeAllSheets();
+  if (k === orderKey()) return;
+  await setPrefs({ order: k });
+  UI.mzAll = false; renderAll();
+  toast(`Ordre : ${ORDERS[k].short}. Ta sourate en cours ne change pas.`);
+};
 ACT['mz-scroll'] = (el) => { const t = $(`#tab-learn [data-anchor="${el.dataset.to}"]`); if (t) t.scrollIntoView({ block: 'start', behavior: 'smooth' }); };
 ACT['mz-open'] = (el) => {
   const s = Number(el.dataset.s); if (!(s >= 1 && s <= 114)) return;
@@ -4588,7 +4690,7 @@ async function boot() {
 /* Retour sur la page depuis l'historique : on rafraîchit */
 window.addEventListener('pageshow', (e) => { if (!e.persisted) return; refreshAgendaDB(); scheduleRender(); resumeSync(); });
 /* Accès pour le banc d'essai automatisé (aucune donnée réelle) */
-window.__QR = { Store, Content, Player, Sync, UI, prefs, put, MERGE, RECITERS, syncNow, connectAccount, sameData, reciterId, selfKnown, dueReviews, buildSession, scheduleAfter, refreshMilestones, progressOf, verseChunks, searchSuras, versesOfPage, pageOfVerse, surahState, milestoneCount, stopAudio, Groups, loadGroups, unitStat, setStatus, whereAmI, suraKnown, juzParts, suraParts, allParts, curUnit, activeGoal, suraUnits, pathFlat, goalDays, goalDue, unitName, todoW, SURA_ORDER, FILES, fileOf, setToday: (iso) => { _todayOverride = iso; scheduleRender(); }, renderAll };
+window.__QR = { Store, Content, Player, Sync, UI, prefs, put, MERGE, RECITERS, syncNow, connectAccount, sameData, reciterId, selfKnown, dueReviews, buildSession, scheduleAfter, refreshMilestones, progressOf, verseChunks, searchSuras, versesOfPage, pageOfVerse, surahState, milestoneCount, stopAudio, Groups, loadGroups, unitStat, setStatus, whereAmI, suraKnown, juzParts, suraParts, allParts, curUnit, activeGoal, suraUnits, pathFlat, goalDays, goalDue, unitName, todoW, SURA_ORDER, suraOrder, orderKey, FILES, fileOf, setToday: (iso) => { _todayOverride = iso; scheduleRender(); }, renderAll };
 boot();
 
 })();

@@ -51,13 +51,17 @@ class Env:
         self.page.on('console', lambda m: self.errors.append('console:' + m.text) if m.type == 'error' else None)
         self.page.on('pageerror', lambda e: self.errors.append('pageerror:' + str(e)))
 
-    def open(self, path='coran.html', skip_minutes=True, reciter='husary'):
+    def open(self, path='coran.html', skip_minutes=True, reciter='husary', order='ecoles'):
         self.page.goto(BASE + path)
         self.page.wait_for_function('window.__QR && window.__QR.Content.index !== null', timeout=15000)
         self.page.wait_for_timeout(700)
         if reciter:
             # les tests généraux utilisent une voix « un fichier par verset » (sons d'essai) ; la voix principale a son propre test
             self.page.evaluate("(r) => window.__QR.put('prefs', 'main', Object.assign({}, window.__QR.prefs(), { reciter: r, reciterV2: true }))", reciter)
+            self.page.wait_for_timeout(150)
+        if order:
+            # les tests écrits avant le 02/11 suivent l'ordre des écoles ; ordre.py vérifie l'ordre par défaut (les plus courtes)
+            self.page.evaluate("(o) => window.__QR.put('prefs', 'main', Object.assign({}, window.__QR.prefs(), { order: o }))", order)
             self.page.wait_for_timeout(150)
         if skip_minutes and self.page.locator('[data-act="minutes-save"]').count():
             self.page.click('[data-act="minutes-save"]')

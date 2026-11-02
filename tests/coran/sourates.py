@@ -52,7 +52,7 @@ with sync_playwright() as p:
     check('titre et principe : « Coche ce que tu connais : l’appli te dit quoi apprendre et quoi réviser »', 'Mémoriser le Coran' in home and 'Coche ce que tu connais : l’appli te dit quoi apprendre et quoi réviser.' in home)
     check('aucune durée en minutes ni « un peu chaque jour »', not re.search(r'\d\s*min\b|minutes|Environ|chaque jour', home), re.findall(r'.{20}(?:min|Environ|chaque jour).{20}', home)[:3])
     check('bilan : 0 connue, 0 en cours, 0 à réviser ; juz ʿAmma 0 sur 38, tout le Coran 0 sur 114', nums(e) == [0, 0, 0]
-          and 'Juz ʿAmma (avec Al-Fatiha) : 0 sur 38' in home and 'Tout le Coran : 0 sourates sur 114' in home, nums(e))
+          and 'Juz ʿAmma (avec Al-Fatiha) : 0 sur 38' in home and 'Tout le Coran : 0 sourate sur 114' in home, nums(e))
     check('listes : « À apprendre » ouverte d’office (rien de coché), compteurs 0 / 0 / 114', tab_on(e) == 'todo' and tabs(e) == {'rev': 0, 'known': 0, 'todo': 114}, (tab_on(e), tabs(e)))
     r0 = rows(e)
     check('« À apprendre » : les 12 premières dans l’ordre (Al-Fatiha, An-Nas, Al-Falaq…), puis « Afficher les 102 autres »',

@@ -325,6 +325,16 @@ svg.i.lg { width: 30px; height: 30px; }
 .rate-btn { min-width: 50px; height: 40px; padding: 0 8px; border-radius: var(--pill); background: var(--surface-3); color: var(--ink-2); font-weight: 600; font-size: 14px; font-variant-numeric: tabular-nums; }
 .rate-btn:hover, .rate-btn:active { background: var(--soft); color: var(--soft-ink); }
 @media (max-width: 380px) { .player__in { padding-left: 12px; gap: 4px; } .rate-btn { min-width: 44px; } }
+/* Téléphone : le texte (sourate, verset, voix) sur sa propre ligne, les boutons dessous — sur une seule ligne il était
+   coupé après une dizaine de lettres */
+@media (max-width: 479px) {
+  .player__in { flex-wrap: wrap; row-gap: 2px; padding: 10px 10px 6px 16px; }
+  .player__info { flex: 1 1 100%; padding-right: 6px; }
+  .player__btns { flex: 1 1 100%; justify-content: space-between; }
+  body.has-player .toasts { bottom: calc(132px + env(safe-area-inset-bottom, 0px)); }
+  body.has-player:not(.has-page) .toasts { bottom: calc(206px + env(safe-area-inset-bottom, 0px)); }
+  body.has-player:not(.has-page) .app { padding-bottom: calc(230px + env(safe-area-inset-bottom, 0px)); }
+}
 body.has-player .page__inner { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
 /* Sur les onglets (lecteur fermé, la récitation continue) : le lecteur se pose au-dessus de la barre du bas, sans la cacher */
 body.has-player:not(.has-page) .player { bottom: calc(90px + env(safe-area-inset-bottom, 0px)); }
@@ -818,6 +828,12 @@ a.btn { text-decoration: none; }
 .mz-tabs__b.is-on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-1); }
 .mz-tabs__b.is-on b { background: var(--mz-k); color: var(--mz-k-ink); }
 .mz-lists__hint { margin: 10px 2px 8px; }
+/* « À apprendre » : l'ordre choisi, modifiable d'un toucher */
+.mz-order { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; margin: 10px 0 0; padding: 10px 14px; border: 0; border-radius: var(--r-md); background: var(--surface-2); color: var(--ink-2); font: inherit; font-size: 14.5px; line-height: 1.35; text-align: left; cursor: pointer; }
+.mz-order > .i { flex: none; color: var(--green-ink); }
+.mz-order__t { flex: 1; min-width: 0; }
+.mz-order__t b { color: var(--ink); font-weight: 600; }
+.mz-order__ch { flex: none; color: var(--green-ink); font-weight: 600; }
 .mz-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .mz-li { display: flex; align-items: center; gap: 6px; padding: 3px 8px 3px 3px; border-radius: var(--r-md); background: var(--surface); box-shadow: var(--shadow-1); }
 .mz-li.is-cur { box-shadow: inset 0 0 0 2px var(--mz-l-line), var(--shadow-1); }
