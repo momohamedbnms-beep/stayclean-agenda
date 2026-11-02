@@ -150,7 +150,7 @@ Contrôles faits à la construction : 114 sourates, 6 236 versets, numérotation
 ## Installation (une seule fois)
 
 1. **Rien d'obligatoire** : sans la table `qr_items`, la progression suit déjà sur tous les appareils grâce à l'espace de fichiers privé du compte (voir « Sauvegarde sans rien installer » plus bas). **Base de données (facultatif, recommandé un jour)** : Supabase → SQL Editor → colle [`supabase/mon-coran.sql`](supabase/mon-coran.sql) → **Run**. Il crée seulement la table `qr_items` (RLS : chaque compte ne voit que ses lignes). On peut le relancer sans risque (il met aussi à jour une installation ancienne). L'appli guide cette étape : bandeau « Ta progression reste sur cet appareil » → **L’activer** → **Copier le code**, **Ouvrir Supabase** (éditeur SQL du projet), **Run**, puis **C’est fait, vérifier**. Sans cette étape, Mon Coran fonctionne quand même, mais **sur cet appareil seulement** ; l'export / import JSON reste possible.
-2. **Mise en ligne** : publier sur `main` → GitHub Pages. Le service worker passe en v47.
+2. **Mise en ligne** : publier sur `main` → GitHub Pages. Le service worker passe en v49.
 3. Sur l'iPhone : ouvre StayClean Agenda **depuis l'icône** → MON CORAN.
 
 ## Comment c'est construit

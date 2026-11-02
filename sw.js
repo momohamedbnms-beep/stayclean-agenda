@@ -1,4 +1,4 @@
-var V = "stayclean-agenda-cache-v48";
+var V = "stayclean-agenda-cache-v49";
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 self.addEventListener("install", function (e) {
   self.skipWaiting();
@@ -45,6 +45,9 @@ self.addEventListener("fetch", function (e) {
   );
 });
 
+/* v49 (02/11/2026) — Mon Coran : 16 récitateurs — Maher Al-Muaiqly et les voix les plus aimées des auditeurs
+   (EveryAyah, verset par verset), ▶ pour écouter chaque voix dans les réglages ; repères mot à mot quran-align pour
+   6 d'entre elles (coran/data/timing/). Même règle « réseau d'abord ». */
 /* v48 (02/11/2026) — Mon Coran : dans « À apprendre », celles en cours en haut ; la récitation qui continue sur un onglet
    ne cache plus la barre du bas ; ouvrir une fiche retire le message précédent (il couvrait ses boutons). */
 /* v47 (02/11/2026) — Mon Coran : « Mémoriser » redessiné pour s'y retrouver — en haut, combien de sourates connues,
