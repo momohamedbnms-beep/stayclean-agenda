@@ -18,7 +18,10 @@ ZIP = os.path.join(ROOT, 'coran', 'sources', 'raw', 'quran-align-data-2016-11-24
 ZIP_SHA = '5eeb045d8a7895208c94d2d7ec243567f8f550728835411527c4ffa1e789c9b7'
 OUT = os.path.join(ROOT, 'coran', 'data', 'timing')
 SIGN = re.compile(r'^[ۖ-ۜ۞۩]+$')
-RECITERS = ['Husary_64kbps', 'Husary_Muallim_128kbps', 'Minshawy_Murattal_128kbps', 'Alafasy_128kbps']
+RECITERS = ['Husary_64kbps', 'Husary_Muallim_128kbps', 'Minshawy_Murattal_128kbps', 'Alafasy_128kbps',
+            # 02/11/2026 : voix ajoutées (les plus citées par les auditeurs) dont quran-align publie les repères
+            'Saood_ash-Shuraym_128kbps', 'Abdul_Basit_Murattal_64kbps', 'Abdul_Basit_Mujawwad_128kbps',
+            'Minshawy_Mujawwad_192kbps', 'Abdurrahmaan_As-Sudais_192kbps', 'Abu_Bakr_Ash-Shaatree_128kbps']
 
 
 def fail(msg):
@@ -45,7 +48,10 @@ def main():
         'qualite': "Comparaison publiée par l'auteur avec une méthode indépendante (ElMohafez) : écart moyen < 73 ms, écart-type moyen 139 ms ; 98,5 à 99,9 % des mots segmentés individuellement.",
     }, 'reciters': {}}
     for rec in RECITERS:
-        data = json.loads(z.read(rec + '.json'))
+        raw = z.read(rec + '.json').decode('utf-8')
+        # Le fichier de Sudais commence par un journal d'erreur de l'outil d'alignement (une commande relancée),
+        # suivi des données complètes : on lit à partir du tableau JSON.
+        data = json.loads(raw[raw.find('[{'):])
         by = {}
         for e in data:
             by[(e['surah'], e['ayah'])] = e
@@ -69,7 +75,10 @@ def main():
                         widx.append(k); k += 1
                 n = k
                 e = by[(s, a)]
-                segs = sorted(e['segments'], key=lambda g: (g[2], g[0]))
+                if not e.get('segments'):
+                    # alignement manqué pour ce verset (Shuraim 12:76, Minshawi mujawwad 32:24) : il reste sans repère
+                    tot['verses_sans_segments'] = tot.get('verses_sans_segments', 0) + 1
+                segs = sorted(e.get('segments') or [], key=lambda g: (g[2], g[0]))
                 mx = max([int(g[1]) for g in segs] or [0])
                 # Très rarement, la numérotation de quran-align compte aussi les marques de pause :
                 # on le détecte (indice maximal = nombre total de jetons) et on convertit ; sinon le verset reste sans repère.

@@ -2,7 +2,7 @@
 import os, json, time, re
 from playwright.sync_api import sync_playwright
 
-BASE = 'http://127.0.0.1:8765/'
+BASE = os.environ.get('QR_BASE', 'http://127.0.0.1:8765/')   # QR_BASE : autre copie du dépôt servie ailleurs
 QA = os.path.dirname(os.path.abspath(__file__))
 SHOTS = os.path.join(QA, 'shots')
 os.makedirs(SHOTS, exist_ok=True)
