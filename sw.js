@@ -1,4 +1,4 @@
-var V = "stayclean-agenda-cache-v47";
+var V = "stayclean-agenda-cache-v48";
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 self.addEventListener("install", function (e) {
   self.skipWaiting();
@@ -45,6 +45,8 @@ self.addEventListener("fetch", function (e) {
   );
 });
 
+/* v48 (02/11/2026) — Mon Coran : dans « À apprendre », celles en cours en haut ; la récitation qui continue sur un onglet
+   ne cache plus la barre du bas ; ouvrir une fiche retire le message précédent (il couvrait ses boutons). */
 /* v47 (02/11/2026) — Mon Coran : « Mémoriser » redessiné pour s'y retrouver — en haut, combien de sourates connues,
    en cours, à réviser ; trois listes (À réviser avec « Récitée », Connues, À apprendre avec ✓ pour cocher) ; la fiche
    d'une sourate ; révisions espacées (le lendemain, 3 jours, 1 semaine, 2 semaines, puis chaque mois) ; conseils et
