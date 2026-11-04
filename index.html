@@ -181,6 +181,8 @@ textarea{resize:none;border-radius:16px;padding:12px}
 .b-cancel{background:var(--rouge-bg);color:var(--rouge)}
 .toast{position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:60;border-radius:16px;padding:14px 16px;box-shadow:0 10px 30px rgba(15,34,51,.3)}
 .toast.ok{background:var(--nuit)}
+.toast{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.toast .tgo{display:inline-block;margin-top:8px;padding:6px 12px;border-radius:999px;background:#fff;color:var(--nuit);font-size:13px;font-weight:800}
 .toast.err{background:var(--rouge)}
 .toast p{color:#fff;font-size:14px;font-weight:700}
 .toast p+p{color:#BFD9EE;font-size:12px;font-weight:500;margin-top:4px}
@@ -4160,7 +4162,7 @@ function initSync() {
 function siteTour() {
   if (!siteCfg().actif) return Promise.resolve();
   return siteRecevoir().then(function (n) {
-    if (n) toast("ok", ["📥 " + n + " nouvelle(s) demande(s) depuis ton site — onglet Demandes."]);
+    if (n) toast("ok", ["📥 " + n + " nouvelle(s) demande(s) depuis ton site."], { tab: "demandes", label: "les demandes", duree: 6000 });
     return sitePublier();
   }).then(function () { renderChrome(); }).catch(function () {});
 }
@@ -4266,16 +4268,26 @@ function showWarn(msg) {
 }
 
 var toastTimer = null;
-function toast(type, lignes) {
+function toast(type, lignes, opts) {
   var box = document.getElementById("toastbox");
   var html = '<div class="toast ' + type + '">';
   lignes.forEach(function (l, i) {
     html += "<p>" + (i === 0 && type === "ok" ? "✓ " : "") + esc(l) + "</p>";
   });
+  if (opts && opts.tab) html += '<span class="tgo">Ouvrir ' + esc(opts.label || "") + " →</span>";
   html += "</div>";
   box.innerHTML = html;
+  /* 4/11/2026 : la bulle ne recouvre plus jamais la barre du bas (Planning · Demandes · Devis…) :
+     on la pose juste au-dessus. Un toucher la ferme ; si elle parle de demandes, il ouvre l'onglet Demandes. */
+  var t = box.firstChild, bas = document.querySelector("nav.bas");
+  var h = (bas && bas.style.display !== "none" && bas.offsetHeight) ? bas.offsetHeight : 0;
+  if (t) {
+    if (h) t.style.bottom = (h + 10) + "px";
+    if (opts && opts.tab) { t.setAttribute("data-act", "tab"); t.setAttribute("data-tab", opts.tab); }
+    t.addEventListener("click", function () { setTimeout(function () { box.innerHTML = ""; }, 0); });
+  }
   if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(function () { box.innerHTML = ""; }, lignes.length > 3 ? 12000 : 8000);
+  toastTimer = setTimeout(function () { box.innerHTML = ""; }, opts && opts.duree ? opts.duree : (lignes.length > 3 ? 12000 : 8000));
 }
 
 function thumbsHtml(list, target) {
@@ -6690,7 +6702,7 @@ if (sbConfigured()) initSync(); else setCloud("off");
   function tick() {
     if (document.hidden || !session || !siteCfg().actif) return;
     siteRecevoir().then(function (n) {
-      if (n) { toast("ok", ["📥 " + n + " nouvelle(s) demande(s) — onglet Demandes."]); renderChrome(); }
+      if (n) { toast("ok", ["📥 " + n + " nouvelle(s) demande(s) depuis ton site."], { tab: "demandes", label: "les demandes", duree: 6000 }); renderChrome(); }
     }).catch(function () {});
   }
   setInterval(tick, 180000);
