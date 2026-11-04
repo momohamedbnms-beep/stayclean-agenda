@@ -1,4 +1,4 @@
-var V = "stayclean-agenda-cache-v50";
+var V = "stayclean-agenda-cache-v51";
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 self.addEventListener("install", function (e) {
   self.skipWaiting();
@@ -21,8 +21,10 @@ self.addEventListener("fetch", function (e) {
   if (e.request.method !== "GET") return;
   var url = new URL(e.request.url);
   if (url.origin !== location.origin) return; /* API et fonts passent en direct */
+  /* v51 : la page elle-même est toujours redemandée au serveur (jamais le cache du navigateur) */
+  var req = e.request.mode === "navigate" ? fetch(url.href, { cache: "no-store", credentials: "same-origin" }) : fetch(e.request);
   e.respondWith(
-    fetch(e.request).then(function (res) {
+    req.then(function (res) {
       if (res && res.ok && res.type === "basic") {
         var cp = res.clone();
         caches.open(V).then(function (c) {
@@ -45,6 +47,8 @@ self.addEventListener("fetch", function (e) {
   );
 });
 
+/* v51 (04/11/2026) — Agenda : la page est toujours rechargée depuis le serveur (cache: no-store) pour que l'iPhone
+   ait la dernière version ; l'app vérifie aussi sa version à chaque retour (APP_BUILD dans index.html). */
 /* v50 (02/11/2026) — Mon Coran : apprendre les plus courtes d'abord (longueur réelle), le moins de versets d'abord ou
    l'ordre des écoles ; date prévue de chaque sourate ; lecteur audio sur deux lignes sur téléphone. Même règle
    « réseau d'abord ». */
