@@ -3820,7 +3820,8 @@ function siteRecevoir() {
     DB.dem.forEach(function (d) { connus[d.id] = true; });
     var nouveaux = (res.data || []).filter(function (d) { return !connus[d.id]; });
     nouveaux.forEach(function (d) { DB.dem.push(d); });
-    if (nouveaux.length) { saveLocal(); renderChrome(); }
+    /* 5/11/2026 : le bouton « Demandes » du Planning et la liste se mettent aussi à jour (avant : seule la barre du bas) */
+    if (nouveaux.length) { saveLocal(); renderChrome(); if (ui.space === "pro" && (ui.tab === "planning" || ui.tab === "demandes")) renderMain(); }
     return nouveaux.length;
   });
 }
@@ -6839,7 +6840,7 @@ if ("serviceWorker" in navigator) {
 /* 4/11/2026 : l'app sur l'écran d'accueil de l'iPhone reste ouverte en mémoire et gardait l'ancienne version.
    À chaque retour dans l'app (max 1 fois / 2 min), on regarde si une nouvelle version est en ligne ;
    si oui, on recharge — jamais pendant une saisie en cours. */
-var APP_BUILD = "2026-11-05a";
+var APP_BUILD = "2026-11-05b";
 (function () {
   /* 5/11/2026 : si une nouvelle version est en ligne, on recharge UNIQUEMENT au moment où l'app revient
      à l'écran (avant que le doigt touche quoi que ce soit) — jamais pendant que tu utilises l'app. */
