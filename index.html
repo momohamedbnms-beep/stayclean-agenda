@@ -179,10 +179,20 @@ textarea{resize:none;border-radius:16px;padding:12px}
 .b-done{background:var(--bleu);color:#fff}
 .b-open{background:var(--fond);border:1px solid var(--bordure)}
 .b-cancel{background:var(--rouge-bg);color:var(--rouge)}
-.toast{position:fixed;left:16px;right:16px;top:calc(10px + env(safe-area-inset-top));bottom:auto;max-width:560px;margin:0 auto;z-index:60;border-radius:16px;padding:14px 16px;box-shadow:0 10px 30px rgba(15,34,51,.3)}
+/* 5/11/2026 : la bulle ne capte plus AUCUN toucher (le doigt passe au travers), sauf son bouton « Ouvrir ».
+   Elle se pose juste au-dessus de la barre du bas et disparaît dès qu'on touche ailleurs. */
+#toastbox{position:fixed;left:0;right:0;bottom:calc(16px + env(safe-area-inset-bottom));z-index:60;display:flex;justify-content:center;padding:0 12px;pointer-events:none}
+#toastbox:empty{display:none}
+.toast{pointer-events:none;width:100%;max-width:560px;display:flex;align-items:center;gap:12px;border-radius:16px;padding:12px 12px 12px 16px;box-shadow:0 10px 30px rgba(15,34,51,.3);animation:toastIn .18s ease-out}
+.toast .tx{flex:1;min-width:0}
+@keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.toast{animation:none}}
 .toast.ok{background:var(--nuit)}
-.toast{cursor:pointer;-webkit-tap-highlight-color:transparent}
-.toast .tgo{display:inline-block;margin-top:8px;padding:6px 12px;border-radius:999px;background:#fff;color:var(--nuit);font-size:13px;font-weight:800}
+.toast .tgo{pointer-events:auto;flex:none;min-height:40px;padding:8px 14px;border:0;border-radius:999px;background:#fff;color:var(--nuit);font-size:13.5px;font-weight:800;white-space:nowrap}
+.toast .tgo:active{transform:scale(.96)}
+/* retour visuel immédiat au toucher, sur tous les boutons */
+:where(button,[data-act]){-webkit-user-select:none;user-select:none}
+:where(button,[data-act]):active{transform:scale(.97)}
 .toast.err{background:var(--rouge)}
 .toast p{color:#fff;font-size:14px;font-weight:700}
 .toast p+p{color:#BFD9EE;font-size:12px;font-weight:500;margin-top:4px}
@@ -4045,12 +4055,23 @@ function applyRemote(remote, merge) {
   saveLocal();
   if (window.SCB && SCB.relier) SCB.relier(); /* un éditeur ouvert pointe vers les nouvelles données */
 }
+var dernierRevVu = null; /* 5/11/2026 : version du cloud déjà connue (mémoire seulement) */
 function fetchRemote() {
   var c = getSb(); if (!c || !session) return Promise.resolve(null);
   return c.from("agenda_state").select("data,updated_at").eq("user_id", session.user.id).maybeSingle().then(function (res) {
     if (res.error) throw res.error;
+    dernierRevVu = res.data ? (res.data.updated_at || null) : null;
     return res.data ? { data: res.data.data || null, rev: res.data.updated_at || null } : null;
   });
+}
+/* Le cloud a-t-il changé depuis la dernière lecture complète ? On ne demande que la date (quelques octets)
+   au lieu de tout l'agenda (~1 Mo) : le retour dans l'app est instantané quand rien n'a bougé. */
+function cloudInchange() {
+  var c = getSb();
+  if (!c || !session || !dernierRevVu || syncDirty()) return Promise.resolve(false);
+  return c.from("agenda_state").select("updated_at").eq("user_id", session.user.id).maybeSingle().then(function (res) {
+    return !res.error && res.data && res.data.updated_at === dernierRevVu;
+  }).catch(function () { return false; });
 }
 /* première ouverture avec cette version : on part de l'état actuel comme base
    (l'ancienne synchro gardait l'appareil aligné), sans rien marquer « modifié » */
@@ -4106,6 +4127,13 @@ function pushCloud() {
 }
 /* Renvoie true si l'état local est à jour avec le cloud (lecture réussie). */
 function pullCloud() {
+  var c = getSb(); if (!c || !session) return Promise.resolve(false);
+  return cloudInchange().then(function (same) {
+    if (same) { setCloud("on"); return true; }
+    return pullCloudComplet();
+  });
+}
+function pullCloudComplet() {
   var c = getSb(); if (!c || !session) return Promise.resolve(false);
   var premiere = syncMeta().baseAt == null;
   initMetaSiBesoin();
@@ -4275,26 +4303,43 @@ function showWarn(msg) {
 }
 
 var toastTimer = null;
+/* 5/11/2026 — bulle d'information qui ne gêne jamais :
+   - elle ne capte aucun toucher (pointer-events: none), seul son bouton « Ouvrir » est touchable ;
+   - elle se place au-dessus de la barre du bas (Planning · Demandes · Devis…) sans jamais la couvrir ;
+   - elle disparaît dès qu'on touche l'écran ailleurs, ou au bout de quelques secondes. */
+function toastFermer() {
+  var box = document.getElementById("toastbox");
+  if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+  if (box && box.firstChild) box.innerHTML = "";
+}
 function toast(type, lignes, opts) {
   var box = document.getElementById("toastbox");
-  var html = '<div class="toast ' + type + '">';
+  if (!box) return;
+  var html = '<div class="toast ' + type + '" role="status"><div class="tx">';
   lignes.forEach(function (l, i) {
     html += "<p>" + (i === 0 && type === "ok" ? "✓ " : "") + esc(l) + "</p>";
   });
-  if (opts && opts.tab) html += '<span class="tgo">Ouvrir ' + esc(opts.label || "") + " →</span>";
+  html += "</div>";
+  if (opts && opts.tab) html += '<button type="button" class="tgo" data-act="tab" data-tab="' + esc(opts.tab) + '">Ouvrir</button>';
   html += "</div>";
   box.innerHTML = html;
-  /* 4/11/2026 : la bulle ne recouvre plus jamais la barre du bas (Planning · Demandes · Devis…) :
-     on la pose juste au-dessus. Un toucher la ferme ; si elle parle de demandes, il ouvre l'onglet Demandes. */
-  /* 4/11/2026 (2) : la bulle s'affiche en HAUT de l'écran : la barre du bas reste toujours libre. */
-  var t = box.firstChild;
-  if (t) {
-    if (opts && opts.tab) { t.setAttribute("data-act", "tab"); t.setAttribute("data-tab", opts.tab); }
-    t.addEventListener("click", function () { setTimeout(function () { box.innerHTML = ""; }, 0); });
-  }
+  var bas = document.querySelector("nav.bas");
+  var h = (bas && bas.style.display !== "none" && bas.offsetHeight) ? bas.offsetHeight : 0;
+  box.style.bottom = h ? (h + 8) + "px" : "";
   if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(function () { box.innerHTML = ""; }, opts && opts.duree ? opts.duree : (lignes.length > 3 ? 12000 : 8000));
+  toastTimer = setTimeout(toastFermer, opts && opts.duree ? opts.duree : (lignes.length > 3 ? 9000 : 5000));
 }
+/* un toucher n'importe où ferme la bulle (le toucher, lui, continue normalement vers ce qui est dessous) */
+document.addEventListener("pointerdown", function (e) {
+  var box = document.getElementById("toastbox");
+  if (!box || !box.firstChild) return;
+  if (e.target && e.target.closest && e.target.closest(".tgo")) return; /* le bouton « Ouvrir » ferme la bulle à son clic */
+  toastFermer();
+}, true);
+document.addEventListener("click", function (e) {
+  if (e.target && e.target.closest && e.target.closest("#toastbox .tgo")) setTimeout(toastFermer, 0);
+});
+document.addEventListener("visibilitychange", function () { if (document.hidden) toastFermer(); });
 
 function thumbsHtml(list, target) {
   var h = '<div class="thumbs">';
@@ -6670,6 +6715,76 @@ document.addEventListener("visibilitychange", function () {
 /* retour du réseau : on renvoie ce qui a été fait hors ligne */
 window.addEventListener("online", function () { if (session) pullCloud(); });
 
+/* ------------------------------------------------------------------
+   5/11/2026 — FLUIDITÉ : l'écran n'est jamais redessiné sous ton doigt.
+   Quand une info arrive en arrière-plan (nouvelle demande, synchro, timer…), l'app redessinait
+   la page et la barre du bas pendant que tu touchais l'écran : le toucher tombait dans le vide
+   et il fallait attendre 3-4 secondes. Désormais :
+   - un redessin déclenché par TOI (toucher, saisie) est immédiat, comme avant ;
+   - un redessin venu de l'arrière-plan attend que le doigt soit levé depuis 0,45 s, puis tous
+     ceux en attente sont regroupés en un seul ;
+   - la barre du bas et l'en-tête ne sont pas reconstruits s'ils n'ont pas changé.
+   ------------------------------------------------------------------ */
+(function () {
+  var doigt = false, dernierToucher = 0, dansEvenement = 0;
+  function bouge() { dernierToucher = Date.now(); }
+  document.addEventListener("pointerdown", function () { doigt = true; bouge(); }, true);
+  document.addEventListener("pointerup", function () { doigt = false; bouge(); }, true);
+  document.addEventListener("pointercancel", function () { doigt = false; bouge(); }, true);
+  document.addEventListener("touchstart", function () { doigt = true; bouge(); }, { capture: true, passive: true });
+  document.addEventListener("touchend", function () { doigt = false; bouge(); }, { capture: true, passive: true });
+  document.addEventListener("touchcancel", function () { doigt = false; bouge(); }, { capture: true, passive: true });
+  window.addEventListener("scroll", bouge, { capture: true, passive: true });
+  ["click", "input", "change", "keydown", "submit"].forEach(function (t) {
+    document.addEventListener(t, function () { dansEvenement++; setTimeout(function () { dansEvenement--; }, 0); }, true);
+  });
+  function occupe() {
+    if (doigt && Date.now() - dernierToucher > 5000) doigt = false; /* sécurité si un « lever » s'est perdu */
+    return doigt || Date.now() - dernierToucher < 450;
+  }
+  window.scDoigtOccupe = occupe;
+  var orig = { renderAll: renderAll, renderMain: renderMain, renderChrome: renderChrome, renderModals: renderModals };
+  var attente = {}, timer = null;
+  function vider() {
+    timer = null;
+    if (occupe()) { timer = setTimeout(vider, 200); return; }
+    var a = attente; attente = {};
+    if (a.renderAll || (a.renderChrome && a.renderMain && a.renderModals)) { orig.renderAll(); return; }
+    if (a.renderChrome) orig.renderChrome();
+    if (a.renderMain) orig.renderMain();
+    if (a.renderModals) orig.renderModals();
+  }
+  Object.keys(orig).forEach(function (nom) {
+    window[nom] = function () {
+      if (dansEvenement > 0 || !occupe()) {
+        if (nom === "renderAll") attente = {}; else delete attente[nom];
+        return orig[nom].apply(this, arguments);
+      }
+      attente[nom] = true;
+      if (!timer) timer = setTimeout(vider, 200);
+    };
+  });
+  /* barre du bas et en-tête : on ne remplace pas ce qui est déjà identique à l'écran */
+  var d = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML");
+  var tpl = document.createElement("template");
+  ["nav", "headx"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el || !d || !d.set) return;
+    try {
+      Object.defineProperty(el, "innerHTML", {
+        configurable: true,
+        get: function () { return d.get.call(this); },
+        set: function (v) {
+          v = String(v);
+          d.set.call(tpl, v);
+          if (d.get.call(tpl) === d.get.call(this)) return;
+          d.set.call(this, v);
+        }
+      });
+    } catch (e) {}
+  });
+})();
+
 /* --------------------------- démarrage ----------------------------- */
 
 (function () {
@@ -6724,26 +6839,41 @@ if ("serviceWorker" in navigator) {
 /* 4/11/2026 : l'app sur l'écran d'accueil de l'iPhone reste ouverte en mémoire et gardait l'ancienne version.
    À chaque retour dans l'app (max 1 fois / 2 min), on regarde si une nouvelle version est en ligne ;
    si oui, on recharge — jamais pendant une saisie en cours. */
-var APP_BUILD = "2026-11-04b";
+var APP_BUILD = "2026-11-05a";
 (function () {
-  var dernier = 0;
+  /* 5/11/2026 : si une nouvelle version est en ligne, on recharge UNIQUEMENT au moment où l'app revient
+     à l'écran (avant que le doigt touche quoi que ce soit) — jamais pendant que tu utilises l'app. */
+  var dernier = 0, majPrete = null, revenuLe = Date.now(), toucheLe = 0;
+  document.addEventListener("pointerdown", function () { toucheLe = Date.now(); }, true);
+  function occupe() {
+    return ui.qDraft || ui.facDraft || ui.docDraft || ui.depDraft || ui.venDraft || ui.showDevis || ui.showManuel || ui.showFacManuel || ui.qBusy || ui.busy || ui.facBusy || ui.docBusy || ui.depBusy || ui.chatBusy || ui.detailId || document.querySelector(".overlay");
+  }
+  function recharger(build) {
+    var k = "sc.maj." + build, deja = 0;
+    try { deja = +sessionStorage.getItem(k) || 0; } catch (e) {}
+    if (Date.now() - deja < 600000) return false; /* une seule tentative par version toutes les 10 min : jamais de boucle */
+    try { sessionStorage.setItem(k, Date.now()); } catch (e) {}
+    location.reload();
+    return true;
+  }
   function verifier() {
     if (document.hidden || Date.now() - dernier < 120000) return;
     dernier = Date.now();
     fetch("index.html?b=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.ok ? r.text() : ""; }).then(function (txt) {
       var m = /var APP_BUILD = "([^"]+)"/.exec(txt || "");
       if (!m || m[1] === APP_BUILD) return;
-      var occupe = ui.qDraft || ui.facDraft || ui.docDraft || ui.depDraft || ui.venDraft || ui.showDevis || ui.showManuel || ui.showFacManuel || ui.qBusy || ui.busy || ui.facBusy || ui.docBusy || ui.depBusy || ui.chatBusy || ui.detailId || document.querySelector(".overlay");
-      var k = "sc.maj." + m[1], deja = 0;
-      try { deja = +sessionStorage.getItem(k) || 0; } catch (e) {}
-      if (occupe || Date.now() - deja < 600000) return; /* une seule tentative par version toutes les 10 min : jamais de boucle */
-      try { sessionStorage.setItem(k, Date.now()); } catch (e) {}
-      location.reload();
+      /* l'app vient d'apparaître et tu n'as encore rien touché : on peut recharger sans gêner */
+      if (toucheLe < revenuLe && Date.now() - revenuLe < 2500 && !occupe() && recharger(m[1])) return;
+      majPrete = m[1]; /* sinon : ce sera fait à la prochaine ouverture */
     }).catch(function () {});
   }
-  document.addEventListener("visibilitychange", verifier);
-  window.addEventListener("focus", verifier);
-  setTimeout(verifier, 5000);
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) return;
+    revenuLe = Date.now();
+    if (majPrete && !occupe() && recharger(majPrete)) return;
+    verifier();
+  });
+  setTimeout(verifier, 1500);
 })();
 /* Rappel de Ma Paperasse touché pendant que l'agenda est ouvert : on n'interrompt jamais un travail en cours */
 if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", function (e) {
@@ -6757,7 +6887,7 @@ window.addEventListener("pageshow", function (e) { if (e.persisted && ui.space =
 </script>
 <script src="finance.js?v=20260926"></script>
 <script src="business.js?v=20260926b"></script>
-<script src="messagerie.js?v=20261102"></script>
+<script src="messagerie.js?v=20261105"></script>
 <script src="origine-google-ads.js?v=20260926"></script>
 </body>
 </html>

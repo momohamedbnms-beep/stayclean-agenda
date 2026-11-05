@@ -1429,6 +1429,9 @@
   });
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState !== "visible" || !connecte()) return;
+    // 5/11/2026 : messagerie en lecture seule — on ne recharge rien tant qu'elle n'est pas ouverte
+    // (avant : ~10 requêtes + la fonction serveur à chaque retour dans l'app, même sur le Planning)
+    if (!$("scm-root")) { S.pret = false; return; }
     // retour dans l'app : le temps réel a pu décrocher en arrière-plan
     if (!S.canal) abonner();
     charger();
@@ -1444,7 +1447,7 @@
   window.addEventListener("offline", function () { S.horsLigne = true; S.piedPour = null; if ($("scm-root")) dessiner(); });
   // Filet de sécurité : relecture toutes les 2 min tant que l'onglet est affiché
   setInterval(function () {
-    if (document.visibilityState === "visible" && $("scm-root") && connecte()) { charger(); verifierSante(false); }
+    if (document.visibilityState === "visible" && $("scm-root") && document.body.contains($("scm-root")) && connecte()) { charger(); verifierSante(false); }
   }, 120000);
 
   /* ------------------------------------------------------------ démarrage */
@@ -1452,7 +1455,8 @@
   (function demarrer() {
     // l'onglet était peut-être déjà affiché avant le chargement de ce fichier
     try { if (window.ui && window.ui.space === "pro" && window.ui.tab === "messages" && !$("scm-root") && typeof window.renderMain === "function") window.renderMain(); } catch (e) {}
-    if (connecte()) { if (!S.pret && !S.charge) charger(); abonner(); return; }
+    // 5/11/2026 : chargée seulement quand on ouvre l'onglet Messages (render() s'en charge)
+    if (connecte()) { if ($("scm-root") && !S.pret && !S.charge) { charger(); abonner(); } return; }
     if (++essais < 120) setTimeout(demarrer, 1500);
   })();
 
