@@ -5390,13 +5390,24 @@ function renderModals() {
   var dem = ui.demId ? findDem(ui.demId) : null;
   if (dem) {
     if (!ui.demForm || ui.demForm.id !== dem.id) {
-      ui.demForm = { id: dem.id, depl: 0, note: "", total: Number(dem.total || 0), duree: Number(dem.duree_min) || 0 };
+      ui.demForm = { id: dem.id, depl: 0, note: "", total: Number(dem.total || 0), duree: Number(dem.duree_min) || 0, jour: dem.jour || todayStr(), heure: String(dem.heure || "10:00").slice(0, 5) };
     }
     var df = ui.demForm;
+    /* 7/11/2026 : date et heure modifiables avant de confirmer */
+    var dfJour = df.jour || dem.jour, dfHeure = String(df.heure || dem.heure || "10:00").slice(0, 5);
+    var creneauChange = dfJour !== dem.jour || dfHeure !== String(dem.heure || "").slice(0, 5);
+    var dfDuree = Number(df.duree || dem.duree_min || DB.settings.defaultDuration || 120);
+    var conflits = (DB.bookings || []).filter(function (b) {
+      if (b.date !== dfJour || b.statut === "annule" || b.deleted) return false;
+      var d0 = toMin(dfHeure), f0 = d0 + dfDuree, d1 = toMin(b.heure), f1 = d1 + (Number(b.durationMin) || 120);
+      return d0 < f1 && d1 < f0;
+    });
     var totalFinal = Math.round(((Number(df.total) || 0) + (Number(df.depl) || 0)) * 100) / 100;
     h += '<div class="overlay" id="ov-dem"><div class="sheet">' +
       '<div class="sheet-head"><h2>Demande du site</h2><button class="x" data-act="dem-close">×</button></div>' +
-      '<div class="fac-ech e-prevoir">🕐 ' + humanDate(dem.jour) + " à " + esc(dem.heure) + "<small>Créneau bloqué — le client attend ta confirmation</small></div>" +
+      '<div class="fac-ech e-prevoir">🕐 ' + (creneauChange
+        ? humanDate(dfJour) + " à " + esc(dfHeure) + "<small>Nouveau créneau — le client avait demandé " + humanDate(dem.jour) + " à " + esc(dem.heure) + "</small>"
+        : humanDate(dem.jour) + " à " + esc(dem.heure) + "<small>Créneau bloqué — le client attend ta confirmation</small>") + "</div>" +
       '<section class="card sec"><p class="k">' + esc(dem.nom || "Client") + "</p>" +
       '<div class="demline"><span>📞 Téléphone</span><b>' + esc(dem.tel || "—") + "</b></div>" +
       '<div class="demline"><span>📍 Adresse</span><b style="text-align:right;max-width:60%">' + esc(dem.adresse || "—") + "</b></div>" +
@@ -5420,10 +5431,14 @@ function renderModals() {
       '<section class="card sec"><p class="k">Ce qu’il a commandé</p>' + demItemsHtml(dem) +
       '<div class="demtot"><span>Total annoncé sur le site</span><b class="tnum">' + euro(dem.total || 0) + "</b></div></section>" +
       '<section class="card sec"><p class="k">Ton ajustement avant de confirmer</p>' +
+      '<div class="two"><div class="fld"><label>Date</label><input type="date" value="' + esc(dfJour) + '" min="' + todayStr() + '" data-dem="jour"></div>' +
+      '<div class="fld"><label>Heure d’arrivée</label><input type="time" step="900" value="' + esc(dfHeure) + '" data-dem="heure"></div></div>' +
+      (creneauChange ? '<p class="note">📅 Créneau changé : préviens le client de la nouvelle date avant de confirmer. Son créneau d’origine (' + humanDate(dem.jour) + " à " + esc(dem.heure) + ') se libère sur le site. <button class="linkline" style="display:inline;padding:0" data-act="dem-creneau-reset">Remettre le créneau demandé</button></p>' : "") +
+      (conflits.length ? '<p class="note" style="color:#B42318">⚠️ Ce créneau chevauche ' + conflits.map(function (b) { return esc(b.client || "un RDV") + " (" + esc(b.heure) + ")"; }).join(", ") + ".</p>" : "") +
       '<div class="two"><div class="fld"><label>Prix des prestations (€)</label><input type="number" step="1" value="' + df.total + '" data-dem="total"></div>' +
       '<div class="fld"><label>Frais de déplacement (€)</label><input type="number" step="5" value="' + df.depl + '" data-dem="depl"></div></div>' +
       '<div class="fld"><label>Durée sur place <span style="font-weight:400;color:var(--gris)">(raccourcis-la si tu veux caser un autre client après)</span></label>' +
-      '<select data-dem="duree">' + dureeOptions(df.duree || dem.duree_min || DB.settings.defaultDuration || 120, dem.heure) + '</select></div>' +
+      '<select data-dem="duree">' + dureeOptions(dfDuree, dfHeure) + '</select></div>' +
       '<div class="fld"><label>Note pour toi (accès, étage, remarque…)</label><input value="' + esc(df.note) + '" data-dem="note"></div>' +
       '<div class="demtot"><span>Total final</span><b class="tnum" style="color:#047857">' + euro(totalFinal) + "</b></div>" +
       (totalFinal !== Number(dem.total || 0) ? '<p class="note">⚠️ Tu changes le prix annoncé (' + euro(dem.total || 0) + ") — préviens-le clairement dans ton message avant qu'il ne s'engage.</p>" : "") +
@@ -5727,17 +5742,31 @@ document.addEventListener("click", function (e) {
     }
     case "dem-open": ui.demId = el.getAttribute("data-id"); ui.demForm = null; renderModals(); break;
     case "dem-close": ui.demId = null; ui.demForm = null; renderAll(); break;
+    case "dem-creneau-reset": { var dR = ui.demId ? findDem(ui.demId) : null; if (dR && ui.demForm) { ui.demForm.jour = dR.jour; ui.demForm.heure = String(dR.heure || "").slice(0, 5); renderModals(); } break; }
     case "dem-ok": {
       var dOk = findDem(el.getAttribute("data-id")); if (!dOk) break;
       var fOk = ui.demForm || { total: dOk.total, depl: 0, note: "" };
       var totOk = Math.round(((Number(fOk.total) || 0) + (Number(fOk.depl) || 0)) * 100) / 100;
       var noteOk = [fOk.note, (Number(fOk.depl) || 0) ? "Frais de déplacement " + euro(fOk.depl) : ""].filter(Boolean).join(" · ");
+      var jourDem = dOk.jour, heureDem = String(dOk.heure || "").slice(0, 5);
+      var nvJour = fOk.jour || jourDem, nvHeure = String(fOk.heure || heureDem).slice(0, 5);
+      var deplace = nvJour !== jourDem || nvHeure !== heureDem;
       var bkOk = demConfirmer(dOk, totOk, noteOk);
       if (Number(fOk.duree) > 0 && bkOk.durationMin !== Number(fOk.duree)) { bkOk.durationMin = Number(fOk.duree); save(); }
+      /* 7/11/2026 : créneau déplacé par Mohamed avant de confirmer */
+      if (deplace) {
+        bkOk.date = nvJour; bkOk.heure = nvHeure;
+        bkOk.creneau = toMin(nvHeure) < 12 * 60 ? "matin" : "apres-midi";
+        bkOk.remarques = [bkOk.remarques, "Créneau déplacé (demandé : " + humanDate(jourDem) + " à " + heureDem + ")"].filter(Boolean).join(" · ");
+        dOk.jour = nvJour; dOk.heure = nvHeure;
+        save();
+        var cDep = getSb();
+        if (cDep && session) cDep.from("sc_demandes").update({ jour: nvJour, heure: nvHeure }).eq("id", dOk.id).then(function () {}, function () {});
+      }
       ui.demId = null; ui.demForm = null;
       ui.space = "pro"; ui.tab = "planning"; ui.detailId = bkOk.id;
       renderAll();
-      toast("ok", ["✅ RDV créé — " + humanDate(bkOk.date) + " à " + bkOk.heure, "Copie son message de confirmation depuis la fiche."]);
+      toast("ok", ["✅ RDV créé — " + humanDate(bkOk.date) + " à " + bkOk.heure, deplace ? "Nouveau créneau : copie son message de confirmation depuis la fiche (la nouvelle date y est)." : "Copie son message de confirmation depuis la fiche."]);
       sitePublier().catch(function () {});
       break;
     }
@@ -6600,6 +6629,7 @@ document.addEventListener("change", function (e) {
   var demF = t.getAttribute("data-dem");
   if (demF && ui.demForm) {
     if (demF === "note") ui.demForm.note = t.value;
+    else if (demF === "jour" || demF === "heure") { if (t.value) ui.demForm[demF] = t.value.slice(0, demF === "heure" ? 5 : 10); }
     else ui.demForm[demF] = t.value === "" ? 0 : Number(t.value) || 0;
     if (demF !== "note") renderModals();
     return;
@@ -6840,7 +6870,7 @@ if ("serviceWorker" in navigator) {
 /* 4/11/2026 : l'app sur l'écran d'accueil de l'iPhone reste ouverte en mémoire et gardait l'ancienne version.
    À chaque retour dans l'app (max 1 fois / 2 min), on regarde si une nouvelle version est en ligne ;
    si oui, on recharge — jamais pendant une saisie en cours. */
-var APP_BUILD = "2026-11-05b";
+var APP_BUILD = "2026-11-07a";
 (function () {
   /* 5/11/2026 : si une nouvelle version est en ligne, on recharge UNIQUEMENT au moment où l'app revient
      à l'écran (avant que le doigt touche quoi que ce soit) — jamais pendant que tu utilises l'app. */
