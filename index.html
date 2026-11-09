@@ -858,6 +858,13 @@ function placeBooking(parsed, bookings, settings) {
   function activeOn(d) { return bookings.filter(function (b) { return b.statut !== "annule" && b.date === d; }); }
   var dur = computeDuration(parsed.prestations, settings);
 
+  /* 9/11/2026 : date passée = intervention oubliée (rattrapage). On la garde exactement à la date
+     et l'heure données, sans la décaler ni appliquer le maximum par jour : elle compte dans le
+     chiffre d'affaires du mois concerné. (Avant : elle était déplacée à aujourd'hui.) */
+  if (parsed.date && parsed.date < tStr) {
+    var hPasse = parsed.heure || (parsed.creneau === "matin" ? settings.morningStart : settings.afternoonStart) || "10:00";
+    return { date: parsed.date, heure: hPasse, dur: dur, shiftedDay: false, shiftedTime: false, dateOrigine: parsed.date, passe: true };
+  }
   var date = parsed.date || addDaysStr(tStr, 1);
   if (date < tStr) date = tStr;
   var shiftedDay = false;
@@ -1150,7 +1157,8 @@ function buildBooking(parsed, placed) {
       total: parsed.total == null ? 0 : parsed.total,
       facture: parsed.facture === true,
       remarques: parsed.remarques || "",
-      statut: "confirme",
+      statut: placed.passe ? "termine" : "confirme",
+      rattrapage: placed.passe ? true : undefined,
       incomplet: manquants,
       creeLe: todayStr()
     },
@@ -1174,7 +1182,13 @@ function commitReservations(list) {
   var apres = caActif(DB.bookings);
 
   var lignes;
-  if (created.length === 1) {
+  function caMois(bks, ym) { return bks.filter(function (b) { return b.statut !== "annule" && !b.deleted && String(b.date || "").slice(0, 7) === ym; }).reduce(function (s0, b) { return s0 + (Number(b.total) || 0); }, 0); }
+  if (created.length === 1 && created[0].placed.passe) {
+    var cP = created[0], ymP = cP.placed.date.slice(0, 7), dP = parseDateStr(cP.placed.date);
+    var caAvantP = caMois(DB.bookings.filter(function (b) { return b !== cP.booking; }), ymP);
+    lignes = ["Intervention ajoutée le " + humanDate(cP.placed.date) + " — " + cP.booking.client,
+      "Chiffre d'affaires " + (/^[aeiouyéè]/i.test(MOIS_FULL[dP.getMonth()]) ? "d'" : "de ") + MOIS_FULL[dP.getMonth()].toLowerCase() + " : " + euro(caAvantP) + " → " + euro(caMois(DB.bookings, ymP))];
+  } else if (created.length === 1) {
     var c = created[0];
     lignes = [humanDate(c.placed.date) + " à " + c.placed.heure + " — " + c.booking.client];
     lignes.push(euro(c.booking.total) + " · CA actif : " + euro(avant) + " → " + euro(apres));
@@ -1194,6 +1208,12 @@ function commitReservations(list) {
   }
   toast("ok", lignes);
 
+  /* rattrapage lancé depuis Revenus : on reste sur Revenus, au mois concerné, pour voir le chiffre bouger */
+  if (created.length === 1 && created[0].placed.passe && ui.space === "pro" && ui.tab === "revenus") {
+    var dR2 = parseDateStr(created[0].placed.date);
+    ui.revPeriod = "mois"; ui.revMonth = { y: dR2.getFullYear(), m: dR2.getMonth() };
+    return;
+  }
   var target = startOfWeek(parseDateStr(created[0].placed.date));
   var cur = startOfWeek(new Date());
   ui.weekOffset = Math.round((target - cur) / (7 * 864e5));
@@ -4831,6 +4851,9 @@ function renderRevenus() {
   }
   h += '<section class="card hero"><p class="k">Chiffre d\u2019affaires</p><p class="v grad tnum">' + euro(p.ca) + '</p>' +
     '<p class="s">' + p.nb + " intervention" + (p.nb > 1 ? "s" : "") + (p.nb ? " \u00b7 panier " + euro(p.panier) : "") + (p.aVenir > 0 ? " \u00b7 dont " + euro(p.aVenir) + " \u00e0 venir" : "") + deltaHtml + "</p></section>";
+  /* 9/11/2026 : rattraper une intervention oubliée, le chiffre d'affaires se met à jour aussitôt */
+  var tdR = todayStr();
+  h += '<button class="linkline" style="margin:0 0 14px" data-act="rattrapage" data-d="' + (r.e < tdR ? r.s : (r.s < tdR ? addDaysStr(tdR, -1) : tdR)) + '">＋ Ajouter une intervention oubliée</button>';
   if (window.SCB && SCB.beneficeHtml) h += SCB.beneficeHtml(r.s, r.e, r.label);
 
   /* records de tous les temps */
@@ -5099,6 +5122,7 @@ function renderModals() {
       '<div class="fld"><label>Prestation</label><input id="m-presta" placeholder="Canapé 6/7 places — Premium"></div>' +
       '<div class="two"><div class="fld"><label>Date</label><input id="m-date" type="date" value="' + (ui.manuelDate || addDaysStr(todayStr(), 1)) + '"></div>' +
       '<div class="fld small"><label>Heure précise</label><input id="m-heure" type="time"></div></div>' +
+      '<p class="note" style="margin:-4px 0 10px">Oublié d’encoder une intervention ? Mets sa date passée : elle est comptée comme réalisée dans le chiffre d’affaires de ce mois-là.</p>' +
       '<div class="fld"><label>Créneau (si pas d\u2019heure)</label><select id="m-creneau"><option value="apres-midi">Après-midi</option><option value="matin">Matin</option></select></div>' +
       '<div class="fld" style="display:flex;align-items:center;gap:8px"><input id="m-fac" type="checkbox" style="width:auto"><label style="margin:0">Facture demandée</label></div>' +
       '<div class="fld"><label>Remarques</label><input id="m-rem"></div>' +
@@ -6124,6 +6148,7 @@ document.addEventListener("click", function (e) {
     case "open-devis": ui.showDevis = true; renderModals(); break;
     case "close-devis": if (!ui.busy) { ui.showDevis = false; ui.imgs = []; renderModals(); } break;
     case "open-manuel": ui.showDevis = false; ui.showManuel = true; renderModals(); break;
+    case "rattrapage": ui.manuelDate = el.getAttribute("data-d") || addDaysStr(todayStr(), -1); ui.showDevis = false; ui.showManuel = true; renderModals(); break;
     case "manuel-ia": ui.showManuel = false; ui.manuelDate = null; ui.showDevis = true; renderModals(); break;
     case "close-manuel": ui.showManuel = false; ui.manuelDate = null; renderModals(); break;
     case "img-add": fileTarget = el.getAttribute("data-target") || "resa"; document.getElementById("filepick").click(); break;
@@ -6870,7 +6895,7 @@ if ("serviceWorker" in navigator) {
 /* 4/11/2026 : l'app sur l'écran d'accueil de l'iPhone reste ouverte en mémoire et gardait l'ancienne version.
    À chaque retour dans l'app (max 1 fois / 2 min), on regarde si une nouvelle version est en ligne ;
    si oui, on recharge — jamais pendant une saisie en cours. */
-var APP_BUILD = "2026-11-07a";
+var APP_BUILD = "2026-11-09a";
 (function () {
   /* 5/11/2026 : si une nouvelle version est en ligne, on recharge UNIQUEMENT au moment où l'app revient
      à l'écran (avant que le doigt touche quoi que ce soit) — jamais pendant que tu utilises l'app. */
