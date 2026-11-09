@@ -350,6 +350,8 @@
       if (cred[b.id]) return; /* facture annulée par note de crédit : pas de revenu */
       if (b.statut === "termine") { real += b.total || 0; nbR++; } else { aVenir += b.total || 0; nbV++; }
     });
+    /* 9/11/2026 : chiffre d'affaires corrigé à la main (Revenus → « Corriger ce chiffre d'affaires ») */
+    if (window.caDeltaPlage) real = Math.max(0, real + window.caDeltaPlage(deb, fin));
     var reel = { essence: 0, produits: 0, pub: 0, autres: 0 }, nbDep = 0;
     cptData().dep.forEach(function (d) {
       if (!d.date || d.date < deb || d.date > fin || d.nature === "perso" || d.categorie === "cotisations") return;
@@ -357,11 +359,19 @@
       var k = d.categorie === "carburant" ? "essence" : d.categorie === "produits" ? "produits" : d.categorie === "publicite" ? "pub" : "autres";
       reel[k] += m; nbDep++;
     });
-    function est(min, max, parJour) { return { min: r2(min * parJour * nbJ), max: r2(max * parJour * nbJ), minT: r2(min * parJour * nbTot), maxT: r2(max * parJour * nbTot) }; }
-    var E = { essence: est(ch.essenceMin, ch.essenceMax, parJourMois), produits: est(ch.produits, ch.produits, parJourMois), pub: est(ch.pubJourMin, ch.pubJourMax, 1) };
+    /* 9/11/2026 : les charges estimées suivent le chiffre d'affaires (demande de Mohamed).
+       Taux = charge habituelle d'un mois ÷ CA moyen des 3 derniers mois complets ; charge estimée = taux × CA réalisé.
+       Plus de CA → plus d'essence et de produits ; moins de CA → moins de charges. */
+    var ref = caReference();
+    var mens = { essence: [ch.essenceMin, ch.essenceMax], produits: [ch.produits, ch.produits], pub: [ch.pubJourMin * 30.4, ch.pubJourMax * 30.4] };
+    function est(k) {
+      var tmin = (Number(mens[k][0]) || 0) / ref, tmax = (Number(mens[k][1]) || 0) / ref;
+      return { min: r2(tmin * real), max: r2(tmax * real), minT: r2(tmin * (real + aVenir)), maxT: r2(tmax * (real + aVenir)), pctMin: tmin * 100, pctMax: tmax * 100 };
+    }
+    var E = { essence: est("essence"), produits: est("produits"), pub: est("pub") };
     var lignes = ["essence", "produits", "pub"].map(function (k) {
       var e = E[k], mid = r2((e.min + e.max) / 2), rr = r2(reel[k]);
-      return { k: k, reel: rr, estMin: e.min, estMax: e.max, retenu: Math.max(rr, mid), retMin: Math.max(rr, e.min), retMax: Math.max(rr, e.max), midT: r2((e.minT + e.maxT) / 2), source: rr >= mid && rr > 0 ? "réel" : "estimé" };
+      return { k: k, reel: rr, estMin: e.min, estMax: e.max, pctMin: e.pctMin, pctMax: e.pctMax, retenu: Math.max(rr, mid), retMin: Math.max(rr, e.min), retMax: Math.max(rr, e.max), midT: r2((e.minT + e.maxT) / 2), source: rr >= mid && rr > 0 ? "réel" : "estimé" };
     });
     var autres = r2(reel.autres);
     var charges = r2(lignes.reduce(function (s2, l) { return s2 + l.retenu; }, 0) + autres);
@@ -370,10 +380,23 @@
     var caHT = r2(real / (1 + tx / 100));
     var projCaHT = r2((real + aVenir) / (1 + tx / 100));
     var chargesTot = r2(lignes.reduce(function (s2, l) { return s2 + Math.max(l.reel, l.midT); }, 0) + autres);
-    return { deb: deb, fin: fin, nbJ: nbJ, nbTot: nbTot, caTTC: r2(real), tva: r2(real - caHT), caHT: caHT, nbR: nbR, aVenir: r2(aVenir), nbV: nbV,
+    return { deb: deb, fin: fin, nbJ: nbJ, nbTot: nbTot, ref: r2(ref), caTTC: r2(real), tva: r2(real - caHT), caHT: caHT, nbR: nbR, aVenir: r2(aVenir), nbV: nbV,
       lignes: lignes, autres: autres, charges: charges, benef: r2(caHT - charges), benefMin: r2(caHT - chargesMax), benefMax: r2(caHT - chargesMin),
       projBenef: r2(projCaHT - chargesTot), projCaTTC: r2(real + aVenir), enCours: fin >= td && deb <= td, nbDep: nbDep };
   }
+  /* CA moyen (TVAC) des 3 derniers mois complets — sert de base aux taux de charges. 6 000 € si pas d'historique. */
+  function caReference() {
+    var now = new Date(), tot = 0, n = 0;
+    for (var i = 1; i <= 3; i++) {
+      var d = new Date(now.getFullYear(), now.getMonth() - i, 1), ym = d.getFullYear() + "-" + pad(d.getMonth() + 1);
+      var fin = ym + "-" + pad(new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()), ca = 0;
+      DB.bookings.forEach(function (b) { if (b.statut !== "annule" && String(b.date || "").slice(0, 7) === ym) ca += b.total || 0; });
+      if (window.caDeltaPlage) ca += window.caDeltaPlage(ym + "-01", fin);
+      if (ca > 0) { tot += ca; n++; }
+    }
+    return n ? Math.max(1000, tot / n) : 6000;
+  }
+  function pctTxt(a, b) { function f(x) { return (Math.round(x * 10) / 10).toString().replace(".", ","); } return Math.abs(a - b) < 0.05 ? f(a) + " %" : f(a) + " à " + f(b) + " %"; }
   var LIB = { essence: "⛽ Essence", produits: "🧴 Produits", pub: "📣 Publicité (Google, Meta…)" };
   function beneficeHtml(deb, fin, label) {
     var B = bilan(deb, fin), ch = CH();
@@ -383,14 +406,14 @@
       '<div class="tvaline"><span>− TVA incluse (à reverser à l\'État)</span><b class="tnum">−' + eur2(B.tva) + "</b></div>" +
       '<div class="tvaline"><span><b>Chiffre d\'affaires HTVA</b></span><b class="tnum">' + eur2(B.caHT) + "</b></div>";
     B.lignes.forEach(function (l) {
-      h += '<div class="tvaline"><span>− ' + LIB[l.k] + '<br><small style="color:var(--gris)">' + (l.source === "réel" ? "réel saisi : " + eur2(l.reel) : "estimé sur " + B.nbJ + " j (" + (l.estMin === l.estMax ? eur2(l.estMin) : eur2(l.estMin) + " à " + eur2(l.estMax)) + ")" + (l.reel ? " · réel saisi " + eur2(l.reel) : "")) + '</small></span><b class="tnum">−' + eur2(l.retenu) + "</b></div>";
+      h += '<div class="tvaline"><span>− ' + LIB[l.k] + '<br><small style="color:var(--gris)">' + (l.source === "réel" ? "réel saisi : " + eur2(l.reel) : "≈ " + pctTxt(l.pctMin, l.pctMax) + " du CA (" + (l.estMin === l.estMax ? eur2(l.estMin) : eur2(l.estMin) + " à " + eur2(l.estMax)) + ")" + (l.reel ? " · réel saisi " + eur2(l.reel) : "")) + '</small></span><b class="tnum">−' + eur2(l.retenu) + "</b></div>";
     });
     if (B.autres) h += '<div class="tvaline"><span>− Autres dépenses pro saisies</span><b class="tnum">−' + eur2(B.autres) + "</b></div>";
     h += '<div class="tvaline" style="border-top:2px solid var(--bordure)"><span><b>Bénéfice estimé</b><br><small style="color:var(--gris)">fourchette ' + eur2(B.benefMin) + " à " + eur2(B.benefMax) + '</small></span><b class="tnum" style="font-size:21px;color:' + (B.benef >= 0 ? "#047857" : "var(--rouge)") + '">' + eur2(B.benef) + "</b></div>";
     if (B.enCours && B.nbV) h += '<p class="note" style="margin:8px 0 0">📈 Avec les ' + B.nbV + " RDV encore prévus (" + eur2(B.aVenir) + "), fin de période estimée : CA " + eur2(B.projCaTTC) + " TVAC · bénéfice ≈ <b>" + eur2(B.projBenef) + "</b>.</p>";
     h += '<p class="note" style="margin:6px 0 0">Avant cotisations sociales et impôt (voir Compta → À payer). Ce n\'est pas un salaire.</p>';
     h += '<details class="scf-regle"><summary>Comment c\'est calculé ? · mes charges habituelles</summary>' +
-      "<p>Revenus = RDV de la période marqués terminés" + (ch.autoTerminer ? " (un RDV passé et non annulé est compté automatiquement — si le client n'est pas venu, annule le RDV)" : "") + ". Charges : pour chaque poste, l'app prend le plus élevé entre ce que tu as réellement saisi dans Compta → Dépenses et ton estimation habituelle au prorata des jours écoulés. Les montants de charges sont ceux payés (TVAC) : c'est prudent, une partie de la TVA pourra être récupérée.</p>" +
+      "<p>Revenus = RDV de la période marqués terminés" + (ch.autoTerminer ? " (un RDV passé et non annulé est compté automatiquement — si le client n'est pas venu, annule le RDV)" : "") + ". Charges : elles suivent ton chiffre d'affaires. Pour chaque poste, ta charge habituelle d'un mois (ci-dessous) est divisée par ton CA moyen des 3 derniers mois (" + eur2(B.ref) + ") : ça donne un pourcentage, appliqué au CA de la période. Si tu as saisi plus en réel dans Compta → Dépenses, c'est le réel qui compte. Les montants de charges sont ceux payés (TVAC) : c'est prudent, une partie de la TVA pourra être récupérée.</p>" +
       '<div class="two"><div class="fld"><label>Essence / mois min (€)</label><input id="scb-ch-essenceMin" type="number" value="' + ch.essenceMin + '"></div><div class="fld"><label>Essence / mois max (€)</label><input id="scb-ch-essenceMax" type="number" value="' + ch.essenceMax + '"></div></div>' +
       '<div class="two"><div class="fld"><label>Publicité / jour min (€)</label><input id="scb-ch-pubJourMin" type="number" value="' + ch.pubJourMin + '"></div><div class="fld"><label>Publicité / jour max (€)</label><input id="scb-ch-pubJourMax" type="number" value="' + ch.pubJourMax + '"></div></div>' +
       '<div class="fld"><label>Produits / mois (€)</label><input id="scb-ch-produits" type="number" value="' + ch.produits + '"></div>' +

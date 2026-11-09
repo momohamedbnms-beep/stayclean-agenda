@@ -4300,9 +4300,9 @@ function computeStats() {
     .sort(function (a, b) { return b[1] - a[1]; }).slice(0, 6);
 
   return {
-    caWeek: sum(inWeek), caMonth: sum(inMonth), caAnnuleMois: sum(annulesMois),
+    caWeek: sum(inWeek), caMonth: sum(inMonth) + caDeltaPlage(monthKey + "-01", monthKey + "-31"), caAnnuleMois: sum(annulesMois),
     caToday: sum(inToday), nbToday: inToday.length,
-    caYear: sum(inYear), nbYear: inYear.length,
+    caYear: sum(inYear) + caDeltaPlage(yearKey + "-01-01", yearKey + "-12-31"), nbYear: inYear.length,
     parJour: parJour,
     months: months, year: yearKey,
     annules: annules,
@@ -4734,6 +4734,26 @@ function rangeFor(period) {
   return { s: sw, e: ew, label: a.getDate() + " " + MOIS[a.getMonth()] + " \u2013 " + b2.getDate() + " " + MOIS[b2.getMonth()], current: ui.revWeekOff === 0, gran: "semaine" };
 }
 
+/* 9/11/2026 : chiffre d'affaires corrigé à la main, mois par mois (DB.settings.caCorrections = { "2026-10": 6200 }).
+   Le montant saisi remplace le calcul des RDV pour ce mois : totaux, année, comparaisons, records et bénéfice suivent. */
+function caCorrections() { return (DB.settings && DB.settings.caCorrections) || {}; }
+function caBrutMois(ym) {
+  var t = 0;
+  DB.bookings.forEach(function (b) { if (b.statut !== "annule" && String(b.date || "").slice(0, 7) === ym) t += Number(b.total) || 0; });
+  return t;
+}
+function caDeltaPlage(s, e) {
+  var c = caCorrections(), d = 0;
+  Object.keys(c).forEach(function (ym) {
+    var v = Number(c[ym]);
+    if (c[ym] == null || isNaN(v)) return;
+    var deb = ym + "-01", fin = ym + "-" + pad(new Date(+ym.slice(0, 4), +ym.slice(5, 7), 0).getDate());
+    if (deb >= s && fin <= e) d += v - caBrutMois(ym);
+  });
+  return Math.round(d * 100) / 100;
+}
+window.caDeltaPlage = caDeltaPlage;
+
 function periodStats(r) {
   var active = DB.bookings.filter(function (b) { return b.statut !== "annule" && b.date >= r.s && b.date <= r.e; });
   var annul = DB.bookings.filter(function (b) { return b.statut === "annule" && b.date >= r.s && b.date <= r.e; });
@@ -4783,7 +4803,8 @@ function periodStats(r) {
     .filter(function (x) { return x[1] > 0; })
     .sort(function (a, b) { return b[1] - a[1]; }).slice(0, 6);
   var aVenir = sum(active.filter(function (b) { return b.date > tStr || (b.date === tStr && b.statut !== "termine"); }));
-  return { ca: sum(active), nb: active.length, panier: active.length ? sum(active) / active.length : 0, aVenir: aVenir, bars: bars, parJour: parJour, repartition: repartition, annules: annul, caAnnule: sum(annul) };
+  var dCorr = caDeltaPlage(r.s, r.e), caTot = sum(active) + dCorr;
+  return { ca: caTot, corr: dCorr, nb: active.length, panier: active.length ? caTot / active.length : 0, aVenir: aVenir, bars: bars, parJour: parJour, repartition: repartition, annules: annul, caAnnule: sum(annul) };
 }
 
 /* Records de tous les temps : meilleur jour / semaine / mois */
@@ -4798,6 +4819,8 @@ function revRecords() {
     var ym = b.date.slice(0, 7);
     byMonth[ym] = (byMonth[ym] || 0) + t;
   });
+  var cRec = caCorrections();
+  Object.keys(cRec).forEach(function (ym) { if (cRec[ym] != null && !isNaN(Number(cRec[ym]))) byMonth[ym] = Number(cRec[ym]); });
   function best(m) {
     var k = null;
     Object.keys(m).forEach(function (x) { if (k === null || m[x] > m[k]) k = x; });
@@ -4824,7 +4847,25 @@ function prevPeriodCA(r, period) {
   DB.bookings.forEach(function (b) {
     if (b.statut !== "annule" && b.date >= s && b.date <= e2) ca += b.total || 0;
   });
-  return ca;
+  return ca + caDeltaPlage(s, e2);
+}
+
+function caCorrHtml(period, r) {
+  if (period !== "mois") return "";
+  var ym = r.s.slice(0, 7), v = caCorrections()[ym];
+  if (ui.caEdit === ym) {
+    return '<div class="fld" style="margin-top:12px"><label>Chiffre d’affaires réel du mois (€ TVAC)</label>' +
+      '<input id="ca-corr-in" type="number" inputmode="decimal" step="1" value="' + (v != null ? v : Math.round(caBrutMois(ym))) + '"></div>' +
+      '<p class="note" style="margin:0 0 10px">Ce montant remplace le total calculé avec les RDV (' + euro(caBrutMois(ym)) + ') pour ce mois. Ton bénéfice estimé suit.</p>' +
+      '<button class="btn-main" data-act="ca-corr-save" data-ym="' + ym + '">Enregistrer ce chiffre d’affaires</button>' +
+      '<button class="linkline" data-act="ca-corr-cancel">Annuler</button>';
+  }
+  if (v != null) {
+    return '<p class="s" style="margin-top:8px">✏️ Corrigé à la main · calculé avec les RDV : ' + euro(caBrutMois(ym)) + '</p>' +
+      '<div style="display:flex;gap:16px;margin-top:6px"><button class="linkline" style="margin:0" data-act="ca-corr-edit" data-ym="' + ym + '">Modifier</button>' +
+      '<button class="linkline" style="margin:0;color:var(--rouge)" data-act="ca-corr-del" data-ym="' + ym + '">Revenir au calcul automatique</button></div>';
+  }
+  return '<button class="linkline" style="margin:10px 0 0;text-align:left" data-act="ca-corr-edit" data-ym="' + ym + '">✏️ Corriger ce chiffre d’affaires</button>';
 }
 
 function renderRevenus() {
@@ -4850,7 +4891,7 @@ function renderRevenus() {
     deltaHtml = ' \u00b7 <b style="color:var(--vert)">nouveau record vs p\u00e9riode pr\u00e9c. (0\u202f\u20ac)</b>';
   }
   h += '<section class="card hero"><p class="k">Chiffre d\u2019affaires</p><p class="v grad tnum">' + euro(p.ca) + '</p>' +
-    '<p class="s">' + p.nb + " intervention" + (p.nb > 1 ? "s" : "") + (p.nb ? " \u00b7 panier " + euro(p.panier) : "") + (p.aVenir > 0 ? " \u00b7 dont " + euro(p.aVenir) + " \u00e0 venir" : "") + deltaHtml + "</p></section>";
+    '<p class="s">' + p.nb + " intervention" + (p.nb > 1 ? "s" : "") + (p.nb ? " \u00b7 panier " + euro(p.panier) : "") + (p.aVenir > 0 ? " \u00b7 dont " + euro(p.aVenir) + " \u00e0 venir" : "") + deltaHtml + "</p>" + caCorrHtml(period, r) + "</section>";
   /* 9/11/2026 : rattraper une intervention oubliée, le chiffre d'affaires se met à jour aussitôt */
   var tdR = todayStr();
   h += '<button class="linkline" style="margin:0 0 14px" data-act="rattrapage" data-d="' + (r.e < tdR ? r.s : (r.s < tdR ? addDaysStr(tdR, -1) : tdR)) + '">＋ Ajouter une intervention oubliée</button>';
@@ -6148,6 +6189,27 @@ document.addEventListener("click", function (e) {
     case "open-devis": ui.showDevis = true; renderModals(); break;
     case "close-devis": if (!ui.busy) { ui.showDevis = false; ui.imgs = []; renderModals(); } break;
     case "open-manuel": ui.showDevis = false; ui.showManuel = true; renderModals(); break;
+    case "ca-corr-edit": ui.caEdit = el.getAttribute("data-ym"); renderMain(); var ciE = document.getElementById("ca-corr-in"); if (ciE) { ciE.focus(); try { ciE.select(); } catch (e9) {} } break;
+    case "ca-corr-cancel": ui.caEdit = null; renderMain(); break;
+    case "ca-corr-save": {
+      var ymS = el.getAttribute("data-ym"), vS = (document.getElementById("ca-corr-in") || {}).value, nS = Number(String(vS || "").replace(",", "."));
+      if (vS === "" || isNaN(nS) || nS < 0) { toast("err", ["Montant invalide : tape un nombre, par exemple 6200."]); break; }
+      var finS = ymS + "-" + pad(new Date(+ymS.slice(0, 4), +ymS.slice(5, 7), 0).getDate());
+      var avantS = caBrutMois(ymS) + caDeltaPlage(ymS + "-01", finS);
+      if (!DB.settings.caCorrections || typeof DB.settings.caCorrections !== "object") DB.settings.caCorrections = {};
+      DB.settings.caCorrections[ymS] = Math.round(nS * 100) / 100;
+      ui.caEdit = null; save(); renderAll();
+      var moisS = MOIS_FULL[+ymS.slice(5, 7) - 1].toLowerCase();
+      toast("ok", ["Chiffre d'affaires " + (/^[aeiouyéè]/i.test(moisS) ? "d'" : "de ") + moisS + " : " + euro(avantS) + " → " + euro(nS), "Ton bénéfice estimé suit ce montant."]);
+      break;
+    }
+    case "ca-corr-del": {
+      var ymD = el.getAttribute("data-ym");
+      if (DB.settings.caCorrections) delete DB.settings.caCorrections[ymD];
+      ui.caEdit = null; save(); renderAll();
+      toast("ok", ["Retour au calcul automatique : " + euro(caBrutMois(ymD)) + " (somme des RDV)."]);
+      break;
+    }
     case "rattrapage": ui.manuelDate = el.getAttribute("data-d") || addDaysStr(todayStr(), -1); ui.showDevis = false; ui.showManuel = true; renderModals(); break;
     case "manuel-ia": ui.showManuel = false; ui.manuelDate = null; ui.showDevis = true; renderModals(); break;
     case "close-manuel": ui.showManuel = false; ui.manuelDate = null; renderModals(); break;
@@ -6895,7 +6957,7 @@ if ("serviceWorker" in navigator) {
 /* 4/11/2026 : l'app sur l'écran d'accueil de l'iPhone reste ouverte en mémoire et gardait l'ancienne version.
    À chaque retour dans l'app (max 1 fois / 2 min), on regarde si une nouvelle version est en ligne ;
    si oui, on recharge — jamais pendant une saisie en cours. */
-var APP_BUILD = "2026-11-09a";
+var APP_BUILD = "2026-11-09b";
 (function () {
   /* 5/11/2026 : si une nouvelle version est en ligne, on recharge UNIQUEMENT au moment où l'app revient
      à l'écran (avant que le doigt touche quoi que ce soit) — jamais pendant que tu utilises l'app. */
@@ -6942,7 +7004,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("mess
 window.addEventListener("pageshow", function (e) { if (e.persisted && ui.space === "portal") renderAll(); });
 </script>
 <script src="finance.js?v=20260926"></script>
-<script src="business.js?v=20260926b"></script>
+<script src="business.js?v=20261109"></script>
 <script src="messagerie.js?v=20261105"></script>
 <script src="origine-google-ads.js?v=20260926"></script>
 </body>
