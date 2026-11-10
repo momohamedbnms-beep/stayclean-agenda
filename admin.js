@@ -1208,6 +1208,28 @@
       });
     });
   }
+  /* Relevés déjà lus ailleurs (même code de lecture) : on intègre l'analyse sans l'original ;
+     le document reste marqué « original à redéposer » jusqu'au dépôt du fichier lui-même
+     (même empreinte → l'original est alors simplement conservé, rien n'est recompté). */
+  function importerAnalyses(liste) {
+    var D = { quand: nowIso(), lignes: [], erreurs: [], avant: chiffresCles() };
+    return sauvegarder("avant import des relevés analysés").then(function (r) {
+      D.sauvegarde = r;
+      var C = A();
+      liste.forEach(function (x) {
+        if (C.admDocs.some(function (d) { return d.sha === x.sha; })) { D.lignes.push({ nom: x.nom, res: "Déjà présent : rien n'a changé." }); return; }
+        var doc = { id: "doc_" + x.sha.slice(0, 16), nom: x.nom, sha: x.sha, mime: "application/pdf", taille: x.taille, le: nowIso(), type: "releve", ops: [], chemin: null, envoi: "original à redéposer (relevé lu par l'assistant à partir du fichier envoyé dans la conversation)" };
+        var L = integrerReleve(x.R, doc); C.admDocs.push(doc); D.lignes.push(Object.assign({ nom: x.nom }, L));
+      });
+      var np = detecterPaiements(); if (np) D.lignes.push({ nom: "Relevés", res: np + " paiement(s) Xerius / SPF Finances repéré(s)." });
+      _M = null;
+      var apres = chiffresCles();
+      D.changements = Object.keys(apres).filter(function (k) { return apres[k] !== D.avant[k]; }).map(function (k) { var monnaie = /TVA|Encaissements/.test(k); return k + " : " + (D.avant[k] == null ? "—" : monnaie ? eu(D.avant[k]) : D.avant[k]) + " → " + (monnaie ? eu(apres[k]) : apres[k]); });
+      hist({ type: "import", objet: liste.length + " relevé(s) analysé(s)", etape: "fait", note: D.lignes.map(function (l) { return l.nom + " : " + l.res; }).join(" | ").slice(0, 900) });
+      U.depot = D; save(); rafraichir();
+      return D;
+    });
+  }
   var TYPES_DOC = { releve: "Relevé bancaire", facture_achat: "Facture d'achat", ticket: "Ticket de caisse", facture_vente: "Facture de vente", decompte_xerius: "Décompte Xerius", accuse_depot: "Accusé de dépôt", preuve_paiement: "Preuve de paiement", courrier_fisc: "Courrier fiscal", autre: "Autre document" };
   function descPiece(d) {
     return (TYPES_DOC[d.type] || "Document") + (d.fournisseur ? " " + d.fournisseur : "") + (d.ttc != null ? " — " + eu(d.ttc) + (d.devise && d.devise !== "EUR" ? " (" + d.devise + ")" : "") : "") + (d.date ? " du " + dfr(d.date) : "") +
@@ -1718,6 +1740,6 @@
     actions: function () { return actions(); }, registre: function () { return registre(); }, echeances: function () { return echeances(); }, xerius: function () { return xeriusVue(); },
     deposer: deposer, sauvegarder: sauvegarder, restaurer: restaurer, exporter: exporter, verifierRappels: verifierRappels, rappelsDus: function () { return rappelsDus(); }, ics: function () { return ics(echeances()); },
     aDesReleves: function () { return A().admImp.length > 0; }, regles: R, verifie: VERIF,
-    _t: { parseRevolutPdf: parseRevolutPdf, parseRevolutCsv: parseRevolutCsv, pdfLignes: pdfLignes, lirePiece: lirePiece, catAuto: catAuto, paysDe: paysDe, typeClient: typeClient, montantTxt: montantTxt, dateTxt: dateTxt, U: U, piece: piece, noterDepot: noterDepot, resumeSauvegarde: resumeSauvegarde, listeSauvegardes: listeSauvegardes, chargerSauvegarde: chargerSauvegarde, brutDepuisNet: brutDepuisNet, CLE_RAPPELS: CLE_RAPPELS }
+    _t: { parseRevolutPdf: parseRevolutPdf, parseRevolutCsv: parseRevolutCsv, pdfLignes: pdfLignes, lirePiece: lirePiece, catAuto: catAuto, paysDe: paysDe, typeClient: typeClient, montantTxt: montantTxt, dateTxt: dateTxt, U: U, piece: piece, noterDepot: noterDepot, resumeSauvegarde: resumeSauvegarde, listeSauvegardes: listeSauvegardes, chargerSauvegarde: chargerSauvegarde, brutDepuisNet: brutDepuisNet, importerAnalyses: importerAnalyses, CLE_RAPPELS: CLE_RAPPELS }
   };
 })();
