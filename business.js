@@ -458,26 +458,189 @@
       if (d.statut === "paye" || d.nature === "perso") return; /* une dépense privée n'est pas une dette de l'entreprise */
       out.push({ id: "dep_" + d.id, src: "depense", ref: d.id, type: "SUPPLIER", creancier: d.fournisseur || "Dépense", montant: d.ttc, officiel: true, echeance: d.echeance || null, statut: "a_payer", iban: d.iban, communication: d.ref, notes: "Dépense scannée pas encore marquée payée" });
     });
-    /* TVA : estimation seulement tant qu'aucun montant officiel n'est saisi */
+    /* TVA : estimation seulement tant qu'aucun montant officiel n'est saisi.
+       10/11/2026 : un trimestre dont l'échéance est dépassée reste affiché (en retard) tant que
+       sa déclaration n'est pas notée — avant, il disparaissait le 26 du mois sans prévenir. */
     if (p.regimeTva !== "franchise") {
-      var ti = trimInfo(td), tp = trimPrec(ti);
-      [tp, ti].forEach(function (q, idx) {
-        if (idx === 0 && td > q.echTva) return;
-        var off = officielPour("VAT", q.label);
-        if (off) return;
-        var tv = cptTvaTrim(q.y, q.t);
+      var ti = trimInfo(td), qs = [ti], q0 = ti;
+      for (var k = 0; k < 4; k++) { q0 = trimPrec(q0); qs.unshift(q0); }
+      qs.forEach(function (q) {
+        if (p.debut && q.fin < p.debut) return; /* trimestre d'avant le début de l'activité */
+        if (officielPour("VAT", q.label)) return;
+        var tv = cptTvaTrim(q.y, q.t), depasse = td > q.echTva;
+        if (depasse && !(tv.solde > 0)) return;
         out.push({ id: "est_tva_" + q.label, src: "estimation", type: "VAT", creancier: "SPF Finances (TVA)", montant: r2(Math.max(0, tv.solde)), officiel: false, periode: q.label, echeance: q.echTva, statut: "a_payer",
-          explication: "TVA collectée " + eur2(tv.col + tv.colResa) + " − TVA déductible " + eur2(tv.ded) + " = " + eur2(tv.solde) + " (" + q.label + "). Échéance trimestrielle le 25 du mois suivant (source secondaire, à vérifier" + (p.periodiciteTva === "mensuelle" ? " — tu as indiqué des déclarations mensuelles : ce calcul trimestriel est à adapter" : "") + ")." });
+          explication: (depasse ? "⚠️ Échéance dépassée (" + dfr(q.echTva) + "). Si tu as déjà déposé et payé cette déclaration (Accountable ou MyMinfin), saisis le montant officiel puis « Marquer payé » : la ligne disparaîtra. Sinon, dépose-la au plus vite : le retard coûte des amendes et des intérêts. " : "") +
+            "TVA collectée " + eur2(tv.col + tv.colResa) + " − TVA déductible " + eur2(tv.ded) + " = " + eur2(tv.solde) + " (" + q.label + (p.debut && q.label === trimInfo(p.debut).label ? ", depuis ton début le " + dfr(p.debut) : "") + "). Déclaration et paiement le 25 du mois qui suit le trimestre, sans report au jour ouvrable suivant pour les déclarants trimestriels (SPF Finances). Paiement : " + IBAN_TVA + " avec ta communication structurée TVA (MyMinfin ou Accountable)." +
+            (p.periodiciteTva === "mensuelle" ? " Tu as indiqué des déclarations mensuelles : ce calcul trimestriel est à adapter." : "") });
       });
     }
     /* Cotisations sociales : le décompte Xerius fait foi */
     var tq = trimInfo(td);
     if (!officielPour("SOCIAL_CONTRIBUTION", tq.label)) {
-      var principal = p.statutIndep !== "complementaire";
-      out.push({ id: "est_cot_" + tq.label, src: "estimation", type: "SOCIAL_CONTRIBUTION", creancier: p.caisseSociale || "Caisse d'assurances sociales", montant: principal ? 890.42 : null, officiel: false, periode: tq.label, echeance: tq.fin, statut: "a_payer",
-        explication: principal ? "Hypothèse : cotisation provisoire minimale 2026 d'un indépendant à titre principal (890,42 € hors frais de gestion de la caisse, source secondaire UCM/Partena). Ton vrai montant est sur ton décompte Xerius : saisis-le pour remplacer cette estimation. Échéance supposée : fin du trimestre (à vérifier sur le décompte)." : "Je n'ai pas cette information : le minimum dépend de ta situation en complémentaire. Saisis ton décompte Xerius." });
+      var principal = p.statutIndep !== "complementaire", R = regles(tq.y), fc = fraisCaisse(), mtc = r2(R.min * (1 + fc));
+      out.push({ id: "est_cot_" + tq.label, src: "estimation", type: "SOCIAL_CONTRIBUTION", creancier: p.caisseSociale || "Caisse d'assurances sociales", montant: principal ? mtc : null, officiel: false, periode: tq.label, echeance: tq.fin, statut: "a_payer",
+        explication: principal ? "Hypothèse : cotisation provisoire minimale d'un indépendant à titre principal, " + eur2(R.min) + " hors frais" + (fc ? " + frais de gestion Xerius 3,05 % = " + eur2(mtc) : "") + (REGLES[tq.y] ? " (INASTI " + tq.y + ")" : " (chiffres 2026 : ceux de " + tq.y + " ne sont pas encore publiés, ils seront un peu plus élevés)") + ". Ton vrai montant arrive sur ton décompte dans My Xerius : saisis-le pour remplacer cette estimation. L'argent doit être sur le compte de la caisse le dernier jour du trimestre." : "Je n'ai pas cette information : le minimum dépend de ta situation en complémentaire. Saisis ton décompte Xerius." });
     }
     return out;
+  }
+
+  /* ====== COTISATIONS : COMBIEN, QUAND, OÙ, COMMENT RÉDUIRE (10/11/2026) ======
+     Demande de Mohamed : « le budget à prévoir, où je dois payer mes cotisations, quand,
+     combien, comment réduire ». Règles vérifiées le 10/11/2026 :
+     – INASTI / SPF Sécurité sociale : note de cotisations 2026 (minimum 890,42 €, seuils
+       17 374,08 € et 8 972,07 € primostarter, 20,5 % jusqu'à 75 024,54 €, 14,16 % ensuite) ;
+     – Xerius : mail « Réduction starter » du 10/09/2026 (917,58 € frais compris, 473,84 €,
+       revenu d'une année incomplète × 4 ÷ trimestres actifs), My Xerius, page « comment payer » ;
+     – SPF Finances : TVA trimestrielle le 25 du mois suivant, sans report (trimestriels).
+     Tout ce qui est calculé ici est une ESTIMATION faite avec les RDV et les charges de l'appli. */
+  var REGLES = {
+    2026: { min: 890.42, seuil: 17374.08, seuilPrimo: 8972.07, primoTrim: 473.84, plafond: 75024.54, plafondAbs: 110562.42 }
+  };
+  function regles(y) { return REGLES[y] || REGLES[2026]; }
+  function fraisCaisse() { return /xerius/i.test(S.F().profil.caisseSociale || "") ? 0.0305 : 0; }
+  var MYX = "https://www.xerius.be/tool/my-xerius/fr-be/", IBAN_XERIUS = "BE36 4100 4034 8181", IBAN_TVA = "BE41 6792 0036 4210";
+  function qIndex(d) { return +d.slice(0, 4) * 4 + Math.floor((+d.slice(5, 7) - 1) / 3); }
+  function cotisAnnuelle(rev, R) {
+    var b = Math.max(rev, R.seuil), c = 0.205 * Math.min(b, R.plafond);
+    if (b > R.plafond) c += 0.1416 * (Math.min(b, R.plafondAbs) - R.plafond);
+    return c;
+  }
+  /* impôt indicatif : barème revenus 2026, isolé, quotité exemptée 11 180 €, additionnels communaux ~7 % */
+  function ippIndicatif(rev) {
+    var tr = [[16720, 0.25], [29510, 0.40], [51070, 0.45], [1e12, 0.50]];
+    function bar(x) { var t = 0, prev = 0; tr.forEach(function (z) { if (x > prev) t += (Math.min(x, z[0]) - prev) * z[1]; prev = z[0]; }); return t; }
+    return Math.max(0, bar(rev) - bar(11180)) * 1.07;
+  }
+  /* revenu net de l'année en cours, estimé depuis le début de l'activité (ou le 1er janvier) */
+  function estimAnnee(obs) {
+    var p = S.F().profil, td = todayStr(), y = +td.slice(0, 4);
+    if (p.debut && p.debut > td) return null;
+    var debY = p.debut && p.debut > y + "-01-01" ? p.debut : y + "-01-01";
+    var B = bilan(debY, td);
+    if (B.nbJ < 30) return null; /* trop tôt pour estimer */
+    var finY = y + "-12-31", benefAn = B.benef / B.nbJ * joursEntre(debY, finY);
+    var nbQ = 4 - Math.floor((+debY.slice(5, 7) - 1) / 3);
+    var cotY = obs.filter(function (o) { return o.type === "SOCIAL_CONTRIBUTION" && o.officiel && (o.periode || "").indexOf(String(y)) !== -1; });
+    /* une cotisation est déductible l'année où elle est payée */
+    var dedY = cotY.filter(function (o) { return (o.payeLe || o.echeance || "9") <= finY; }).reduce(function (s, o) { return s + (o.montant || 0); }, 0);
+    var net = benefAn - dedY, annualise = net * 4 / nbQ, R = regles(y), f = fraisCaisse();
+    var provOff = cotY.reduce(function (s, o) { return s + (o.montant || 0); }, 0);
+    var provis = provOff + Math.max(0, nbQ - cotY.length) * R.min * (1 + f);
+    var reducDeja = Math.max(0, cotY.length * R.min * (1 + f) - provOff); /* réduction unique primostarter déjà accordée */
+    var defin = Math.max(0, cotisAnnuelle(annualise, R) / 4 * nbQ * (1 + f) - reducDeja);
+    return { y: y, deb: debY, net: r2(net), annualise: r2(annualise), nbQ: nbQ, R: R, defin: r2(defin), provis: r2(provis), regul: r2(defin - provis), ipp: r2(ippIndicatif(Math.max(0, net))) };
+  }
+  /* année prochaine, au rythme des derniers mois complets d'activité */
+  function estimAnSuivant() {
+    var p = S.F().profil, now = new Date(), tot = 0, n = 0;
+    for (var i = 1; i <= 3; i++) {
+      var d = new Date(now.getFullYear(), now.getMonth() - i, 1), ym = d.getFullYear() + "-" + pad(d.getMonth() + 1);
+      var deb = ym + "-01", fin = ym + "-" + pad(new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate());
+      if (p.debut && deb < p.debut.slice(0, 7) + "-01") continue;
+      tot += bilan(deb, fin).benef; n++;
+    }
+    if (!n) return null;
+    var y = now.getFullYear() + 1, R = regles(y), f = fraisCaisse();
+    var benef = tot / n * 12, minAn = R.min * (1 + f) * 4, net = Math.max(0, benef - minAn);
+    var defin = cotisAnnuelle(net, R) * (1 + f);
+    return { y: y, n: n, benef: r2(benef), net: r2(net), defin: r2(defin), parTrim: r2(defin / 4), minTrim: r2(minAn / 4), regul: r2(defin - minAn), ipp: r2(ippIndicatif(Math.max(0, benef - defin))) };
+  }
+  function ligne(lib, val, fort) { return '<div class="tvaline"' + (fort ? ' style="border-top:2px solid var(--bordure)"' : "") + "><span>" + lib + '</span><b class="tnum">' + val + "</b></div>"; }
+
+  function boite(bord, fond) { return '<div style="margin-top:8px;padding:10px 12px;border-radius:12px;border:1.5px solid ' + bord + ';background:' + fond + ';font-size:13.5px;line-height:1.45">'; }
+
+  function cotisHtml(obs) {
+    var p = S.F().profil, td = todayStr(), xerius = fraisCaisse() > 0, principal = p.statutIndep !== "complementaire";
+    function parEch(a, b) { return (a.echeance || "9") < (b.echeance || "9") ? -1 : 1; }
+    var ouverts = obs.filter(function (o) { return o.statut !== "paye"; });
+    var cot = ouverts.filter(function (o) { return o.type === "SOCIAL_CONTRIBUTION"; }).sort(parEch);
+
+    /* --- 1. combien, quand, où --- */
+    var h = '<section class="card sec" style="margin-top:12px;border:2px solid #1d4ed8"><p class="k">🧾 Mes cotisations sociales — combien, quand, où</p>';
+    h += '<p class="note" style="margin:2px 0 8px">' + esc([p.forme === "pp" ? "Personne physique" : p.forme ? "Société" : "", p.statutIndep === "principal" ? "indépendant à titre principal" : p.statutIndep === "complementaire" ? "indépendant complémentaire" : "", p.debut ? "depuis le " + dfr(p.debut) : "", p.caisseSociale || ""].filter(Boolean).join(" · ")) + "</p>";
+    if (!cot.length) h += '<p class="emptyline">Aucune cotisation en attente 👌</p>';
+    cot.forEach(function (o) {
+      var j = o.echeance ? jours(o.echeance) : null;
+      h += ligne("<b>" + esc(o.periode || "Cotisation") + "</b> " + badge(o.officiel) + '<br><small style="color:var(--gris)">' + (o.echeance ? "à payer avant le " + dfr(o.echeance) + " · " + (j < 0 ? "dépassée de " + (-j) + " j" : j === 0 ? "aujourd'hui" : "dans " + j + " j") : "sans échéance") + (o.notes ? " · " + esc(o.notes) : "") + "</small>", eur2(o.montant || 0));
+    });
+    if (cot.length > 1) h += ligne("<b>Total cotisations à payer</b>", eur2(r2(cot.reduce(function (s, o) { return s + (o.montant || 0); }, 0))), true);
+    if (xerius) {
+      h += '<details class="scf-regle" open><summary>Où et comment payer ?</summary><p>' +
+        "<b>Le plus simple :</b> My Xerius → « Payez avec POM ». Montant, compte et communication sont déjà remplis, et l'argent ne part qu'à l'échéance.<br>" +
+        "<b>Pour ne plus jamais y penser :</b> My Xerius → Demande → « Domiciliation : demander ou changer ». Xerius prélève chaque fin de trimestre (garde l'argent sur le compte 2 semaines avant).<br>" +
+        "<b>Par virement :</b> compte officiel Xerius " + IBAN_XERIUS + " + la <b>communication structurée de ton décompte</b> (My Xerius → Décomptes trimestriels). Sans elle, Xerius ne peut pas relier ton paiement.<br>" +
+        "<b>Délai légal :</b> l'argent doit être chez Xerius le dernier jour du trimestre (Xerius demande de payer avant le 25). En retard : +3 % par trimestre, puis +7 % au 1er janvier.</p>" +
+        '<a class="linkline" href="' + MYX + '" target="_blank" rel="noreferrer">Ouvrir My Xerius →</a></details>';
+    }
+    h += "</section>";
+
+    /* --- 2. budget à prévoir jusqu'à la fin du trimestre suivant --- */
+    var dh = parseDateStr(td); dh.setMonth(dh.getMonth() + 3);
+    var hor = trimInfo(fmtDate(dh)).fin, R0 = regles(+td.slice(0, 4));
+    var lignesB = ouverts.filter(function (o) { return ETAT[o.type] && (!o.echeance || o.echeance <= hor); }).map(function (o) {
+      return { lib: (TYPES_OB[o.type] || o.type) + (o.periode ? " " + o.periode : ""), m: o.montant || 0, ech: o.echeance, off: o.officiel, note: o.type === "VAT" && !o.officiel ? (o.echeance < td ? "déclaration à vérifier" : "selon tes RDV terminés à ce jour, augmente avec les prochains") : "" };
+    });
+    /* trimestres de cotisation pas encore réclamés par la caisse */
+    if (principal && p.debut) {
+      var qq = trimInfo(td);
+      for (var g = 0; g < 3 && qq.fin <= hor; g++) {
+        (function (q) {
+          var deja = obs.some(function (o) { return o.type === "SOCIAL_CONTRIBUTION" && o.periode === q.label; });
+          if (!deja && q.fin >= p.debut) lignesB.push({ lib: "Cotisations " + q.label, m: r2(regles(q.y).min * (1 + fraisCaisse())), ech: q.fin, off: false, note: "pas encore réclamée par " + (p.caisseSociale || "la caisse") + " (minimum" + (REGLES[q.y] ? "" : " 2026, celui de " + q.y + " sera un peu plus élevé") + ")" });
+        })(qq);
+        var dn = parseDateStr(qq.fin); dn.setDate(dn.getDate() + 1); qq = trimInfo(fmtDate(dn));
+      }
+    }
+    lignesB = lignesB.filter(function (l) { return l.off || l.m > 0; });
+    lignesB.sort(parEch);
+    var totB = r2(lignesB.reduce(function (s, l) { return s + l.m; }, 0));
+    h += '<section class="card sec" style="margin-top:12px"><p class="k">💶 Budget à prévoir d\'ici le ' + dfr(hor) + ' <span class="estbadge">officiel + estimé</span></p>';
+    lignesB.forEach(function (l) {
+      h += ligne(esc(l.lib) + " " + badge(l.off) + '<br><small style="color:var(--gris)">' + (l.ech ? (l.ech < td ? "⚠️ échéance dépassée (" + dfr(l.ech) + ")" : "avant le " + dfr(l.ech)) : "sans échéance") + (l.note ? " · " + esc(l.note) : "") + "</small>", eur2(l.m));
+    });
+    h += ligne("<b>Total à prévoir</b>", eur2(totB), true);
+    var E = principal ? estimAnnee(obs) : null, N = principal ? estimAnSuivant() : null;
+    var plusTard = [];
+    if (E && E.regul > 50) plusTard.push(["Régularisation cotisations " + E.y + " (vers " + (E.y + 2) + ")", E.regul]);
+    if (E && E.ipp > 0) plusTard.push(["Impôt sur les revenus " + E.y + " (avertissement-extrait de rôle en " + (E.y + 1) + "-" + (E.y + 2) + ")", E.ipp]);
+    if (plusTard.length) {
+      h += '<p class="k" style="margin-top:12px">À mettre de côté pour plus tard <span class="estbadge">estimation</span></p>';
+      plusTard.forEach(function (x) { h += ligne(esc(x[0]), "≈ " + euro(x[1])); });
+      h += '<p class="note" style="margin:6px 0 0">Impôt : calcul indicatif comme isolé, avec StayClean comme seul revenu (si tu es marié et que ton épouse gagne peu, l\'imposition commune le réduit). Pas de versements anticipés obligatoires : tu es starter, et depuis les revenus 2026 il n\'y a plus de majoration pour les indépendants personnes physiques.</p>';
+    }
+    h += "</section>";
+
+    /* --- 3. réduire ? --- */
+    if (principal && E) {
+      var debQ = p.debut ? qIndex(p.debut) : null, fenetre = debQ != null && qIndex(td) - debQ < 4;
+      h += '<section class="card sec" style="margin-top:12px"><p class="k">✂️ Réduire mes cotisations ?</p>';
+      h += ligne("Revenu net " + E.y + " estimé<br><small style=\"color:var(--gris)\">du " + dfr(E.deb) + " au 31/12, avec tes RDV et tes charges, avant impôt</small>", "≈ " + euro(Math.max(0, E.net)));
+      if (E.nbQ < 4) h += ligne("Converti en revenu annuel<br><small style=\"color:var(--gris)\">règle d'une 1re année incomplète : × 4 ÷ " + E.nbQ + " trimestres actifs</small>", "≈ " + euro(Math.max(0, E.annualise)));
+      var verdict;
+      if (E.annualise >= E.R.seuil) {
+        verdict = boite("#b45309", "#fffbeb") + '<b>Non, ne demande pas la réduction starter.</b> Ton revenu annuel estimé (≈ ' + euro(E.annualise) + ") dépasse " + eur2(E.R.seuil) + " : la réduction serait injustifiée. Au calcul définitif, tu paierais le supplément + 3 % par trimestre + 7 %. Et si tu gagnes finalement moins, Xerius rembourse automatiquement le trop-payé : la demander ne rapporte rien.</div>";
+      } else if (E.annualise >= E.R.seuilPrimo) {
+        var gain = r2((E.R.min - 0.205 * E.annualise / 4) * (1 + fraisCaisse()));
+        verdict = boite("#2563eb", "#eff6ff") + '<b>Possible, mais à petit gain</b> (≈ ' + euro(gain) + " par trimestre) : ta cotisation serait calculée sur ton revenu estimé. Seulement si tu en es sûr : sinon supplément + 3 % par trimestre + 7 %. " + (fenetre ? "Demande : My Xerius → Demande → « Modification cotisations sociales ou statut »." : "") + "</div>";
+      } else {
+        verdict = boite("#059669", "#ecfdf5") + '<b>Oui, possible :</b> ' + eur2(E.R.primoTrim) + " par trimestre au lieu du minimum, pendant tes 4 premiers trimestres. " + (fenetre ? "Demande : My Xerius → Demande → « Modification cotisations sociales ou statut » (Xerius l'accepte tout de suite)." : "") + "</div>";
+      }
+      if (!fenetre) verdict += '<p class="note" style="margin:6px 0 0">La réduction starter ne vaut que pour les 4 premiers trimestres d\'activité : ta fenêtre est passée.</p>';
+      h += verdict;
+      if (E.regul > 50) h += '<p class="note" style="margin:8px 0 0">📌 Ce que Xerius te réclame (' + eur2(E.provis) + " pour " + E.y + ") est un <b>provisoire</b>. Le vrai montant (≈ " + euro(E.defin) + ") sera calculé quand le SPF Finances transmettra tes revenus, environ 2 ans plus tard : prévois ≈ <b>" + euro(E.regul) + "</b> de régularisation.</p>";
+      if (N && N.regul > 100) {
+        h += '<p class="note" style="margin:8px 0 0">📈 <b>' + N.y + "</b> au rythme de tes " + N.n + " derniers mois : revenu net ≈ " + euro(N.net) + " → cotisations réelles ≈ " + euro(N.parTrim) + " par trimestre, alors que Xerius te réclamera le minimum (≈ " + eur2(N.minTrim) + "). Écart ≈ " + euro(N.regul) + " à payer vers " + (N.y + 2) + ", plus ≈ " + euro(N.ipp) + " d'impôt sur ces revenus (vers " + (N.y + 1) + ").</p>" +
+          boite("#059669", "#ecfdf5") + '💡 <b>Le meilleur choix :</b> en janvier, demande à Xerius d\'<b>augmenter</b> tes cotisations ' + N.y + " (My Xerius → Demande → « Modification cotisations sociales ou statut », revenu estimé ≈ " + euro(Math.round(N.net / 100) * 100) + "). C'est déductible tout de suite et ça évite une grosse facture en " + (N.y + 2) + ". Sinon, mets ≈ " + euro(N.parTrim - N.minTrim) + " de côté chaque trimestre.</div>";
+      }
+      var nbDep = cptData().dep.filter(function (d) { return (!p.debut || (d.date || "") >= p.debut) && (d.nature === "pro" || d.nature === "mixte"); }).length;
+      h += '<p class="k" style="margin-top:12px">Ce qui baisse vraiment (et légalement) tes cotisations et ton impôt</p>' +
+        '<div class="tvaline"><span>1. <b>Encoder toutes tes dépenses pro</b> (produits, essence, pub, téléphone, matériel, assurance…). Chaque 100 € de frais = ≈ 20 € de cotisations et ≈ 25 à 45 € d\'impôt en moins, plus la TVA récupérée. Dépenses pro encodées depuis ton début : <b>' + nbDep + "</b>.<br>" +
+        '<button class="linkline" style="display:inline;margin:0" data-act="tab" data-tab="depenses">Encoder mes dépenses →</button></span></div>' +
+        '<div class="tvaline"><span>2. <b>Payer chaque trimestre à temps</b> (POM ou domiciliation) : une cotisation est déductible l\'année où elle est payée, et le retard coûte 3 % par trimestre.</span></div>';
+      h += '<p class="note" style="margin:8px 0 0">Règles 2026 : INASTI (note de cotisations 2026), Xerius (mail « Réduction starter » du 10/09/2026, My Xerius), SPF Finances. Estimations calculées avec tes RDV et tes charges de l\'appli : ce n\'est pas l\'avis d\'un comptable.</p></section>';
+    }
+    return h;
   }
   function groupe(o) {
     if (o.statut === "paye") return "paye";
@@ -514,6 +677,7 @@
     var st = cptData().set, td = todayStr(), mk = td.slice(0, 7);
     var obs = obligations();
     var h = '<div class="tdy-head"><h2>À payer & à faire</h2><span class="n">' + dfr(td) + "</span></div>";
+    try { h += cotisHtml(obs); } catch (e) { h += '<div class="anomalie">Le bloc « cotisations » n\'a pas pu s\'afficher (' + esc(String(e && e.message || e)) + ").</div>"; }
 
     /* --- aujourd'hui --- */
     var faitsJ = DB.bookings.filter(function (b) { return b.date === td && b.statut === "termine"; });

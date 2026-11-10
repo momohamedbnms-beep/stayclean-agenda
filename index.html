@@ -2949,19 +2949,23 @@ function cptFisc(monthKey) {
    non facturées, TVA extraite au taux paramétré) − déductible (achats pro) */
 function cptTvaTrim(y, tq) {
   var r = trimRange(y, tq);
+  /* 10/11/2026 : rien avant le début de l'activité (Profil) — avant le 01/09/2026, les RDV
+     étaient facturés par la coopérative JobYourself, sous son propre numéro de TVA */
+  var debAct = (cptData().profil || {}).debut || "";
+  var s0 = debAct > r.s ? debAct : r.s;
   var tx = tvaPresta();
   var col = 0, colN = 0, ded = 0, dedN = 0, colResa = 0, resaN = 0;
   cptData().ven.forEach(function (v) {
     if (v.statut === "annulee" || v.statut === "brouillon") return;
-    if ((v.date || "") >= r.s && (v.date || "") <= r.e) { col += v.tvaMontant || 0; colN++; }
+    if ((v.date || "") >= s0 && (v.date || "") <= r.e) { col += v.tvaMontant || 0; colN++; }
   });
   var linked = venLinkedBkIds();
   DB.bookings.forEach(function (b) {
     if (b.statut !== "termine" || linked[b.id]) return;
-    if ((b.date || "") >= r.s && (b.date || "") <= r.e) { colResa += (b.total || 0) * tx / (100 + tx); resaN++; }
+    if ((b.date || "") >= s0 && (b.date || "") <= r.e) { colResa += (b.total || 0) * tx / (100 + tx); resaN++; }
   });
   cptData().dep.forEach(function (d) {
-    if ((d.date || "") < r.s || (d.date || "") > r.e) return;
+    if ((d.date || "") < s0 || (d.date || "") > r.e) return;
     if (d.nature === "pro") { ded += d.tvaMontant || 0; dedN++; }
     else if (d.nature === "mixte" && d.pctPro != null) { ded += (d.tvaMontant || 0) * d.pctPro / 100; dedN++; }
   });
@@ -6957,7 +6961,7 @@ if ("serviceWorker" in navigator) {
 /* 4/11/2026 : l'app sur l'écran d'accueil de l'iPhone reste ouverte en mémoire et gardait l'ancienne version.
    À chaque retour dans l'app (max 1 fois / 2 min), on regarde si une nouvelle version est en ligne ;
    si oui, on recharge — jamais pendant une saisie en cours. */
-var APP_BUILD = "2026-11-09b";
+var APP_BUILD = "2026-11-10a";
 (function () {
   /* 5/11/2026 : si une nouvelle version est en ligne, on recharge UNIQUEMENT au moment où l'app revient
      à l'écran (avant que le doigt touche quoi que ce soit) — jamais pendant que tu utilises l'app. */
@@ -7004,7 +7008,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("mess
 window.addEventListener("pageshow", function (e) { if (e.persisted && ui.space === "portal") renderAll(); });
 </script>
 <script src="finance.js?v=20260926"></script>
-<script src="business.js?v=20261109"></script>
+<script src="business.js?v=20261110"></script>
 <script src="messagerie.js?v=20261105"></script>
 <script src="origine-google-ads.js?v=20260926"></script>
 </body>

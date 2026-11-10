@@ -1,4 +1,4 @@
-var V = "stayclean-agenda-cache-v51";
+var V = "stayclean-agenda-cache-v52";
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 self.addEventListener("install", function (e) {
   self.skipWaiting();
@@ -47,6 +47,9 @@ self.addEventListener("fetch", function (e) {
   );
 });
 
+/* v52 (10/11/2026) — Compta → À payer : bloc « Mes cotisations sociales » (combien, quand, où payer), budget à prévoir,
+   « Réduire mes cotisations ? » calculé avec les RDV ; la TVA d'un trimestre en retard reste affichée ; TVA comptée
+   seulement depuis le début de l'activité. */
 /* v51 (04/11/2026) — Agenda : la page est toujours rechargée depuis le serveur (cache: no-store) pour que l'iPhone
    ait la dernière version ; l'app vérifie aussi sa version à chaque retour (APP_BUILD dans index.html). */
 /* v50 (02/11/2026) — Mon Coran : apprendre les plus courtes d'abord (longueur réelle), le moins de versets d'abord ou
