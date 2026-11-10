@@ -467,11 +467,18 @@
       qs.forEach(function (q) {
         if (p.debut && q.fin < p.debut) return; /* trimestre d'avant le début de l'activité */
         if (officielPour("VAT", q.label)) return;
-        var tv = cptTvaTrim(q.y, q.t), depasse = td > q.echTva;
+        var tv = cptTvaTrim(q.y, q.t), depasse = td > q.echTva, va = null;
+        /* 10/11/2026 : dès que des relevés Revolut sont importés, la TVA vient de l'Assistant compta
+           (encaissements réels + pièces), plus des RDV de l'agenda (en partie fictifs). */
+        if (window.SCA && SCA.aDesReleves && SCA.aDesReleves()) {
+          try { va = SCA.tvaTrim(q.y + "T" + q.t); } catch (e) { va = null; }
+          if (va && va.decl && va.decl.etape === "deposee") return;
+          if (va) tv = { col: va.G["54"] / 100, colResa: 0, ded: va.G["59"] / 100, solde: (va.G["54"] + va.G["55"] + va.G["56"] - va.G["59"]) / 100 };
+        }
         if (depasse && !(tv.solde > 0)) return;
         out.push({ id: "est_tva_" + q.label, src: "estimation", type: "VAT", creancier: "SPF Finances (TVA)", montant: r2(Math.max(0, tv.solde)), officiel: false, periode: q.label, echeance: q.echTva, statut: "a_payer",
           explication: (depasse ? "⚠️ Échéance dépassée (" + dfr(q.echTva) + "). Si tu as déjà déposé et payé cette déclaration (Accountable ou MyMinfin), saisis le montant officiel puis « Marquer payé » : la ligne disparaîtra. Sinon, dépose-la au plus vite : le retard coûte des amendes et des intérêts. " : "") +
-            "TVA collectée " + eur2(tv.col + tv.colResa) + " − TVA déductible " + eur2(tv.ded) + " = " + eur2(tv.solde) + " (" + q.label + (p.debut && q.label === trimInfo(p.debut).label ? ", depuis ton début le " + dfr(p.debut) : "") + "). Déclaration et paiement le 25 du mois qui suit le trimestre, sans report au jour ouvrable suivant pour les déclarants trimestriels (SPF Finances). Paiement : " + IBAN_TVA + " avec ta communication structurée TVA (MyMinfin ou Accountable)." +
+            (va ? "Calcul de l'Assistant compta (relevés Revolut et pièces), " + (va.ctrl && va.ctrl.pret ? "à valider" : "encore à vérifier") + " : " : "") + "TVA collectée " + eur2(tv.col + tv.colResa) + " − TVA déductible " + eur2(tv.ded) + " = " + eur2(tv.solde) + " (" + q.label + (p.debut && q.label === trimInfo(p.debut).label ? ", depuis ton début le " + dfr(p.debut) : "") + "). Déclaration et paiement le 25 du mois qui suit le trimestre, sans report au jour ouvrable suivant pour les déclarants trimestriels (SPF Finances). Paiement : " + IBAN_TVA + " avec ta communication structurée TVA (MyMinfin ou Accountable)." +
             (p.periodiciteTva === "mensuelle" ? " Tu as indiqué des déclarations mensuelles : ce calcul trimestriel est à adapter." : "") });
       });
     }
@@ -495,7 +502,7 @@
      – SPF Finances : TVA trimestrielle le 25 du mois suivant, sans report (trimestriels).
      Tout ce qui est calculé ici est une ESTIMATION faite avec les RDV et les charges de l'appli. */
   var REGLES = {
-    2026: { min: 890.42, seuil: 17374.08, seuilPrimo: 8972.07, primoTrim: 473.84, plafond: 75024.54, plafondAbs: 110562.42 }
+    2026: { min: 890.42, seuil: 17374.08, seuilPrimo: 8972.07, primoTrim: 473.85, /* 459,82 € + frais Xerius (vérifié le 10/11/2026) */ plafond: 75024.54, plafondAbs: 110562.42 }
   };
   function regles(y) { return REGLES[y] || REGLES[2026]; }
   function fraisCaisse() { return /xerius/i.test(S.F().profil.caisseSociale || "") ? 0.0305 : 0; }
@@ -517,7 +524,7 @@
     var p = S.F().profil, td = todayStr(), y = +td.slice(0, 4);
     if (p.debut && p.debut > td) return null;
     var debY = p.debut && p.debut > y + "-01-01" ? p.debut : y + "-01-01";
-    var B = bilan(debY, td);
+    var B = (window.SCA && SCA.bilanReel && SCA.bilanReel(debY, td)) || bilan(debY, td);
     if (B.nbJ < 30) return null; /* trop tôt pour estimer */
     var finY = y + "-12-31", benefAn = B.benef / B.nbJ * joursEntre(debY, finY);
     var nbQ = 4 - Math.floor((+debY.slice(5, 7) - 1) / 3);
@@ -529,7 +536,7 @@
     var provis = provOff + Math.max(0, nbQ - cotY.length) * R.min * (1 + f);
     var reducDeja = Math.max(0, cotY.length * R.min * (1 + f) - provOff); /* réduction unique primostarter déjà accordée */
     var defin = Math.max(0, cotisAnnuelle(annualise, R) / 4 * nbQ * (1 + f) - reducDeja);
-    return { y: y, deb: debY, net: r2(net), annualise: r2(annualise), nbQ: nbQ, R: R, defin: r2(defin), provis: r2(provis), regul: r2(defin - provis), ipp: r2(ippIndicatif(Math.max(0, net))) };
+    return { y: y, deb: debY, net: r2(net), annualise: r2(annualise), nbQ: nbQ, R: R, defin: r2(defin), provis: r2(provis), regul: r2(defin - provis), ipp: r2(ippIndicatif(Math.max(0, net))), src: B.source || "", jusqua: B.source ? B.fin : null };
   }
   /* année prochaine, au rythme des derniers mois complets d'activité */
   function estimAnSuivant() {
@@ -538,7 +545,8 @@
       var d = new Date(now.getFullYear(), now.getMonth() - i, 1), ym = d.getFullYear() + "-" + pad(d.getMonth() + 1);
       var deb = ym + "-01", fin = ym + "-" + pad(new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate());
       if (p.debut && deb < p.debut.slice(0, 7) + "-01") continue;
-      tot += bilan(deb, fin).benef; n++;
+      var bb = (window.SCA && SCA.bilanReel && SCA.bilanReel(deb, fin)) || bilan(deb, fin);
+      tot += bb.benef; n++;
     }
     if (!n) return null;
     var y = now.getFullYear() + 1, R = regles(y), f = fraisCaisse();
@@ -615,7 +623,7 @@
     if (principal && E) {
       var debQ = p.debut ? qIndex(p.debut) : null, fenetre = debQ != null && qIndex(td) - debQ < 4;
       h += '<section class="card sec" style="margin-top:12px"><p class="k">✂️ Réduire mes cotisations ?</p>';
-      h += ligne("Revenu net " + E.y + " estimé<br><small style=\"color:var(--gris)\">du " + dfr(E.deb) + " au 31/12, avec tes RDV et tes charges, avant impôt</small>", "≈ " + euro(Math.max(0, E.net)));
+      h += ligne("Revenu net " + E.y + " estimé<br><small style=\"color:var(--gris)\">du " + dfr(E.deb) + " au 31/12, " + (E.src ? "avec tes relevés Revolut (jusqu'au " + dfr(E.jusqua) + ")" : "avec tes RDV et tes charges") + ", avant impôt</small>", "≈ " + euro(Math.max(0, E.net)));
       if (E.nbQ < 4) h += ligne("Converti en revenu annuel<br><small style=\"color:var(--gris)\">règle d'une 1re année incomplète : × 4 ÷ " + E.nbQ + " trimestres actifs</small>", "≈ " + euro(Math.max(0, E.annualise)));
       var verdict;
       if (E.annualise >= E.R.seuil) {
@@ -638,7 +646,7 @@
         '<div class="tvaline"><span>1. <b>Encoder toutes tes dépenses pro</b> (produits, essence, pub, téléphone, matériel, assurance…). Chaque 100 € de frais = ≈ 20 € de cotisations et ≈ 25 à 45 € d\'impôt en moins, plus la TVA récupérée. Dépenses pro encodées depuis ton début : <b>' + nbDep + "</b>.<br>" +
         '<button class="linkline" style="display:inline;margin:0" data-act="tab" data-tab="depenses">Encoder mes dépenses →</button></span></div>' +
         '<div class="tvaline"><span>2. <b>Payer chaque trimestre à temps</b> (POM ou domiciliation) : une cotisation est déductible l\'année où elle est payée, et le retard coûte 3 % par trimestre.</span></div>';
-      h += '<p class="note" style="margin:8px 0 0">Règles 2026 : INASTI (note de cotisations 2026), Xerius (mail « Réduction starter » du 10/09/2026, My Xerius), SPF Finances. Estimations calculées avec tes RDV et tes charges de l\'appli : ce n\'est pas l\'avis d\'un comptable.</p></section>';
+      h += '<p class="note" style="margin:8px 0 0">Règles 2026 : INASTI (note de cotisations 2026), Xerius (mail « Réduction starter » du 10/09/2026, My Xerius), SPF Finances. Estimations calculées avec ' + (E.src ? "tes relevés Revolut importés dans l\'Assistant compta" : "tes RDV et tes charges de l\'appli") + ' : ce n\'est pas l\'avis d\'un comptable.</p></section>';
     }
     return h;
   }

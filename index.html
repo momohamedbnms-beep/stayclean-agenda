@@ -439,6 +439,7 @@ body.cpt .fab{background:#065F46;box-shadow:0 10px 26px rgba(6,95,70,.4)}
 body.cpt .crumb .home{background:#D1FAE5;color:#047857}
 body.cpt .tsec .k .cnt{background:#D1FAE5;color:#047857}
 body.cpt nav button.on{background:#059669;border-color:#059669;color:#fff}
+body.cpt nav.deux button{flex:1 1 auto;padding-left:7px;padding-right:7px} /* 10/11 : 5 onglets sur la 2e ligne, largeur selon le texte */
 body.cpt .chatfab{background:#047857;box-shadow:0 10px 26px rgba(4,120,87,.4)}
 body.cpt .msg.me{background:#059669}
 body.cpt .msg.ai{background:#D1FAE5;color:#064E3B}
@@ -2121,10 +2122,10 @@ var PRO_BAS = [
 ];
 var PRO_PLUS = { clients: 1, factures: 1, messages: 1, reglages: 1, plus: 1 };
 var PERSO_TAB_LABEL = { tableau: "Tableau", agenda: "Agenda", taches: "Tâches", docs: "Docs & dossiers" };
-var CPT_TABS = [["apayer", "À payer"], ["situation", "Situation"], ["depenses", "Dépenses"], ["ventes", "Ventes"], ["tva", "TVA"], ["caisse", "Caisse"], ["revenus", "Mes revenus"], ["profil", "Profil"]];
-var CPT_TABS_1 = [["situation", "Situation"], ["apayer", "À payer"], ["ventes", "Ventes"], ["depenses", "Dépenses"]];
-var CPT_TABS_2 = [["caisse", "Caisse"], ["tva", "TVA"], ["revenus", "Revenus"], ["profil", "Profil"]];
-var CPT_TAB_LABEL = { apayer: "À payer & à faire", situation: "Situation", depenses: "Dépenses", ventes: "Ventes", tva: "TVA", caisse: "Caisse", revenus: "Mes revenus", profil: "Profil fiscal" };
+var CPT_TABS = [["assistant", "Assistant"], ["apayer", "À payer"], ["situation", "Situation"], ["depenses", "Dépenses"], ["ventes", "Ventes"], ["tva", "TVA"], ["caisse", "Caisse"], ["revenus", "Mes revenus"], ["profil", "Profil"]];
+var CPT_TABS_1 = [["assistant", "Assistant"], ["apayer", "À payer"], ["ventes", "Ventes"], ["depenses", "Dépenses"]];
+var CPT_TABS_2 = [["situation", "Situation"], ["tva", "TVA"], ["caisse", "Caisse"], ["revenus", "Revenus"], ["profil", "Profil"]];
+var CPT_TAB_LABEL = { assistant: "Assistant compta", apayer: "À payer & à faire", situation: "Situation", depenses: "Dépenses", ventes: "Ventes", tva: "TVA", caisse: "Caisse", revenus: "Mes revenus", profil: "Profil fiscal" };
 
 function renderChrome() {
   if (ui.space === "pro" && ui.tab === "tableau") ui.tab = "planning"; /* 24/09 : plus d'accueil pro */
@@ -5104,7 +5105,8 @@ function renderMain() {
   if (s === "portal") { main.innerHTML = renderPortal(); return; }
   if (s === "jour") { main.innerHTML = renderJournee(); return; }
   if (s === "cpt") {
-    if (ui.tab === "depenses") main.innerHTML = renderDepenses();
+    if (ui.tab === "assistant") main.innerHTML = (window.SCA && SCA.render) ? SCA.render() : '<p class="emptyline">Assistant compta en cours de chargement… recharge l’app.</p>';
+    else if (ui.tab === "depenses") main.innerHTML = renderDepenses();
     else if (ui.tab === "ventes") main.innerHTML = renderVentes();
     else if (ui.tab === "tva") main.innerHTML = renderTVA();
     else if (ui.tab === "apayer" && window.SCB && SCB.renderAPayer) main.innerHTML = SCB.renderAPayer();
@@ -5696,7 +5698,7 @@ document.addEventListener("click", function (e) {
       else allerQr();
       break;
     }
-    case "go-cpt": ui.space = "cpt"; ui.tab = "situation"; renderAll(); break;
+    case "go-cpt": ui.space = "cpt"; ui.tab = "assistant"; renderAll(); break;
     case "go-jour": ui.space = "jour"; renderAll(); break;
     case "go-home": ui.space = "portal"; ui.searchQ = ""; renderAll(); break;
     case "go-reglages": ui.space = "pro"; ui.tab = "reglages"; renderAll(); break;
@@ -6961,7 +6963,7 @@ if ("serviceWorker" in navigator) {
 /* 4/11/2026 : l'app sur l'écran d'accueil de l'iPhone reste ouverte en mémoire et gardait l'ancienne version.
    À chaque retour dans l'app (max 1 fois / 2 min), on regarde si une nouvelle version est en ligne ;
    si oui, on recharge — jamais pendant une saisie en cours. */
-var APP_BUILD = "2026-11-10a";
+var APP_BUILD = "2026-11-10b";
 (function () {
   /* 5/11/2026 : si une nouvelle version est en ligne, on recharge UNIQUEMENT au moment où l'app revient
      à l'écran (avant que le doigt touche quoi que ce soit) — jamais pendant que tu utilises l'app. */
@@ -7008,7 +7010,8 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("mess
 window.addEventListener("pageshow", function (e) { if (e.persisted && ui.space === "portal") renderAll(); });
 </script>
 <script src="finance.js?v=20260926"></script>
-<script src="business.js?v=20261110"></script>
+<script src="business.js?v=20261110b"></script>
+<script src="admin.js?v=20261110b"></script>
 <script src="messagerie.js?v=20261105"></script>
 <script src="origine-google-ads.js?v=20260926"></script>
 </body>

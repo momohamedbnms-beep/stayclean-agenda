@@ -1,4 +1,4 @@
-var V = "stayclean-agenda-cache-v52";
+var V = "stayclean-agenda-cache-v53";
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 self.addEventListener("install", function (e) {
   self.skipWaiting();
@@ -11,7 +11,8 @@ self.addEventListener("activate", function (e) {
     }).then(function () { return self.clients.claim(); })
   );
 });
-/* Réseau en priorité (toujours la dernière version en ligne), cache seulement
+/* v53 (10/11/2026) : nouveau module admin.js (Assistant compta : relevés Revolut, pièces, TVA, Xerius, rappels).
+   Réseau en priorité (toujours la dernière version en ligne), cache seulement
    en secours si hors-ligne.
    v35 (26/09/2026) :
    - on ne met en cache que les réponses valides (plus de page d'erreur 404/500 servie hors ligne) ;
