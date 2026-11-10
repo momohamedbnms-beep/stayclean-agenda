@@ -597,6 +597,7 @@
     var C = A();
     if (C.admDos.length) return;
     DOSSIER_INIT.forEach(function (d) { C.admDos.push(Object.assign({ le: VERIF }, d)); });
+    try { save(); } catch (e) {}
   }
   function dos(id) { return A().admDos.filter(function (d) { return d.id === id; })[0]; }
   function dossierOk(id) { var d = dos(id); return d && d.st === "confirmé" ? d : null; }
@@ -642,6 +643,7 @@
       } else if (cat === "rembt_client") { x.brut = -o.out; x.frais = 0; x.client = "particulier"; }
       else { x.brut = o.inn; x.frais = 0; x.client = o.client || typeClient(o.de || o.lib); x.payeur = (o.de || o.lib || "").split(",")[0].replace(/^paiement envoy[ée] par\s*/i, ""); }
       x.tva = Math.round(x.brut * 21 / 121); x.base = x.brut - x.tva;
+      if (o.datePresta) { x.dTva = o.datePresta; x.dTvaSrc = "date de prestation indiquée"; }
     }
     if (x.grp === "charge") {
       var docs = x.docs.filter(function (d) { return PIECES[d.type]; });
@@ -709,7 +711,7 @@
     var C = A(), pris = {};
     M.facturesSansEnc = []; M.ventesSansFacture = [];
     var factures = (C.ven || []).filter(function (v) { return v.numero && v.numero !== "BROUILLON" && v.statut !== "annulee" && v.statut !== "brouillon"; })
-      .map(function (v) { return { src: "appli", id: v.id, numero: v.numero, date: v.date, ttc: ct(v.ttc), client: v.client || "", type: v.clientType || "" }; });
+      .map(function (v) { return { src: "appli", id: v.id, numero: v.numero, date: v.date, datePresta: v.datePrestation || null, ttc: ct(v.ttc), client: v.client || "", type: v.clientType || "" }; });
     C.admDocs.filter(function (d) { return d.type === "facture_vente"; }).forEach(function (d) { factures.push({ src: "pièce", id: d.id, numero: d.numero || "", date: d.date || "", ttc: d.ttc || 0, client: d.client || d.fournisseur || "", doc: d, opForce: (d.ops || [])[0] }); });
     var ventes = M.ops.filter(function (x) { return x.grp === "vente" && x.brut > 0; });
     factures.forEach(function (f) {
@@ -724,10 +726,17 @@
         });
         c = cands[0] || null;
       }
-      if (c) { pris[c.id] = true; c.facture = f; f.op = c; }
+      if (c) { pris[c.id] = true; c.facture = f; f.op = c; if (!c.dTva && f.datePresta) { c.dTva = f.datePresta; c.dTvaSrc = "date de prestation de la facture " + f.numero; } }
       else M.facturesSansEnc.push(f);
     });
-    ventes.forEach(function (x) { if (!x.facture && x.client === "entreprise") M.ventesSansFacture.push(x); });
+    M.clientsAPreciser = [];
+    ventes.forEach(function (x) {
+      if (!x.facture && x.client === "entreprise") M.ventesSansFacture.push(x);
+      if (x.cat === "vente_vir" && x.client === "à préciser") M.clientsAPreciser.push(x);
+      /* encaissement des 15 premiers jours d'un trimestre sans date de prestation : le service peut appartenir au trimestre précédent */
+      var q = trimDe(x.d);
+      if (!x.dTva && q.deb > debutActivite() && ecart(q.deb, x.d) < 15 && x.cat === "vente_vir") x.periodeAConfirmer = true;
+    });
   }
 
   /* ------------------------------- couverture ------------------------------- */
@@ -766,7 +775,8 @@
     GRILLES.forEach(function (k) { G[k] = 0; });
     var V = { q: q, id: q.id, deb: deb, fin: q.fin, ventes: [], achats: [], aVerifier: [], G: G, potentiel: 0, enCours: td <= q.fin };
     M.ops.forEach(function (x) {
-      if (x.d < deb || x.d > q.fin) return;
+      var dx = x.grp === "vente" && x.dTva ? x.dTva : x.d;
+      if (dx < deb || dx > q.fin) return;
       if (x.grp === "vente") { G["03"] += x.base; G["54"] += x.tva; V.ventes.push(x); return; }
       if (x.grp === "inconnu") { V.aVerifier.push(x); return; }
       if (x.grp !== "charge") return;
@@ -784,6 +794,7 @@
     V.factSansEnc = (M.facturesSansEnc || []).filter(function (f) { return f.date >= deb && f.date <= q.fin; });
     V.ventesSansFacture = (M.ventesSansFacture || []).filter(function (x) { return x.d >= deb && x.d <= q.fin; });
     V.brutCalc = V.ventes.filter(function (x) { return x.brutCalc; });
+    V.periodeAConfirmer = V.ventes.filter(function (x) { return x.periodeAConfirmer; });
     V.decl = decl("tva:" + q.id);
     V.pay = etatPaiement("tva:" + q.id);
     V.ctrl = controle(V);
@@ -808,6 +819,7 @@
     c.push({ k: "Pièces des dépenses", ok: manq.length === 0, txt: manq.length ? manq.length + " dépense(s) sans pièce complète : TVA non déduite" : "Toutes les dépenses ont leur pièce" });
     var inc = V.aVerifier.filter(function (x) { return x.grp === "inconnu"; }).length;
     c.push({ k: "Traitement fiscal des opérations", ok: inc === 0 && !V.brutCalc.length, txt: (inc ? inc + " opération(s) à préciser. " : "") + (V.brutCalc.length ? V.brutCalc.length + " paiement(s) carte : montant client recalculé (commission 1,7 %) à confirmer." : (inc ? "" : "OK")) });
+    c.push({ k: "Période des ventes", ok: !V.periodeAConfirmer.length, txt: V.periodeAConfirmer.length ? V.periodeAConfirmer.map(function (x) { return (x.payeur || x.o.lib) + " (payé le " + dfr(x.d) + ")"; }).join(", ") + " : la prestation a-t-elle eu lieu au trimestre précédent ? La TVA est due à la fin du service." : "OK" });
     c.push({ k: "Ventes et factures", ok: !V.factSansEnc.length && !V.ventesSansFacture.length, txt: (V.factSansEnc.length ? V.factSansEnc.length + " facture(s) sans encaissement. " : "") + (V.ventesSansFacture.length ? V.ventesSansFacture.length + " client(s) entreprise sans facture." : "") || "OK" });
     var ageRegles = ecart(VERIF, todayStr());
     c.push({ k: "Règles et dates", ok: ageRegles <= 120, txt: "Règles vérifiées le " + dfr(VERIF) + (ageRegles > 120 ? " : à revérifier" : "") });
@@ -952,8 +964,8 @@
         periode: "depuis le " + dfr(debutActivite()), etapes: ["Ouvre « Documents manquants » ci-dessous : chaque ligne dit où trouver la facture.", "Télécharge les PDF depuis tes espaces clients (Google Ads, Meta, Higgsfield…) ou demande un duplicata.", "Dépose-les avec « Ajouter mes documents » : je les relie aux paiements."],
         preuve: "Les factures originales (PDF reçus), pas une capture du paiement.", vue: "manquants" });
     }
-    var inc = M.ops.filter(function (x) { return x.grp === "inconnu" || (x.grp === "charge" && x.statut === "Usage à préciser"); });
-    if (inc.length) out.push({ id: "usage", kind: "question", prio: 45, titre: "Préciser " + inc.length + " opération" + (inc.length > 1 ? "s" : ""), phrase: "Je ne sais pas si ces paiements sont professionnels ou privés.", etapes: ["Ouvre « À préciser ».", "Pour chacune, choisis la bonne catégorie (ou « privé »).", "Le calcul se met à jour tout de suite."], preuve: "Rien à garder de plus : ta réponse est notée avec la date.", vue: "preciser" });
+    var inc = M.ops.filter(function (x) { return x.grp === "inconnu" || (x.grp === "charge" && x.statut === "Usage à préciser") || x.periodeAConfirmer || (x.cat === "vente_vir" && x.client === "à préciser"); });
+    if (inc.length) out.push({ id: "usage", kind: "question", prio: 45, titre: "Préciser " + inc.length + " opération" + (inc.length > 1 ? "s" : ""), phrase: "Il me manque une information pour ces opérations : usage (pro ou privé), type de client ou date de la prestation.", etapes: ["Ouvre « À préciser ».", "Pour chacune, choisis la bonne catégorie (ou « privé »).", "Le calcul se met à jour tout de suite."], preuve: "Rien à garder de plus : ta réponse est notée avec la date.", vue: "preciser" });
     if (M.facturesSansEnc.length) out.push({ id: "factsans", kind: "question", prio: 35, titre: "Vérifier " + M.facturesSansEnc.length + " facture" + (M.facturesSansEnc.length > 1 ? "s" : "") + " sans paiement Revolut", phrase: "Une facture remise au client rend la TVA due, même si elle n'a pas été payée sur Revolut.", montant: M.facturesSansEnc.reduce(function (s, f) { return s + Math.round(f.ttc * 21 / 121); }, 0), statutMt: "estimé (TVA en jeu)", etapes: ["Ouvre « Ventes à vérifier ».", "Pour chaque facture : le client l'a-t-il reçue ? A-t-il payé autrement ?", "Si elle n'aurait pas dû exister : annule-la par une note de crédit (onglet Ventes)."], preuve: "La facture et, si besoin, la note de crédit.", vue: "ventes" });
     if (M.ventesSansFacture.length) out.push({ id: "factb2b", kind: "document", prio: 30, titre: "Facturer " + M.ventesSansFacture.length + " client" + (M.ventesSansFacture.length > 1 ? "s" : "") + " entreprise", phrase: "Un client entreprise doit recevoir une facture ; depuis 2026, une facture électronique Peppol s'il est assujetti à la TVA.", montant: M.ventesSansFacture.reduce(function (s, x) { return s + x.brut; }, 0), statutMt: "encaissé", bouton: acc, etapes: ["Vérifie si la facture existe déjà dans Accountable ; sinon crée-la (envoi Peppol).", "Montant TVAC = le virement reçu (TVA 21 % incluse).", "Dépose le PDF de la facture ici pour la relier au paiement."], preuve: "La facture PDF et la confirmation d'envoi Peppol.", vue: "ventes", regul: "" });
     var cov = couverture();
@@ -1288,6 +1300,8 @@
     var ni = M.ops.filter(function (x) { return x.grp === "inconnu"; }).length; if (ni) points.push(ni + " opération" + (ni > 1 ? "s" : "") + " à préciser");
     var nb = M.ops.filter(function (x) { return x.brutCalc; }).length; if (nb) points.push(nb + " paiement" + (nb > 1 ? "s" : "") + " carte dont le montant client est recalculé");
     if (M.facturesSansEnc.length) points.push(M.facturesSansEnc.length + " facture" + (M.facturesSansEnc.length > 1 ? "s" : "") + " de vente sans paiement");
+    var npc = M.ops.filter(function (x) { return x.periodeAConfirmer; }).length; if (npc) points.push(npc + " encaissement" + (npc > 1 ? "s" : "") + " de début de trimestre : date de la prestation à confirmer");
+    if (M.clientsAPreciser.length) points.push(M.clientsAPreciser.length + " virement" + (M.clientsAPreciser.length > 1 ? "s" : "") + " : client entreprise ou particulier ?");
     if (M.ventesSansFacture.length) points.push(M.ventesSansFacture.length + " client" + (M.ventesSansFacture.length > 1 ? "s" : "") + " entreprise sans facture");
     questions().forEach(function (q) { points.push(q.lib.charAt(0).toLowerCase() + q.lib.slice(1)); });
     var periode = "du " + dfr(debutActivite()) + " au " + dfr(cov.jusqua);
@@ -1427,7 +1441,7 @@
     }
     var ops = M.ops.filter(function (o) {
       if (f === "ventes") return o.grp === "vente"; if (f === "depenses") return o.grp === "charge"; if (f === "neutres") return o.grp === "neutre";
-      if (f === "preciser") return o.grp === "inconnu" || o.statut === "Usage à préciser"; return true;
+      if (f === "preciser") return o.grp === "inconnu" || o.statut === "Usage à préciser" || o.periodeAConfirmer || (o.cat === "vente_vir" && o.client === "à préciser"); return true;
     }).slice().reverse();
     if (!ops.length) x += '<p class="emptyline">Aucune opération.</p>';
     var mois = "";
@@ -1604,6 +1618,7 @@
         '<label>Usage professionnel (une phrase)<input id="sca-o-usage" value="' + h(o.usage || xo.usage || "") + '"></label>' +
         '<label>Part professionnelle (%) — vide = 100 %<input id="sca-o-pct" type="number" min="0" max="100" value="' + (o.pct != null ? o.pct : "") + '"></label>';
       if (xo.cat === "vente_carte") { var bv = (xo.brut / 100).toFixed(2).replace(".", ","); x += '<label>Montant payé par le client (€) — ' + h(xo.brutSrc) + '<input id="sca-o-brut" inputmode="decimal" value="' + bv + '" data-init="' + bv + '"></label>' + (xo.brutCalc ? '<label class="sca-c"><input type="checkbox" id="sca-o-brutok"> J\'ai vérifié ce montant dans le détail Revolut</label>' : ""); }
+      if (xo.grp === "vente") x += '<label>Date de la prestation (si différente du paiement)' + (xo.periodeAConfirmer ? " — à confirmer : la TVA est due à la fin du service" : "") + '<input type="date" id="sca-o-dp" value="' + h(o.datePresta || "") + '"></label>';
       if (xo.cat === "vente_vir") x += '<label>Client<select id="sca-o-cli">' + ["particulier", "entreprise", "à préciser"].map(function (c) { return "<option" + (xo.client === c ? " selected" : "") + ">" + c + "</option>"; }).join("") + "</select></label>";
       x += '<label>Pièce jointe<select id="sca-o-doc"><option value="">—</option>' + docsLibres.map(function (z) { return '<option value="' + h(z.id) + '"' + ((z.ops || []).indexOf(o.id) >= 0 ? " selected" : "") + ">" + h(z.nom) + (z.ttc ? " · " + eu(z.ttc) : "") + "</option>"; }).join("") + "</select></label>" +
         '<div class="sca-btns"><button class="sca-b p" data-sca="m-op" data-id="' + h(o.id) + '">Enregistrer</button></div>';
@@ -1677,7 +1692,9 @@
       }
       case "m-op": {
         var C = A(), op = C.admOps.filter(function (z) { return z.id === id; })[0]; if (!op) break;
-        var avant = tvaTrim(trimDe(op.d)).solde, cat = v("sca-o-cat"), pctS = v("sca-o-pct");
+        var soldes = function () { var r = {}; trimestresTva().forEach(function (q) { r[q.id] = tvaTrim(q).solde; }); return r; };
+        var avantT = soldes(), avant = avantT[trimDe(op.d).id], cat = v("sca-o-cat"), pctS = v("sca-o-pct");
+        var dpEl = document.getElementById("sca-o-dp"); if (dpEl) { if (dpEl.value) op.datePresta = dpEl.value; else delete op.datePresta; }
         op.cat = cat; op.catLe = todayStr(); op.usage = v("sca-o-usage") || undefined; op.pct = pctS === "" ? undefined : Math.max(0, Math.min(100, +pctS));
         var br = document.getElementById("sca-o-brut");
         if (br) { var bm = montantTxt(br.value + " €"); if (bm && (br.value.trim() !== br.getAttribute("data-init") || coche("sca-o-brutok"))) op.brut = Math.abs(bm.c); }
@@ -1686,8 +1703,11 @@
         C.admDocs.forEach(function (z) { if ((z.ops || []).indexOf(op.id) >= 0 && z.id !== dsel) z.ops = z.ops.filter(function (i) { return i !== op.id; }); });
         if (dsel) { var dz = C.admDocs.filter(function (z) { return z.id === dsel; })[0]; if (dz) dz.ops = [op.id]; }
         _M = null;
-        var q = trimDe(op.d), apres = tvaTrim(q).solde, dq = decl("tva:" + q.id);
-        if (dq && dq.etape === "deposee" && apres !== avant) hist({ type: "correction", obl: "tva:" + q.id, objet: "Correction après dépôt — " + q.label, etape: "preparee", montant: apres - avant, note: "Écart à reporter dans la déclaration du trimestre suivant (« " + (op.lib || "") + " » du " + dfr(op.d) + ")." });
+        var q = trimDe(op.d), apresT = soldes(), apres = apresT[q.id];
+        Object.keys(apresT).forEach(function (qid) {
+          var dq = decl("tva:" + qid), qq = qParId(qid);
+          if (dq && dq.etape === "deposee" && apresT[qid] !== avantT[qid]) hist({ type: "correction", obl: "tva:" + qid, objet: "Correction après dépôt — " + qq.label, etape: "preparee", montant: apresT[qid] - avantT[qid], note: "Écart à reporter dans la déclaration suivante (« " + (op.lib || "") + " » du " + dfr(op.d) + ")." });
+        });
         save(); U.modal = null;
         toast("ok", ["Enregistré." + (apres !== avant ? " TVA du " + q.label + " : " + eu(avant) + " → " + eu(apres) + "." : "")]); rafraichir(); break;
       }
