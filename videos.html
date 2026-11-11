@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vidéos à publier · StayClean Agenda</title>
+<meta name="description" content="Deux vidéos par jour, prêtes à publier.">
+<meta name="theme-color" content="#0E1A2B">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="StayClean Agenda">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="videos/app.css?v=1">
+</head>
+<body>
+<header class="top">
+  <button type="button" class="back" data-act="home" aria-label="Retour à l’accueil">‹ Accueil</button>
+  <h1>Vidéos à publier</h1>
+  <p id="sub" class="sub"></p>
+</header>
+<main id="app" class="app"></main>
+<nav class="nav" aria-label="Navigation">
+  <button type="button" data-act="tab" data-tab="jour" class="on"><span>▶</span>Aujourd’hui</button>
+  <button type="button" data-act="tab" data-tab="banque"><span>▦</span>Banque</button>
+  <button type="button" data-act="tab" data-tab="cal"><span>▤</span>Calendrier</button>
+  <button type="button" data-act="tab" data-tab="guide"><span>✎</span>Guide</button>
+</nav>
+<div id="sheet" class="sheet" hidden></div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script src="videos/data.js?v=1"></script>
+<script src="videos/app.js?v=1"></script>
+</body>
+</html>
