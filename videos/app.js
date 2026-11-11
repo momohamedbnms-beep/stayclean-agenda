@@ -136,7 +136,12 @@
     D.formats.forEach(function (f, i) {
       h += "<li><b>" + (i + 1) + ". " + esc(f[0]) + "</b><br>" + esc(f[1]) + '<br><span class="sc">Vues <b>' + f[2] + '/5</b></span><span class="sc">Local <b>' + f[3] + '/5</b></span><span class="sc">Clics site <b>' + f[4] + "/5</b></span></li>";
     });
-    h += "</ul><p class=\"muted\">Notes données d’après les vidéos francophones de nettoyage qui ont dépassé leur moyenne ces six derniers mois.</p></div>";
+    h += "</ul><p class=\"muted\">Notes données d’après la veille ci-dessous. Ce sont des paris à vérifier avec tes propres chiffres.</p></div>";
+    h += "<h2>Ce que font les sociétés du métier</h2>";
+    D.veille.forEach(function (v) {
+      h += '<div class="card"><p class="big">' + esc(v[0]) + "</p>" + (v[1] ? '<p class="muted">' + esc(v[1]) + "</p>" : "") + "<p>" + esc(v[2]) + "</p>" +
+        (v[3] ? "<p><b>Pourquoi ça marche :</b> " + esc(v[3]) + "</p>" : "") + "<p><b>Pour toi :</b> " + esc(v[4]) + "</p>" + (v[5] ? '<p class="muted">Plan nécessaire : ' + esc(v[5]) + "</p>" : "") + "</div>";
+    });
     h += "<h2>Ce qu’on a le droit de dire</h2><div class=\"card\"><table class=\"t\">" + D.reperes.map(function (r) { return "<tr><td>" + esc(r[0]) + "</td><td>" + esc(r[1]) + "</td></tr>"; }).join("") +
       "</table><p class=\"muted\" style=\"margin-top:8px\">Relevé sur stayclean.be le " + esc(D.maj.split("-").reverse().join("/")) + ".</p></div>";
     h += "<h2>Le style des vidéos</h2><div class=\"card\"><table class=\"t\">" + D.da.map(function (r) { return "<tr><td>" + esc(r[0]) + "</td><td>" + esc(r[1]) + "</td></tr>"; }).join("") + "</table></div>";

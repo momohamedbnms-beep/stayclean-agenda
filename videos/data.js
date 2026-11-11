@@ -56,7 +56,7 @@ window.VD_DATA = {
   plans: {
     P1: ["Saleté en gros plan", "Tache, accoudoir gris, assise foncée. 5 s, sans bouger, à 20 cm."],
     P2: ["Machine en action", "La buse qui passe sur le tissu, vue de dessus. 10 s, mouvement lent et droit."],
-    P3: ["Eau sale", "Le réservoir ou le seau qu'on vide, ou le tuyau transparent. C'est le plan qui fait le plus de vues."],
+    P3: ["Eau sale", "La buse transparente filmée de très près pendant qu'elle aspire, ou le réservoir qu'on vide. C'est le plan qui fait le plus de vues."],
     P4: ["Détachage", "Le produit sur la tache, la brosse, la tache qui s'en va. 10 s."],
     P5: ["Bande propre", "Un seul passage au milieu du sale : la ligne nette entre avant et après. 5 s."],
     P6: ["Avant / après", "Même cadrage, même lumière, avant puis après. Pose le téléphone au même endroit."],
@@ -66,12 +66,26 @@ window.VD_DATA = {
     P10: ["Toi, face caméra", "Facultatif. Une phrase, debout à côté du meuble. Jamais obligatoire."]
   },
 
+  /* veille du 12/11/2026 : uniquement des sociétés qui vendent du nettoyage textile */
+  veille: [
+    ["Driveclean.fr (France, voiture et canapé)", "tiktok.com/@driveclean.fr", "Extraction d'un siège auto en très gros plan, buse transparente, aucun texte, aucun mot, 24 à 60 s. Trois vidéos à 7,7 · 10,4 et 26,5 millions de vues. Ses vidéos récentes de 60 à 130 s font 2 000 à 6 000 vues.", "On voit l'eau sale passer dans la buse dès la première image. Rien à lire : ça marche dans tous les pays.", "Siège ou coussin en gros plan, bruit réel, 20 s maximum (V07, V14, V17).", "Bande propre + eau sale, de très près"],
+    ["MyShampouineuse (Corse)", "tiktok.com/@myshampouineuse", "Le fondateur montre son travail pas à pas, 54 s : 21 200 vues, sa meilleure. « Moment extraction » en 7 s : 7 500 vues.", "Un visage et un prénom donnent confiance ; la vidéo de 7 s se regarde en boucle.", "« Quand j'arrive chez un client » (V27) et « Un seul passage » (V17).", "Arrivée et matériel · bande propre"],
+    ["MyShampouineuse", "tiktok.com/@myshampouineuse", "« Rappel amical : faites nettoyer votre canapé pour éviter cette couleur d'eau » et « On trouvera quoi dans votre canapé ? »", "Le texte parle au spectateur et pose une question : les gens répondent en commentaire.", "« Il avait l'air propre » (V01), « Vous dormez dessus » (V03).", "Eau sale"],
+    ["Tapis Fresh (France, lavage de tapis)", "tiktok.com/@tapisfresh", "« On m'a juré que ce tapis à 20 € était noir » : histoire racontée sur le lavage, 63 s, 701 000 vues.", "Une petite histoire de client + une couleur cachée qui apparaît.", "« Elle voulait le jeter » (V02), « Les couleurs reviennent » (V22).", "Saleté · bande propre · résultat"],
+    ["Comme Neuf (France, lavage de tapis)", "tiktok.com/@commeneuf_", "Raclette qui pousse l'eau brune et fait apparaître le rouge du tapis, 60 s, 775 000 vues (57 fois sa moyenne).", "La couleur revient d'un coup, dans le premier plan.", "Commencer par le passage qui révèle la couleur (V22).", "Bande propre"],
+    ["Lavage Tapis (France, 2 000 abonnés)", "tiktok.com/@lavagetapis0", "« Je lave un tapis étrange » : 196 000 vues avec 2 000 abonnés.", "Un objet inhabituel suffit, même sur un petit compte.", "Filmer chaque meuble ou tapis qui sort de l'ordinaire.", "Saleté · machine"],
+    ["StayClean (ton compte)", "tiktok.com/@stayclean_be", "10 vidéos, 500 à 3 500 vues. Les deux meilleures (été 2025) : canapé clair en gros plan, 22 à 26 s, 24 partages et 26 sauvegardes.", "Les plus courtes et les plus proches du tissu font le mieux. Le numéro de téléphone en grand sur l'image et « devis par WhatsApp » n'aident pas.", "Garder le gros plan, enlever le téléphone de l'image, envoyer vers le site.", "Tes vidéos déjà publiées sont réutilisables"],
+    ["Gclean Paris", "", "Société réelle (Paris 8e), mais aucun compte TikTok trouvé à ce nom.", "", "Donne-moi le lien de son compte si tu l'as.", ""],
+    ["Fast Wash", "", "Le compte @fastwash est un centre auto brésilien, arrêté en 2022. Pas le bon.", "", "Donne-moi le lien exact.", ""],
+    ["SuperPropre", "", "Le compte @superpropre vend des produits ménagers, pas un service. Écarté.", "", "Donne-moi le lien exact.", ""]
+  ],
+
   formats: [
+    ["Extraction en très gros plan", "L'eau sale qu'on voit passer, de très près, sans voix ni texte. 10 à 20 s. C'est le format des vidéos à plusieurs millions de vues de Driveclean.", 5, 3, 3],
     ["Eau sale = preuve", "On montre l'eau avant le canapé. 8 à 12 s.", 5, 4, 4],
     ["Histoire d'un client", "« La cliente voulait le jeter… » Voix off sur le nettoyage. 20 à 30 s. C'est le format des comptes de tapis qui font 500 000 vues.", 5, 3, 3],
     ["Bande propre en boucle", "Un seul passage, 7 s, la fin recolle au début : les gens regardent deux fois.", 4, 3, 2],
     ["Avant / après sur la musique", "Le sale, puis coupure nette sur le propre au temps fort.", 4, 4, 3],
-    ["« Ça ne suffit pas ❌ »", "On part d'une astuce maison connue et on montre ce qui reste dans le tissu.", 4, 3, 4],
     ["POV : j'arrive chez un client", "Le matériel, l'installation, le premier passage. Les coulisses rassurent.", 4, 5, 4],
     ["Son seul (ASMR)", "Aucune voix, aucun texte après le début. Le bruit de l'extraction.", 4, 2, 2],
     ["Le prix, clairement", "« Combien coûte… à Bruxelles ? » Peu de vues, mais ce sont des gens prêts à réserver.", 2, 5, 5],
