@@ -1,5 +1,5 @@
-var V = "stayclean-agenda-cache-v56";
-/* v56 (12/11/2026) : nouvelle section « Vidéos à publier » (videos.html, videos/). */
+var V = "stayclean-agenda-cache-v57";
+/* v57 (12/11/2026) : section « Vidéos à publier » retirée à la demande de Mohamed. */
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 self.addEventListener("install", function (e) {
   self.skipWaiting();

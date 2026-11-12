@@ -355,9 +355,6 @@ nav button{font-size:12px;padding:10px 2px}
 .pcard.pap{background:linear-gradient(135deg,#1E1650 0%,#4B32D1 62%,#9C8BFF 130%);color:#fff}
 .pcard.cal{background:linear-gradient(135deg,#431407 0%,#C2410C 62%,#FDBA74 130%);color:#fff}
 .pcard.cal .lg{background:#FFF1E7}
-/* Vidéos à publier (12/11/2026) : juste sous StayClean */
-.pcard.vd{background:linear-gradient(135deg,#0E1A2B 0%,#17456A 60%,#3AB0EC 135%);color:#fff}
-.pcard.vd .lg{background:#EAF6FD}
 /* Mon Coran (27/10/2026) : vert forêt de la section */
 .pcard.qr{background:linear-gradient(135deg,#0B3B2C 0%,#145A43 58%,#4FAF85 130%);color:#fff}
 .pcard.qr .lg{background:#E7F4EB}
@@ -2077,20 +2074,6 @@ function qrResume() {
     return r.name ? '<span class="pst">En cours : ' + esc(r.name) + "</span>" : "";
   } catch (e) { return ""; }
 }
-/* ---- Vidéos à publier : 2 vidéos par jour pour TikTok, Instagram et Snapchat (videos.html, même appli) ----
-   Le résumé de la carte est écrit par la section sur cet appareil (vd.summary.v1). */
-var VD_LOGO = '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="9" y="5" width="24" height="38" rx="6" fill="#fff" stroke="#20212B" stroke-width="2.6"/><path d="M18 17.5v11a1 1 0 0 0 1.5.87l9-5.5a1 1 0 0 0 0-1.74l-9-5.5a1 1 0 0 0-1.5.87z" fill="#3AB0EC" stroke="#20212B" stroke-width="2.2" stroke-linejoin="round"/><circle cx="35" cy="35" r="9.5" fill="#1B7FB5"/><path d="M35 39.6v-8.4M31.3 34.7l3.7-3.7 3.7 3.7" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-function vdResume() {
-  try {
-    var r = JSON.parse(localStorage.getItem("vd.summary.v1") || "null");
-    if (!r || !r.at) return '<span class="pst">30 textes prêts · images à filmer</span>';
-    var auj = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Brussels", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-    if (!r.pretes) return '<span class="pst">' + r.textes + " textes prêts · images à filmer</span>";
-    if (r.lance && r.date === auj && r.due) return '<span class="pst">' + r.due + " à publier aujourd’hui</span>";
-    if (r.lance && r.date === auj) return '<span class="pst">✓ Publié aujourd’hui</span>';
-    return '<span class="pst">' + r.pretes + " prête" + (r.pretes > 1 ? "s" : "") + " à publier</span>";
-  } catch (e) { return ""; }
-}
 function renderPortal() {
   return '<div class="portal">' + portalResume() +
     '<p class="pt">Où veux-tu aller ?</p>' +
@@ -2098,11 +2081,6 @@ function renderPortal() {
     '<span class="em">🧼</span><span class="go">›</span>' +
     '<span class="tt" style="display:block">STAYCLEAN</span>' +
     '<span class="ss" style="display:block">Mon activité professionnelle</span>' +
-    "</button>" +
-    '<button class="pcard vd" data-act="go-videos" aria-label="Vidéos à publier : TikTok, Instagram, Snapchat">' +
-    '<span class="lg">' + VD_LOGO + '</span><span class="go">›</span>' +
-    '<span class="tt" style="display:block">VIDÉOS À PUBLIER</span>' +
-    '<span class="ss" style="display:block">2 par jour · TikTok, Instagram, Snapchat</span>' + vdResume() +
     "</button>" +
     '<button class="pcard cpt2" data-act="go-cpt">' +
     '<span class="em">💶</span><span class="go">›</span>' +
@@ -5704,13 +5682,6 @@ document.addEventListener("click", function (e) {
       else allerPap();
       break;
     }
-    case "go-videos": {
-      try { sessionStorage.setItem("vd.from", "agenda"); } catch (e) {}
-      var allerVd = function () { location.href = "videos.html"; };
-      if (pushTimer && session) { clearTimeout(pushTimer); pushTimer = null; Promise.race([pushCloud(), new Promise(function (r) { setTimeout(r, 2500); })]).then(allerVd, allerVd); }
-      else allerVd();
-      break;
-    }
     case "go-calories": {
       try { sessionStorage.setItem("ct.from", "agenda"); } catch (e) {}
       var allerCal = function () { location.href = "calories.html"; };
@@ -6992,7 +6963,7 @@ if ("serviceWorker" in navigator) {
 /* 4/11/2026 : l'app sur l'écran d'accueil de l'iPhone reste ouverte en mémoire et gardait l'ancienne version.
    À chaque retour dans l'app (max 1 fois / 2 min), on regarde si une nouvelle version est en ligne ;
    si oui, on recharge — jamais pendant une saisie en cours. */
-var APP_BUILD = "2026-11-12a";
+var APP_BUILD = "2026-11-12b";
 (function () {
   /* 5/11/2026 : si une nouvelle version est en ligne, on recharge UNIQUEMENT au moment où l'app revient
      à l'écran (avant que le doigt touche quoi que ce soit) — jamais pendant que tu utilises l'app. */
