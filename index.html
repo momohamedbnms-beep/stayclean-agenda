@@ -506,6 +506,18 @@ body.mv .chatfab{box-shadow:0 10px 26px rgba(124,58,237,.4)}
 .quickbar button{flex:1;padding:11px 6px;border-radius:14px;font-size:12.5px;font-weight:800;background:#fff;border:1.5px solid var(--bordure);color:var(--encre)}
 .quickbar button.warn{border-color:#FCA5A5;color:#B91C1C;background:#FEF2F2}
 .demgo{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;margin:0 0 12px;padding:10px 16px;border-radius:14px;border:1.5px solid var(--bordure);background:#fff;color:var(--encre);font-size:15px;font-weight:800;text-align:left}
+.veille{margin:0 0 12px;padding:14px 14px 6px;border-radius:16px;background:#fff;border:1.5px solid #BFE3F7}
+.veille .vh{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px}
+.veille .vh b{font-size:15px;font-weight:800;color:var(--encre)}
+.veille .vh span{font-size:12.5px;font-weight:700;color:#5B7387;white-space:nowrap}
+.veille .vrow{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--bordure)}
+.veille .vrow div{flex:1;min-width:0}
+.veille .vrow b{display:block;font-size:14px;font-weight:800;color:var(--encre);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.veille .vrow small{display:block;font-size:12px;color:#5B7387;margin-top:2px}
+.veille .vbtn{flex:none;min-height:40px;padding:8px 14px;border-radius:999px;border:0;background:#25D366;color:#06361C;font-size:13.5px;font-weight:800}
+.veille .vbtn.fait{background:#EEF4F9;color:#5B7387}
+.veille .vbtn.mail{background:#0A7DB8;color:#fff}
+.veille .vok{font-size:13px;color:#047857;font-weight:700;padding:4px 0 8px}
 .demgo span{flex:1}
 .demgo b{font-size:13px;font-weight:700;color:#5B7387}
 .demgo i{font-style:normal;font-size:20px;color:#5B7387}
@@ -4422,6 +4434,58 @@ function libreLabel(date) {
   return fmtH(min) + " libre" + (w.length > 1 ? " (" + w.length + " plages)" : "");
 }
 
+/* 16/11/2026 — confirmation la veille (demande de Mohamed) : chaque client de demain reçoit un petit message
+   pour confirmer. Sans facture : on précise que le paiement se fait en espèces si possible. Avec facture : simple
+   confirmation. Le bouton ouvre WhatsApp avec le message déjà écrit (et le copie, au cas où). */
+function veilleListe() {
+  var dm = addDaysStr(todayStr(), 1);
+  return DB.bookings.filter(function (b) { return b.date === dm && b.statut !== "annule" && !b.deleted; })
+    .sort(function (a, b) { return toMin(a.heure) - toMin(b.heure); });
+}
+function telWa(t) {
+  var d = String(t || "").replace(/[^0-9+]/g, "").replace(/^\+/, "").replace(/^00/, "");
+  if (/^0/.test(d)) d = "32" + d.slice(1);
+  else if (/^4\d{8}$/.test(d)) d = "32" + d;
+  return d.length >= 10 ? d : "";
+}
+function msgVeille(b) {
+  var p = String(b.client || "").trim().split(/\s+/)[0] || "";
+  var ok = /^[A-Za-zÀ-ÖØ-öø-ÿ'’-]{2,}$/.test(p) && !/^(client|cliente|madame|monsieur|mme|mr|m|srl|sprl|sa|asbl|nv|bv|snc|scs|sc|société|societe|ste|sté|cabinet|agence|hotel|hôtel|restaurant|test)$/i.test(p) && !/^[A-ZÀ-Ö]{2,4}$/.test(p);
+  var bonjour = ok ? "Bonjour " + p.charAt(0).toUpperCase() + p.slice(1).toLowerCase() : "Bonjour";
+  var d = parseDateStr(b.date);
+  var jour = JOURS_FULL[(d.getDay() + 6) % 7].toLowerCase() + " " + d.getDate() + " " + MOIS_FULL[d.getMonth()].toLowerCase();
+  var h = String(b.heure || "").slice(0, 5).replace(":", "h").replace(/h00$/, "h").replace(/^0/, "");
+  var t = bonjour + " 👋\n\nC'est StayClean. Je reviens vers vous pour confirmer le nettoyage prévu demain, " + jour + (h ? " à " + h : "") +
+    ". Est-ce que c'est toujours OK pour vous ?";
+  /* 17/11 : seulement sans facture — paiement en espèces, dit avec l'émoji 💶 */
+  if (!b.facture) t += "\n\nPetite information : le paiement se fait uniquement en espèces 💶, le jour même après le nettoyage.";
+  t += "\n\nMerci et à demain !\nStayClean";
+  return t;
+}
+/* e-mail du client : celui du RDV, sinon celui de sa demande du site */
+function veilleMail(b) {
+  var m = b.email || "";
+  if (!m && b.demId) { var dM = findDem(b.demId); if (dM && dM.email) m = dM.email; }
+  return /@/.test(m) ? String(m).trim() : "";
+}
+function veilleHtml() {
+  var L = veilleListe(); if (!L.length) return "";
+  var td = todayStr(), faits = L.filter(function (b) { return b.veilleEnvoye === td; }).length;
+  var hNow = new Date().getHours();
+  var h = '<section class="veille"><div class="vh"><b>📲 Confirmations pour demain</b><span>' + faits + "/" + L.length + " envoyée" + (faits > 1 ? "s" : "") + "</span></div>" +
+    (faits < L.length ? '<p style="margin:0 0 6px;font-size:12.5px;color:' + (hNow >= 15 ? "#B45309" : "#5B7387") + '">' + (hNow >= 15 ? "⏰ C’est le moment : envoie-les maintenant, ils auront le temps de prévoir le paiement." : "À envoyer aujourd’hui, idéalement vers 15 h.") + "</p>" : "");
+  if (faits === L.length) h += '<p class="vok">✓ Tous tes clients de demain ont reçu leur confirmation.</p>';
+  L.forEach(function (b) {
+    var fait = b.veilleEnvoye === td;
+    h += '<div class="vrow"><div><b>' + esc(String(b.heure || "").slice(0, 5)) + " · " + esc(b.client || "Client") + "</b><small>" +
+      (b.facture ? "Avec facture · confirmation simple" : "Sans facture · paiement en espèces") +
+      (telWa(b.telephone) ? "" : veilleMail(b) ? " · pas de numéro : à confirmer par mail" : " · ⚠️ ni numéro ni mail") + "</small></div>" +
+      '<button class="vbtn' + (fait ? " fait" : (!telWa(b.telephone) && veilleMail(b) ? " mail" : "")) + '" data-act="veille-wa" data-id="' + esc(b.id) + '">' +
+      (fait ? "✓ Envoyé" : telWa(b.telephone) ? "WhatsApp" : veilleMail(b) ? "Par mail" : "Copier") + "</button></div>";
+  });
+  return h + "</section>";
+}
+
 function renderPlanning() {
   var st = computeStats();
   var isPro = ui.space === "pro";
@@ -4435,6 +4499,7 @@ function renderPlanning() {
     h += '<button class="demgo' + (nDemP ? " on" : "") + '" data-act="tab" data-tab="demandes">' +
       '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>' +
       "<span>Demandes</span><b>" + (nDemP ? nDemP + " à traiter" : "aucune en attente") + "</b><i>›</i></button>";
+    h += veilleHtml();
     if (window.SCB && SCB.stripHtml) h += SCB.stripHtml();
     /* blocages : pastilles discrètes — la gestion complète est dans « Bloquer » */
     var cgsP = congesActifs();
@@ -4646,8 +4711,47 @@ function renderPlanningSemaine(st) {
   return h;
 }
 
+/* 17/11/2026 — lien de réservation rapide avec un prix déjà convenu sur WhatsApp (demande de Mohamed).
+   Aucun article à choisir : un prix, éventuellement le nom/numéro du client. Le lien stayclean.be/reservation/?d=…
+   ouvre le calendrier, pré-remplit nom et téléphone, et la demande arrive dans l'app avec CE prix. */
+function lienRapideHtml() {
+  var L = ui.lienR || (ui.lienR = { nom: "", tel: "", prix: "", quoi: "", formule: "basique", duree: 120, url: "" });
+  var h = '<section class="card sec" id="lien-rapide"><p class="k">🔗 Lien de réservation · prix déjà convenu</p>' +
+    '<p class="note" style="margin-top:0">Le client choisit son créneau et remplit ses coordonnées. Le prix est déjà enregistré : la demande arrive dans l’app avec ce montant.</p>' +
+    '<div class="two"><div class="fld"><label>Prénom et nom (facultatif)</label><input id="lr-nom" value="' + esc(L.nom) + '" placeholder="Wendy Brans"></div>' +
+    '<div class="fld"><label>Téléphone (facultatif)</label><input id="lr-tel" inputmode="tel" value="' + esc(L.tel) + '" placeholder="0495 12 34 56"></div></div>' +
+    '<div class="two"><div class="fld"><label>Prix convenu (€ TVAC)</label><input id="lr-prix" type="number" inputmode="decimal" value="' + esc(L.prix) + '" placeholder="149"></div>' +
+    '<div class="fld"><label>Durée sur place</label><select id="lr-duree">' + [60, 90, 120, 150, 180, 240, 300].map(function (v) { return '<option value="' + v + '"' + (v === Number(L.duree) ? " selected" : "") + ">" + plageTxt(v) + "</option>"; }).join("") + "</select></div></div>" +
+    '<div class="fld"><label>Ce qu’il faut nettoyer (facultatif)</label><input id="lr-quoi" value="' + esc(L.quoi) + '" placeholder="Canapé 3 places + tapis"></div>' +
+    '<div class="dossierchips" style="margin:0 0 12px"><button class="' + (L.formule !== "premium" ? "on" : "") + '" data-act="lr-formule" data-v="basique">Basique</button>' +
+    '<button class="' + (L.formule === "premium" ? "on" : "") + '" data-act="lr-formule" data-v="premium">Premium vapeur</button></div>' +
+    '<button class="btn-main" data-act="lr-creer">Créer le lien et l’envoyer sur WhatsApp</button>';
+  if (L.url) h += '<div class="docact" style="margin-top:10px;word-break:break-all">✅ ' + esc(L.url) + '</div>' +
+    '<div class="acts2" style="margin-top:8px"><button class="icsbtn" data-act="lr-copier">🔗 Copier le lien</button><button class="icsbtn" data-act="lr-nouveau">＋ Nouveau lien</button></div>';
+  return h + "</section>";
+}
+function lienRapideLire() {
+  var L = ui.lienR || {};
+  function v(id) { var e = document.getElementById(id); return e ? e.value : null; }
+  ["nom", "tel", "prix", "quoi", "duree"].forEach(function (k) { var x = v("lr-" + k); if (x != null) L[k] = x; });
+  ui.lienR = L; return L;
+}
+function lienRapideMessage(L) {
+  var p = String(L.nom || "").trim().split(/\s+/)[0] || "";
+  return (p ? p + ", voici" : "Voici") + " nos prochaines disponibilités 📅 Choisissez votre créneau ici :\n" + L.url;
+}
+
+/* ce qui est tapé dans le lien rapide est gardé même si l'écran se redessine */
+document.addEventListener("input", function (e) {
+  var id = e.target && e.target.id;
+  if (id && /^lr-(nom|tel|prix|quoi)$/.test(id)) { ui.lienR = ui.lienR || {}; ui.lienR[id.slice(3)] = e.target.value; }
+});
+document.addEventListener("change", function (e) {
+  if (e.target && e.target.id === "lr-duree") { ui.lienR = ui.lienR || {}; ui.lienR.duree = e.target.value; }
+});
+
 function renderDevisTab() {
-  var h = '<section class="card sec"><p class="k">Calculateur de devis</p>' +
+  var h = lienRapideHtml() + '<section class="card sec"><p class="k">Calculateur de devis</p>' +
     '<p class="note" style="margin-top:0">Colle le message du client et/ou ses photos (canapé, tapis...), ou dicte toi-même le prix (ex. "total 138€ basique, 158€ premium"). Les prix restent modifiables ensuite.</p>' +
     '<textarea id="q-text" rows="4" placeholder="Ex : Bonjour, 2 canapés 5 places et un tapis à Molenbeek… ou : total 138€ basique, 158€ premium" ' + (ui.qBusy ? "disabled" : "") + ">" + esc(ui.qDraft && ui.qDraft._text ? ui.qDraft._text : "") + "</textarea>" +
     thumbsHtml(ui.qImgs, "quote") +
@@ -5638,6 +5742,19 @@ document.addEventListener("click", function (e) {
       });
       break;
     }
+    case "veille-wa": {
+      var bV = findBk(el.getAttribute("data-id")); if (!bV) break;
+      var mV = msgVeille(bV), tV = telWa(bV.telephone);
+      var mlV = tV ? "" : veilleMail(bV);
+      copyText(mV);
+      if (tV) window.open("https://wa.me/" + tV + "?text=" + encodeURIComponent(mV), "_blank");
+      else if (mlV) window.location.href = "mailto:" + mlV + "?subject=" + encodeURIComponent("Confirmation de votre nettoyage de demain") + "&body=" + encodeURIComponent(mV);
+      bV.veilleEnvoye = todayStr(); save(); renderMain();
+      toast("ok", tV ? ["WhatsApp ouvert avec le message de " + (bV.client || "ton client") + ".", "Appuie sur Envoyer. (Le message est aussi copié, au cas où.)"]
+        : mlV ? [(bV.client || "Ce client") + " n'a pas laissé de numéro : réponds-lui par mail.", "Ton mail s'ouvre avec le message prêt (" + mlV + ")."]
+        : ["Ni numéro ni mail pour " + (bV.client || "ce client") + " : message copié.", "Ajoute son numéro dans la fiche du RDV."]);
+      break;
+    }
     case "bk-wa": {
       var bkw = ui.detailId ? findBk(ui.detailId) : null;
       var msgw2 = (document.getElementById("bk-msg") || {}).value || "";
@@ -6360,6 +6477,41 @@ document.addEventListener("click", function (e) {
       });
       break;
     }
+    case "lr-formule": lienRapideLire(); ui.lienR.formule = el.getAttribute("data-v"); renderMain(); break;
+    case "lr-nouveau": ui.lienR = null; renderMain(); break;
+    case "lr-copier": { var Lc = ui.lienR; if (Lc && Lc.url) copyText(Lc.url).then(function () { toast("ok", ["🔗 Lien copié."]); }); break; }
+    case "lr-creer": {
+      var Lr = lienRapideLire();
+      var prixR = Number(String(Lr.prix || "").replace(",", "."));
+      if (!(prixR > 0)) { toast("err", ["Indique le prix convenu (ex. 149)."]); break; }
+      var cR = getSb();
+      if (!cR || !session) { toast("err", ["Connecte-toi au cloud (Réglages) pour créer un lien."]); break; }
+      var tokR = (function () { var a = new Uint8Array(12); crypto.getRandomValues(a); return Array.prototype.map.call(a, function (x) { return "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[x % 62]; }).join(""); })();
+      var telR = String(Lr.tel || "").replace(/[^0-9+]/g, "");
+      if (telR && telR.indexOf("+") !== 0) telR = "+32" + telR.replace(/^0/, "");
+      var quoiR = String(Lr.quoi || "").trim() || "Nettoyage convenu sur WhatsApp";
+      var durR = Number(Lr.duree) || 120;
+      cR.from("sc_devis").insert({
+        token: tokR, tel: telR || null, nom: String(Lr.nom || "").trim() || null,
+        lignes: [{ label: quoiR, base: prixR, prem: prixR }], resume: quoiR,
+        formule: Lr.formule === "premium" ? "premium" : "basique",
+        total_basique: prixR, total_premium: prixR,
+        duree_min: Math.min(durR, toMin(siteCfg().fermeture || "19:00") - toMin(siteCfg().ouverture || "10:00")), duree_texte: plageTxt(durR),
+        source: "app-lien"
+      }).then(function (res) {
+        if (res.error) throw res.error;
+        Lr.url = "https://stayclean.be/reservation/?d=" + tokR;
+        var msgR = lienRapideMessage(Lr), waR = telWa(Lr.tel);
+        copyText(msgR);
+        if (waR) window.open("https://wa.me/" + waR + "?text=" + encodeURIComponent(msgR), "_blank");
+        renderMain();
+        toast("ok", waR ? ["🔗 Lien créé · WhatsApp ouvert avec le message.", "Appuie sur Envoyer. Prix enregistré : " + euro(prixR) + "."]
+          : ["🔗 Lien créé et copié avec le message.", "Colle-le dans la conversation WhatsApp du client. Prix enregistré : " + euro(prixR) + "."]);
+      }).catch(function (e) {
+        toast("err", ["Lien impossible à créer : " + (e && e.message ? e.message : "erreur réseau") + ".", "Rien n'a été envoyé — tu peux réessayer."]);
+      });
+      break;
+    }
     case "q-lien-wa": {
       /* Envoi du lien de réservation SEUL — jamais le devis. C'est l'action que
          Mohamed déclenche quand il veut transmettre au client sa réservation
@@ -6963,7 +7115,7 @@ if ("serviceWorker" in navigator) {
 /* 4/11/2026 : l'app sur l'écran d'accueil de l'iPhone reste ouverte en mémoire et gardait l'ancienne version.
    À chaque retour dans l'app (max 1 fois / 2 min), on regarde si une nouvelle version est en ligne ;
    si oui, on recharge — jamais pendant une saisie en cours. */
-var APP_BUILD = "2026-11-12b";
+var APP_BUILD = "2026-11-17a";
 (function () {
   /* 5/11/2026 : si une nouvelle version est en ligne, on recharge UNIQUEMENT au moment où l'app revient
      à l'écran (avant que le doigt touche quoi que ce soit) — jamais pendant que tu utilises l'app. */
