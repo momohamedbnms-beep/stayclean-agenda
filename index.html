@@ -4782,39 +4782,64 @@ function renderPlanningSemaine(st) {
    Aucun article à choisir : un prix, éventuellement le nom/numéro du client. Le lien stayclean.be/reservation/?d=…
    ouvre le calendrier, pré-remplit nom et téléphone, et la demande arrive dans l'app avec CE prix. */
 function lienRapideHtml() {
-  var L = ui.lienR || (ui.lienR = { nom: "", tel: "", prix: "", quoi: "", formule: "basique", duree: 120, url: "" });
-  var h = '<section class="card sec" id="lien-rapide"><p class="k">🔗 Lien de réservation · prix déjà convenu</p>' +
-    '<p class="note" style="margin-top:0">Le client choisit son créneau et remplit ses coordonnées. Le prix est déjà enregistré : la demande arrive dans l’app avec ce montant.</p>' +
+  var L = ui.lienR || (ui.lienR = { nom: "", tel: "", quoi: "", prixB: "", prixP: "", choix: "client", duree: 120, url: "" });
+  if (!L.choix) L.choix = "client";
+  var h = '<section class="card sec" id="lien-rapide"><p class="k">🔗 Devis + lien de réservation</p>' +
+    '<p class="note" style="margin-top:0">Le client voit ton prix, choisit sa formule et son créneau, puis remplit ses coordonnées. La demande arrive dans l’app avec le bon prix.</p>' +
     '<div class="two"><div class="fld"><label>Prénom et nom (facultatif)</label><input id="lr-nom" value="' + esc(L.nom) + '" placeholder="Wendy Brans"></div>' +
     '<div class="fld"><label>Téléphone (facultatif)</label><input id="lr-tel" inputmode="tel" value="' + esc(L.tel) + '" placeholder="0495 12 34 56"></div></div>' +
-    '<div class="two"><div class="fld"><label>Prix convenu (€ TVAC)</label><input id="lr-prix" type="number" inputmode="decimal" value="' + esc(L.prix) + '" placeholder="149"></div>' +
-    '<div class="fld"><label>Durée sur place</label><select id="lr-duree">' + [60, 90, 120, 150, 180, 240, 300].map(function (v) { return '<option value="' + v + '"' + (v === Number(L.duree) ? " selected" : "") + ">" + plageTxt(v) + "</option>"; }).join("") + "</select></div></div>" +
-    '<div class="fld"><label>Ce qu’il faut nettoyer (facultatif)</label><input id="lr-quoi" value="' + esc(L.quoi) + '" placeholder="Canapé 3 places + tapis"></div>' +
-    '<div class="dossierchips" style="margin:0 0 12px"><button class="' + (L.formule !== "premium" ? "on" : "") + '" data-act="lr-formule" data-v="basique">Basique</button>' +
-    '<button class="' + (L.formule === "premium" ? "on" : "") + '" data-act="lr-formule" data-v="premium">Premium vapeur</button></div>' +
+    '<div class="fld"><label>Ce qu’il faut nettoyer</label><input id="lr-quoi" value="' + esc(L.quoi) + '" placeholder="Canapé 3 places + fauteuil"></div>' +
+    '<p class="note" style="margin:-4px 0 10px" id="lr-auto">' + (L.autoTxt || "Les prix se calculent tout seuls avec ta grille (tu peux les changer).") + "</p>" +
+    '<div class="two"><div class="fld"><label>Prix Basique (€)</label><input id="lr-prixB" type="number" inputmode="decimal" value="' + esc(L.prixB) + '" placeholder="128"></div>' +
+    '<div class="fld"><label>Prix Premium vapeur (€)</label><input id="lr-prixP" type="number" inputmode="decimal" value="' + esc(L.prixP) + '" placeholder="148"></div></div>' +
+    '<div class="dossierchips" style="margin:0 0 12px">' +
+    [["client", "Le client choisit"], ["basique", "Basique seulement"], ["premium", "Premium seulement"]].map(function (c) {
+      return '<button class="' + (L.choix === c[0] ? "on" : "") + '" data-act="lr-formule" data-v="' + c[0] + '">' + c[1] + "</button>";
+    }).join("") + "</div>" +
+    '<div class="fld"><label>Durée sur place</label><select id="lr-duree">' + [60, 90, 120, 150, 180, 240, 300].map(function (v) { return '<option value="' + v + '"' + (v === Number(L.duree) ? " selected" : "") + ">" + plageTxt(v) + "</option>"; }).join("") + "</select></div>" +
     '<button class="btn-main" data-act="lr-creer">Créer le lien et l’envoyer sur WhatsApp</button>';
   if (L.url) h += '<div class="docact" style="margin-top:10px;word-break:break-all">✅ ' + esc(L.url) + '</div>' +
-    '<div class="acts2" style="margin-top:8px"><button class="icsbtn" data-act="lr-copier">🔗 Copier le lien</button><button class="icsbtn" data-act="lr-nouveau">＋ Nouveau lien</button></div>';
+    '<div class="acts2" style="margin-top:8px"><button class="icsbtn" data-act="lr-copier">🔗 Copier le lien</button><button class="icsbtn" data-act="lr-nouveau">＋ Nouveau devis</button></div>';
   return h + "</section>";
 }
 function lienRapideLire() {
   var L = ui.lienR || {};
   function v(id) { var e = document.getElementById(id); return e ? e.value : null; }
-  ["nom", "tel", "prix", "quoi", "duree"].forEach(function (k) { var x = v("lr-" + k); if (x != null) L[k] = x; });
+  ["nom", "tel", "quoi", "prixB", "prixP", "duree"].forEach(function (k) { var x = v("lr-" + k); if (x != null) L[k] = x; });
   ui.lienR = L; return L;
 }
-function lienRapideMessage(L) {
+/* prix calculés tout seuls d'après « ce qu'il faut nettoyer » (même calcul que pour les demandes sans prix) */
+function lienRapideAuto() {
+  var L = ui.lienR || {}; if (L.prixManuel) return;
+  var E = String(L.quoi || "").trim() ? estimerDemande({ message: L.quoi }) : null;
+  var pb = document.getElementById("lr-prixB"), pp = document.getElementById("lr-prixP"), at = document.getElementById("lr-auto");
+  if (E) {
+    L.prixB = String(E.base); L.prixP = String(E.prem);
+    L.autoTxt = "🧮 Calculé : " + E.lignes.map(function (l) { return l.label + " " + euro(l.prix); }).join(" + ") + (E.minimum ? " (minimum " + euro(E.minimum) + ")" : "") + ".";
+    if (E.lignes.length === 1 && /canap/i.test(E.lignes[0].label) && !L.dureeManuel) L.duree = 90;
+  } else { L.autoTxt = "Les prix se calculent tout seuls avec ta grille (tu peux les changer)."; }
+  if (pb) pb.value = L.prixB || ""; if (pp) pp.value = L.prixP || ""; if (at) at.textContent = L.autoTxt;
+}
+function lienRapideMessage(L, B, P, formule) {
   var p = String(L.nom || "").trim().split(/\s+/)[0] || "";
-  return (p ? p + ", voici" : "Voici") + " nos prochaines disponibilités 📅 Choisissez votre créneau ici :\n" + L.url;
+  var quoi = String(L.quoi || "").trim();
+  var t = (p ? p + ", voici" : "Voici") + " votre devis StayClean 🧽" + (quoi ? "\n" + quoi : "") + "\n\n";
+  if (!formule) t += "• Basique : " + euro(B) + "\n• Premium vapeur (+ désinfection vapeur) : " + euro(P) + "\n\nChoisissez votre formule et votre créneau directement ici 📅\n";
+  else t += "Formule " + (formule === "premium" ? "Premium vapeur" : "Basique") + " : " + euro(formule === "premium" ? P : B) + "\n\nChoisissez votre créneau directement ici 📅\n";
+  return t + L.url;
 }
 
 /* ce qui est tapé dans le lien rapide est gardé même si l'écran se redessine */
 document.addEventListener("input", function (e) {
   var id = e.target && e.target.id;
-  if (id && /^lr-(nom|tel|prix|quoi)$/.test(id)) { ui.lienR = ui.lienR || {}; ui.lienR[id.slice(3)] = e.target.value; }
+  if (id && /^lr-(nom|tel|quoi|prixB|prixP)$/.test(id)) {
+    ui.lienR = ui.lienR || {}; ui.lienR[id.slice(3)] = e.target.value;
+    if (id === "lr-quoi") lienRapideAuto();
+    if (id === "lr-prixB" || id === "lr-prixP") ui.lienR.prixManuel = true;
+  }
 });
 document.addEventListener("change", function (e) {
-  if (e.target && e.target.id === "lr-duree") { ui.lienR = ui.lienR || {}; ui.lienR.duree = e.target.value; }
+  if (e.target && e.target.id === "lr-duree") { ui.lienR = ui.lienR || {}; ui.lienR.duree = e.target.value; ui.lienR.dureeManuel = true; }
 });
 
 function renderDevisTab() {
@@ -4860,6 +4885,8 @@ function renderDevisTab() {
     h += '<section class="card sec"><p class="k">Message pr\u00eat \u00e0 envoyer</p>' +
       '<p class="note" style="margin-top:0">\u26a0\ufe0f Ceci est le <b>devis</b> (avec les prix). Le lien de r\u00e9servation personnalis\u00e9 se cr\u00e9e et s\u2019envoie \u00e0 part, ci-dessous \u2014 ce n\u2019est jamais le m\u00eame envoi.</p>' +
       '<div class="fld" style="margin-bottom:10px"><label>T\u00e9l\u00e9phone client (pour l\u2019envoi direct WhatsApp)</label><input id="q-tel" value="' + esc(d.telephone || "") + '" inputmode="tel" placeholder="Ex : 0498 12 34 56"></div>' +
+      '<button class="btn-main" data-act="q-tout" style="margin:0 0 12px;background:#25D366;color:#06361C">📲 Devis + lien de réservation → WhatsApp</button>' +
+      '<p class="note" style="margin:-6px 0 12px">Un seul message : ses 2 prix + le lien où il choisit sa formule et son créneau. La demande arrivera avec le bon prix.</p>' +
       '<textarea id="q-msg" class="quote-pre">' + esc(quoteText(d)) + "</textarea>" +
       '<div class="qbtns">' +
       '<button class="q-copy" data-act="q-copy">Copier le devis</button>' +
@@ -6557,13 +6584,17 @@ document.addEventListener("click", function (e) {
       });
       break;
     }
-    case "lr-formule": lienRapideLire(); ui.lienR.formule = el.getAttribute("data-v"); renderMain(); break;
+    case "lr-formule": lienRapideLire(); ui.lienR.choix = el.getAttribute("data-v"); renderMain(); break;
     case "lr-nouveau": ui.lienR = null; renderMain(); break;
     case "lr-copier": { var Lc = ui.lienR; if (Lc && Lc.url) copyText(Lc.url).then(function () { toast("ok", ["🔗 Lien copié."]); }); break; }
     case "lr-creer": {
       var Lr = lienRapideLire();
-      var prixR = Number(String(Lr.prix || "").replace(",", "."));
-      if (!(prixR > 0)) { toast("err", ["Indique le prix convenu (ex. 149)."]); break; }
+      var nb = function (x) { return Number(String(x || "").replace(",", ".")) || 0; };
+      var Bv = nb(Lr.prixB), Pv = nb(Lr.prixP), ch = Lr.choix || "client";
+      if (ch === "premium" && !Pv) { toast("err", ["Indique le prix Premium vapeur."]); break; }
+      if (ch !== "premium" && !Bv) { toast("err", ["Indique au moins le prix Basique (ou écris ce qu’il faut nettoyer pour le calcul automatique)."]); break; }
+      if (!Bv) Bv = Pv; if (!Pv) Pv = Bv;
+      var formR = ch === "basique" ? "basique" : ch === "premium" ? "premium" : (Pv === Bv ? "basique" : null);
       var cR = getSb();
       if (!cR || !session) { toast("err", ["Connecte-toi au cloud (Réglages) pour créer un lien."]); break; }
       var tokR = (function () { var a = new Uint8Array(12); crypto.getRandomValues(a); return Array.prototype.map.call(a, function (x) { return "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[x % 62]; }).join(""); })();
@@ -6573,20 +6604,66 @@ document.addEventListener("click", function (e) {
       var durR = Number(Lr.duree) || 120;
       cR.from("sc_devis").insert({
         token: tokR, tel: telR || null, nom: String(Lr.nom || "").trim() || null,
-        lignes: [{ label: quoiR, base: prixR, prem: prixR }], resume: quoiR,
-        formule: Lr.formule === "premium" ? "premium" : "basique",
-        total_basique: prixR, total_premium: prixR,
+        lignes: [{ label: quoiR, base: Bv, prem: Pv }], resume: quoiR,
+        formule: formR, total_basique: Bv, total_premium: Pv,
         duree_min: Math.min(durR, toMin(siteCfg().fermeture || "19:00") - toMin(siteCfg().ouverture || "10:00")), duree_texte: plageTxt(durR),
         source: "app-lien"
       }).then(function (res) {
         if (res.error) throw res.error;
         Lr.url = "https://stayclean.be/reservation/?d=" + tokR;
-        var msgR = lienRapideMessage(Lr), waR = telWa(Lr.tel);
+        var msgR = lienRapideMessage(Lr, Bv, Pv, formR), waR = telWa(Lr.tel);
         copyText(msgR);
         if (waR) window.open("https://wa.me/" + waR + "?text=" + encodeURIComponent(msgR), "_blank");
         renderMain();
-        toast("ok", waR ? ["🔗 Lien créé · WhatsApp ouvert avec le message.", "Appuie sur Envoyer. Prix enregistré : " + euro(prixR) + "."]
-          : ["🔗 Lien créé et copié avec le message.", "Colle-le dans la conversation WhatsApp du client. Prix enregistré : " + euro(prixR) + "."]);
+        toast("ok", waR ? ["🔗 Devis créé · WhatsApp ouvert avec le message.", "Appuie sur Envoyer. Le client choisira sa formule et son créneau."]
+          : ["🔗 Devis créé et copié avec le message.", "Colle-le dans la conversation WhatsApp du client."]);
+      }).catch(function (e) {
+        toast("err", ["Lien impossible à créer : " + (e && e.message ? e.message : "erreur réseau") + ".", "Rien n'a été envoyé — tu peux réessayer."]);
+      });
+      break;
+    }
+    case "q-tout": {
+      /* 23/11/2026 : en un geste — le devis (2 prix) + le lien où le client choisit sa formule et son créneau */
+      var cT = getSb();
+      if (!cT || !session) { toast("err", ["Connecte-toi au cloud (Réglages) pour créer un lien."]); break; }
+      var dT = ui.qDraft; if (!dT) break;
+      var telIn = document.getElementById("q-tel"); if (telIn && telIn.value) dT.telephone = telIn.value;
+      var tT = quoteResolvedTotals(dT), sigT = devisSignature(dT, tT);
+      var lignesT = (dT.articles || []).map(function (a) {
+        var it = findItem(a.item); if (!it) return null;
+        var lbl = (a.quantite > 1 ? a.quantite + "× " : "") + it.label + (it.id === "moquette" ? " (" + Math.round(a.surface_m2 || 10) + " m²)" : "");
+        var b0 = it.id === "moquette" ? moquettePrix(a.surface_m2 || 10) * (a.quantite || 1) : it.base * a.quantite;
+        var p0 = it.id === "moquette" ? b0 : it.prem * a.quantite;
+        return { label: lbl, base: b0, prem: p0 };
+      }).filter(Boolean);
+      var resumeT = lignesT.map(function (l) { return l.label; }).join(" + ") || "Votre nettoyage";
+      var envoyerT = function (url) {
+        var prenomT = String(dT.client || "").trim().split(/\s+/)[0] || "";
+        var msgT = (prenomT ? prenomT + ", voici" : "Voici") + " votre devis StayClean 🧽\n" + resumeT + "\n\n" +
+          (tT.prem > tT.base ? "• Basique : " + euro(tT.base) + "\n• Premium vapeur (+ désinfection vapeur) : " + euro(tT.prem) + "\n\nChoisissez votre formule et votre créneau directement ici 📅\n"
+            : "Prix : " + euro(tT.base) + "\n\nChoisissez votre créneau directement ici 📅\n") + url;
+        var waT = telWa(dT.telephone);
+        copyText(msgT);
+        if (waT) window.open("https://wa.me/" + waT + "?text=" + encodeURIComponent(msgT), "_blank"); else openWhatsApp("");
+        toast("ok", waT ? ["📲 WhatsApp ouvert avec le devis + le lien.", "Appuie sur Envoyer : le client choisit sa formule et son créneau."]
+          : ["Devis + lien copiés.", "Colle-les dans la conversation du client (ajoute son numéro pour l’ouvrir directement)."]);
+      };
+      if (dT.lienTout && dT.lienToutSig === sigT) { envoyerT(dT.lienTout); break; }
+      var seulT = (dT.articles || []).length === 1 && (dT.articles[0].quantite || 1) === 1 ? dT.articles[0].item : "";
+      var plT = plageDuree((tT.base + tT.prem) / 2, seulT);
+      var tokT = (function () { var a = new Uint8Array(12); crypto.getRandomValues(a); return Array.prototype.map.call(a, function (x) { return "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[x % 62]; }).join(""); })();
+      var telT = String(dT.telephone || "").replace(/[^0-9+]/g, "");
+      if (telT && telT.indexOf("+") !== 0) telT = "+32" + telT.replace(/^0/, "");
+      cT.from("sc_devis").insert({
+        token: tokT, tel: telT || null, nom: dT.client || null,
+        lignes: lignesT, resume: resumeT, formule: tT.prem > tT.base ? null : "basique",
+        total_basique: tT.base, total_premium: tT.prem,
+        duree_min: Math.min(plT[1], toMin(siteCfg().fermeture || "19:00") - toMin(siteCfg().ouverture || "10:00")), duree_texte: plageTxt(plT[0]) + " à " + plageTxt(plT[1]),
+        source: "app"
+      }).then(function (res) {
+        if (res.error) throw res.error;
+        dT.lienTout = "https://stayclean.be/reservation/?d=" + tokT; dT.lienToutSig = sigT;
+        envoyerT(dT.lienTout);
       }).catch(function (e) {
         toast("err", ["Lien impossible à créer : " + (e && e.message ? e.message : "erreur réseau") + ".", "Rien n'a été envoyé — tu peux réessayer."]);
       });
@@ -7195,7 +7272,7 @@ if ("serviceWorker" in navigator) {
 /* 4/11/2026 : l'app sur l'écran d'accueil de l'iPhone reste ouverte en mémoire et gardait l'ancienne version.
    À chaque retour dans l'app (max 1 fois / 2 min), on regarde si une nouvelle version est en ligne ;
    si oui, on recharge — jamais pendant une saisie en cours. */
-var APP_BUILD = "2026-11-23a";
+var APP_BUILD = "2026-11-23c";
 (function () {
   /* 5/11/2026 : si une nouvelle version est en ligne, on recharge UNIQUEMENT au moment où l'app revient
      à l'écran (avant que le doigt touche quoi que ce soit) — jamais pendant que tu utilises l'app. */
