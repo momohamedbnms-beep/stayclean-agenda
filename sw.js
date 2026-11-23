@@ -1,4 +1,5 @@
-var V = "stayclean-agenda-cache-v57";
+var V = "stayclean-agenda-cache-v58";
+/* v58 (23/11/2026) : MON PROGRAMME (sport.html, « Le Camp ») remplace la carte MES CALORIES ; lien ami « sport.html?ami=1 ». */
 /* v57 (12/11/2026) : section « Vidéos à publier » retirée à la demande de Mohamed. */
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 self.addEventListener("install", function (e) {

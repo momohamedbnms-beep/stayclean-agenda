@@ -1,5 +1,7 @@
 # Mes Calories dans StayClean Agenda
 
+> Depuis le 23/11/2026, la 4e carte de l'accueil est **MON PROGRAMME** (voir `MON-PROGRAMME.md`). Mes Calories reste accessible depuis son profil ; ses pesées sont partagées avec Mon Programme.
+
 Quatrième carte de l'accueil : **MES CALORIES**. Tu dis ce que tu as mangé, l'appli calcule les calories ; tu te pèses, elle trace ton évolution et ta date d'arrivée.
 
 Rien de nouveau à connecter : Mes Calories utilise **ton compte**, **ton serveur Supabase** et **ta clé d'IA (Claude ou Gemini)** déjà réglés dans l'agenda.

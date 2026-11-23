@@ -262,7 +262,7 @@ function applyRows(rows, startedAt) {
     if (r.updated_at && (!Sync.since || Date.parse(r.updated_at) > Date.parse(Sync.since))) Sync.since = r.updated_at;
     const lw = Sync.localWrites.get(r.kind + '/' + r.id);
     if (lw && lw > startedAt - 1500) continue;
-    if (r.kind === 'settings') { d.settings = r.deleted ? clone(DEFAULT_SETTINGS) : mergeSettings(r.data); continue; }
+    if (r.kind === 'settings') { if (r.id !== 'main') continue; /* settings/sport : Mon Programme */ d.settings = r.deleted ? clone(DEFAULT_SETTINGS) : mergeSettings(r.data); continue; }
     const m = d[r.kind]; if (!m) continue;
     if (r.deleted) m.delete(r.id); else m.set(r.id, r.data);
   }

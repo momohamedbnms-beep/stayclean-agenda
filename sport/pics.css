@@ -1,0 +1,15 @@
+/* Généré par sport/sources/gen_sport.py */
+
+.pic{display:block;width:100%;height:auto;border-radius:9px}
+.pic .f{stroke:none}.pic .s{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.pic .f.g{fill:var(--fig)}.pic .s.g{stroke:var(--fig)}
+.pic .f.far{fill:var(--far)}.pic .s.far{stroke:var(--far)}
+.pic .f.e{fill:var(--eq)}.pic .s.e{stroke:var(--eq)}
+.pic .f.e2{fill:var(--eq2)}.pic .s.e2{stroke:var(--eq2)}
+.pic .f.a{fill:var(--arrow)}.pic .s.a{stroke:var(--arrow)}
+.pic .f.bg{fill:var(--frame)}.pic .s.bgs{stroke:var(--frame)}.pic .f.gr{fill:var(--ground)}
+.pic .f.w{fill:var(--eq);opacity:.28}
+.pic .f.nb{fill:var(--fig)}.pic .nt{font:800 17px "DM Sans",sans-serif;fill:var(--frame)}
+.pic .sj{stroke:var(--fig);stroke-linejoin:round}
+.pic .ghost{opacity:var(--gho,.3)}
+

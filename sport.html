@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mon Programme · Le Camp</title>
+<meta name="description" content="Six séances d’athlète, la nutrition et le poids. Tu appuies sur « Je m’entraîne », je te donne la séance du jour.">
+<meta name="theme-color" content="#141233">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Le Camp">
+<meta name="referrer" content="no-referrer">
+<link rel="apple-touch-icon" href="sport/icon-180.png">
+<link rel="icon" type="image/png" href="sport/icon-192.png">
+<link rel="manifest" href="sport/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="sport/pics.css?v=1">
+<link rel="stylesheet" href="sport/app.css?v=1">
+<!-- même fichier que l'agenda (version figée + empreinte SRI) ; utilisé seulement si l'agenda est relié à un compte -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.js" integrity="sha384-K1nraABOP/zFehpLIUksXebbs7jMpB8gYMlb+uhVKZcWT/9Vkq1+qhv6ndC+1Yuz" crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="clap" aria-hidden="true"></div>
+<header class="top" id="top"></header>
+<main class="app" id="app">
+  <section id="tab-today" class="screen" aria-label="Aujourd’hui"></section>
+  <section id="tab-plan" class="screen" aria-label="Programme" hidden></section>
+  <section id="tab-food" class="screen" aria-label="Assiette" hidden></section>
+  <section id="tab-weight" class="screen" aria-label="Poids" hidden></section>
+</main>
+<nav class="nav" aria-label="Navigation">
+  <button type="button" class="nav__tab is-on" data-act="tab" data-tab="today"><span class="nav__ic">⚡</span><span>Aujourd’hui</span></button>
+  <button type="button" class="nav__tab" data-act="tab" data-tab="plan"><span class="nav__ic">🗓️</span><span>Programme</span></button>
+  <button type="button" class="nav__tab" data-act="tab" data-tab="food"><span class="nav__ic">🍽️</span><span>Assiette</span></button>
+  <button type="button" class="nav__tab" data-act="tab" data-tab="weight"><span class="nav__ic">⚖️</span><span>Poids</span></button>
+</nav>
+<div id="sheet" class="sheet" hidden></div>
+<div id="timer" class="timer" hidden></div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script src="sport/data.js?v=1"></script>
+<script src="sport/app.js?v=1"></script>
+</body>
+</html>

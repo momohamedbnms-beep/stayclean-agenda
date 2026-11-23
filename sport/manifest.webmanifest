@@ -1,0 +1,32 @@
+{
+  "id": "./sport.html",
+  "name": "Le Camp — Opération 87",
+  "short_name": "Le Camp",
+  "description": "Six séances d’athlète, la nutrition et le poids.",
+  "display": "standalone",
+  "start_url": "../sport.html?ami=1",
+  "scope": "../",
+  "background_color": "#141233",
+  "theme_color": "#141233",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

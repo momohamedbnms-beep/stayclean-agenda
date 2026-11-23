@@ -12,7 +12,7 @@ with sync_playwright() as p:
     pg.goto(BASE + 'index.html'); pg.wait_for_timeout(2500)
     e.shot('80-agenda-portal', full=True)
     cards = e.js("() => [...document.querySelectorAll('.pcard .tt')].map(x => x.textContent)")
-    check('accueil de l’agenda : cartes existantes + MON CORAN', cards == ['STAYCLEAN', 'COMPTA', 'MA PAPERASSE', 'MES CALORIES', 'MON CORAN'], cards)
+    check('accueil de l’agenda : cartes existantes + MON CORAN (MON PROGRAMME remplace MES CALORIES le 23/11)', cards == ['STAYCLEAN', 'COMPTA', 'MA PAPERASSE', 'MON PROGRAMME', 'MON CORAN'], cards)
     # les autres espaces s'ouvrent toujours
     pg.click('.pcard.pro'); pg.wait_for_timeout(800)
     check('STAYCLEAN (planning) s’ouvre', e.js("() => document.body.innerText.includes('Planning')"))
@@ -33,8 +33,8 @@ with sync_playwright() as p:
     pill = e.js("() => { const c = document.querySelector('.pcard.qr .pst'); return c ? c.textContent : null }")
     check('carte : résumé écrit par Mon Coran (prochaine sourate, rien de quotidien)', pill and 'Prochaine sourate : Al-Fatiha' in pill and 'aujourd' not in pill, pill)
     e.shot('81-agenda-portal-after')
-    # la carte Mes Calories / Ma Paperasse n'ont pas bougé
-    check('MES CALORIES toujours présente', e.js("() => !!document.querySelector('.pcard.cal')"))
+    # la carte Mon Programme (ex-Mes Calories) n'a pas bougé
+    check('MON PROGRAMME toujours présente', e.js("() => !!document.querySelector('.pcard.sp')"))
     errs = real_errors(e.errors)
     print('ERRORS', errs)
     check('aucune erreur JavaScript', not [x for x in errs if 'pageerror' in x], errs)

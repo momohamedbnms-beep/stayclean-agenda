@@ -13,7 +13,8 @@ Application web installable (PWA), en JavaScript sans framework, hébergée sur 
 | `dispo.html` | Page publique des disponibilités. Elle lit `sc_dispo`, `sc_fermes` et `sc_reglages`. |
 | `reserver.html` | Redirige vers stayclean.be. L'ancienne page de réservation est retirée ; elle reste dans l'historique Git. |
 | `paperasse.html` + `paperasse/` | **Ma Paperasse** (remplace « Ma Vie » sur l'accueil) : papiers perso, rappels, preuves. Même session et même clé IA que l'agenda. Voir `MA-PAPERASSE.md`. |
-| `calories.html` + `calories/` | **Mes Calories** (4e carte de l'accueil) : repas dictés, calories, pesées et évolution. Même session et même clé IA que l'agenda. Voir `MES-CALORIES.md`. |
+| `sport.html` + `sport/` | **Mon Programme** (« Le Camp », 4e carte de l'accueil depuis le 23/11/2026, à la place de Mes Calories) : séance du jour en rotation J1 → J6, séries, charges, nutrition, poids. Même session que l'agenda ; lien ami `sport.html?ami=1` sans compte ni réseau. Voir `MON-PROGRAMME.md`. |
+| `calories.html` + `calories/` | **Mes Calories** (ancienne 4e carte, toujours accessible depuis Mon Programme) : repas dictés, calories, pesées et évolution. Même session et même clé IA que l'agenda. Voir `MES-CALORIES.md`. |
 | `coran.html` + `coran/` | **Mon Coran** (5e carte de l'accueil) : mémoriser, lire et réviser le Coran (juz par juz et groupe par groupe avec statuts déclarés, lecteur 114 sourates, séance guidée facultative avec révisions espacées, carte des 30 juz) et « Lire et écrire l'arabe » (`coran/arabe.js`, module chargé avant `app.js` : 10 chapitres, examens notés par l'appli, clavier arabe, oral via la clé Gemini de l'agenda après accord ; fiches PDF dans `coran/fiches/`). Même session que l'agenda, données privées à part. Voir `MON-CORAN.md`. |
 | `sw.js` | Service worker : le réseau d'abord, le cache seulement hors ligne. Reçoit aussi les notifications de Ma Paperasse (v36 ; v37 pour Mes Calories ; v38 pour Mon Coran ; v39 : voix Al-Luhaidan, suivi du texte, « Je la connais à 100 % » ; v40 : « Lire et écrire l'arabe » ; v41 : le cours en 10 chapitres, examens notés avec clavier arabe et oral ; v42 : « Mémoriser » juz par juz, carte des 30 juz). |
 | `supabase/ma-paperasse.sql`, `supabase/functions/mp-push/` | Côté serveur de Ma Paperasse : tables `mp_*` (RLS), bucket privé `mp-files`, tâche horaire, envoi des notifications. |
@@ -51,6 +52,13 @@ Application web installable (PWA), en JavaScript sans framework, hébergée sur 
 - Mes Calories lit sur l'appareil, sans les modifier : `DB.settings.sync` (serveur), `DB.settings.provider/apiKey/geminiKey` (IA) et `DB.cpt.profil` (prénom).
 - Elle écrit `ct.summary.v1` dans localStorage (kcal du jour, objectif, dernier poids) : le résumé de la carte de l'accueil.
 - Ses données vivent dans Supabase (`cal_items`), jamais dans `agenda_state`.
+
+## Mon Programme (23/11/2026)
+
+- L'accueil affiche **MON PROGRAMME** à la place de MES CALORIES ; le bouton ouvre `sport.html` (même appli installée, flèche ‹ de retour).
+- Mon Programme lit sur l'appareil, sans les modifier : `DB.settings.sync` (serveur), la session Supabase de l'agenda et `DB.cpt.profil` (prénom). Avec `?ami=1`, il ne lit rien de l'agenda et n'appelle aucun serveur.
+- Il écrit `sp.summary.v1` dans localStorage : le résumé de la carte de l'accueil.
+- Ses données vivent dans `cal_items` (pesées partagées avec Mes Calories, programme dans `settings/sport`), jamais dans `agenda_state`.
 
 ## Mon Coran (27/10/2026)
 

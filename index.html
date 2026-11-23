@@ -364,6 +364,8 @@ nav button{font-size:12px;padding:10px 2px}
 .pcard.pap{background:linear-gradient(135deg,#1E1650 0%,#4B32D1 62%,#9C8BFF 130%);color:#fff}
 .pcard.cal{background:linear-gradient(135deg,#431407 0%,#C2410C 62%,#FDBA74 130%);color:#fff}
 .pcard.cal .lg{background:#FFF1E7}
+.pcard.sp{background:linear-gradient(135deg,#141233 0%,#2C2970 62%,#FFC531 150%);color:#fff}
+.pcard.sp .lg{background:#FFF6DC}
 /* Mon Coran (27/10/2026) : vert forêt de la section */
 .pcard.qr{background:linear-gradient(135deg,#0B3B2C 0%,#145A43 58%,#4FAF85 130%);color:#fff}
 .pcard.qr .lg{background:#E7F4EB}
@@ -2149,6 +2151,24 @@ function calResume() {
     return '<span class="pst">' + (reste >= 0 ? reste.toLocaleString("fr-BE") + " kcal restantes" : Math.abs(reste).toLocaleString("fr-BE") + " kcal au-dessus") + kg + "</span>";
   } catch (e) { return ""; }
 }
+/* ---- Mon Programme « Le Camp » (sport.html, même appli, même compte) — remplace la carte Mes Calories (23/11/2026,
+   demande de Mohamed ; calories.html reste accessible depuis le profil de Mon Programme).
+   Le résumé de la carte est écrit par Mon Programme sur cet appareil (sp.summary.v1). */
+var SP_LOGO = '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="4" y="19" width="6" height="10" rx="2" fill="#20212B"/><rect x="10" y="14" width="6" height="20" rx="2" fill="#FFC531" stroke="#20212B" stroke-width="2.4"/><rect x="16" y="22" width="16" height="4" rx="1.5" fill="#20212B"/><rect x="32" y="14" width="6" height="20" rx="2" fill="#FFC531" stroke="#20212B" stroke-width="2.4"/><rect x="38" y="19" width="6" height="10" rx="2" fill="#20212B"/></svg>';
+function spResume() {
+  try {
+    var r = JSON.parse(localStorage.getItem("sp.summary.v1") || "null");
+    if (!r || !r.at) return "";
+    var u = session && session.user && session.user.id;
+    if (u && r.uid && r.uid !== u) return "";
+    var auj = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Brussels", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    var kg = typeof r.kg === "number" ? " · " + r.kg.toLocaleString("fr-BE", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " kg" : "";
+    if (r.date === auj && r.k === "done") return '<span class="pst">✓ ' + esc(r.sid || "Séance") + " faite aujourd’hui" + kg + "</span>";
+    if (r.date === auj && r.k === "rest") return '<span class="pst">Repos aujourd’hui' + kg + "</span>";
+    if (r.date === auj && r.k === "active") return '<span class="pst">Séance en cours : ' + esc(r.sid || "") + kg + "</span>";
+    return r.next ? '<span class="pst">Prochaine séance : ' + esc(r.next) + kg + "</span>" : "";
+  } catch (e) { return ""; }
+}
 /* ---- Mon Coran : apprendre, lire et réviser (coran.html, même appli, même compte) ----
    Le résumé de la carte est écrit par Mon Coran sur cet appareil (qr.summary.v1). */
 var QR_LOGO = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M5.5 12.6c5.6-2.3 11.8-2 17.5 1.3v24.6c-5.7-3.3-11.9-3.6-17.5-1.3z" fill="#fff" stroke="#20212B" stroke-width="2.6" stroke-linejoin="round"/><path d="M40.5 12.6c-5.6-2.3-11.8-2-17.5 1.3v24.6c5.7-3.3 11.9-3.6 17.5-1.3z" fill="#fff" stroke="#20212B" stroke-width="2.6" stroke-linejoin="round"/><circle cx="34" cy="35" r="9.5" fill="#145A43"/><path d="M31.4 30.6v8.8a.9.9 0 0 0 1.37.77l7.1-4.4a.9.9 0 0 0 0-1.54l-7.1-4.4a.9.9 0 0 0-1.37.77z" fill="#fff"/></svg>';
@@ -2193,10 +2213,10 @@ function renderPortal() {
     '<span class="tt" style="display:block">MA PAPERASSE</span>' +
     '<span class="ss" style="display:block">Factures, amendes, rappels et preuves</span>' + papResume() +
     "</button>" +
-    '<button class="pcard cal" data-act="go-calories" aria-label="Mes Calories : repas et poids">' +
-    '<span class="lg">' + CAL_LOGO + '</span><span class="go">›</span>' +
-    '<span class="tt" style="display:block">MES CALORIES</span>' +
-    '<span class="ss" style="display:block">Repas dictés, poids et évolution</span>' + calResume() +
+    '<button class="pcard sp" data-act="go-sport" aria-label="Mon Programme : séance du jour, nutrition et poids">' +
+    '<span class="lg">' + SP_LOGO + '</span><span class="go">›</span>' +
+    '<span class="tt" style="display:block">MON PROGRAMME</span>' +
+    '<span class="ss" style="display:block">Séance du jour, nutrition et poids</span>' + spResume() +
     "</button>" +
     '<button class="pcard qr" data-act="go-coran" aria-label="Mon Coran : apprendre, lire et réviser">' +
     '<span class="lg">' + QR_LOGO + '</span><span class="go">›</span>' +
@@ -6025,6 +6045,14 @@ document.addEventListener("click", function (e) {
       else allerCal();
       break;
     }
+    case "go-sport": {
+      try { sessionStorage.setItem("sp.from", "agenda"); } catch (e) {}
+      var allerSp = function () { location.href = "sport.html"; };
+      /* une modification attend d'être envoyée au cloud : on l'envoie d'abord (2,5 s max) */
+      if (pushTimer && session) { clearTimeout(pushTimer); pushTimer = null; Promise.race([pushCloud(), new Promise(function (r) { setTimeout(r, 2500); })]).then(allerSp, allerSp); }
+      else allerSp();
+      break;
+    }
     case "go-coran": {
       try { sessionStorage.setItem("qr.from", "agenda"); } catch (e) {}
       var allerQr = function () { location.href = "coran.html"; };
@@ -7369,7 +7397,7 @@ if ("serviceWorker" in navigator) {
 /* 4/11/2026 : l'app sur l'écran d'accueil de l'iPhone reste ouverte en mémoire et gardait l'ancienne version.
    À chaque retour dans l'app (max 1 fois / 2 min), on regarde si une nouvelle version est en ligne ;
    si oui, on recharge — jamais pendant une saisie en cours. */
-var APP_BUILD = "2026-11-23e";
+var APP_BUILD = "2026-11-23f";
 (function () {
   /* 5/11/2026 : si une nouvelle version est en ligne, on recharge UNIQUEMENT au moment où l'app revient
      à l'écran (avant que le doigt touche quoi que ce soit) — jamais pendant que tu utilises l'app. */
