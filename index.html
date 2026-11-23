@@ -262,6 +262,15 @@ textarea{resize:none;border-radius:16px;padding:12px}
 .qbtns button,.qbtns a{flex:1;text-align:center;padding:12px 4px;border-radius:999px;font-size:13px;font-weight:700;text-decoration:none}
 .q-copy{background:var(--pale);color:var(--bleu-dark)}
 .q-wa{background:#25D366;color:#fff}
+.qres{border:2px solid #25D366}
+.qres-quoi{margin:2px 0 10px;font-size:16px;font-weight:700}
+.qres-prix{display:flex;gap:10px;margin:0 0 12px}
+.qres-prix>div{flex:1;padding:10px 12px;border-radius:12px;background:#EAF6FD}
+.qres-prix>div.pr{background:#FFF4EC}
+.qres-prix small{display:block;font-size:12px;color:var(--gris)}
+.qres-prix b{font-size:22px}
+.qres-lien{margin:4px 0 0;font-size:14px;line-height:1.45}
+.qres-lien a{color:var(--bleu);font-weight:700}
 .q-rdv{background:var(--nuit);color:#fff}
 .pick2{display:flex;gap:8px;margin-top:10px}
 .pick2 button{flex:1;padding:12px;border-radius:16px;font-size:13px;font-weight:700;border:1.5px solid var(--bordure);background:#fff}
@@ -1536,6 +1545,78 @@ function devisSignature(draft, t) {
     a: (draft.articles || []).map(function (a) { return a.item + "x" + a.quantite + (a.surface_m2 ? ":" + Math.round(a.surface_m2) : ""); })
   });
 }
+/* 23/11/2026 (v2) — photo du client → prix → SON lien personnel, préparé tout seul
+   dès que le calcul est fini, pour que le bouton WhatsApp s'ouvre tout de suite. */
+function lienToutLignes(dT) {
+  return (dT.articles || []).map(function (a) {
+    var it = findItem(a.item); if (!it) return null;
+    var lbl = (a.quantite > 1 ? a.quantite + "× " : "") + it.label + (it.id === "moquette" ? " (" + Math.round(a.surface_m2 || 10) + " m²)" : "");
+    var b0 = it.id === "moquette" ? moquettePrix(a.surface_m2 || 10) * (a.quantite || 1) : it.base * a.quantite;
+    var p0 = it.id === "moquette" ? b0 : it.prem * a.quantite;
+    return { label: lbl, base: b0, prem: p0 };
+  }).filter(Boolean);
+}
+function lienToutResume(dT) { return lienToutLignes(dT).map(function (l) { return l.label; }).join(" + ") || "Votre nettoyage"; }
+function lienToutSig(dT) {
+  return devisSignature(dT, quoteResolvedTotals(dT)) + "|" + String(dT.client || "").trim() + "|" + String(dT.telephone || "").replace(/[^0-9+]/g, "");
+}
+function lienToutPret(dT) { return dT && dT.lienTout && dT.lienToutSig === lienToutSig(dT) ? dT.lienTout : null; }
+function lienToutMessage(dT, url) {
+  var tT = quoteResolvedTotals(dT);
+  var prenomT = String(dT.client || "").trim().split(/\s+/)[0] || "";
+  return (prenomT ? prenomT + ", voici" : "Voici") + " votre devis StayClean 🧽\n" + lienToutResume(dT) + "\n\n" +
+    (tT.prem > tT.base ? "• Basique : " + euro(tT.base) + "\n• Premium vapeur (+ désinfection vapeur) : " + euro(tT.prem) + "\n\nChoisissez votre formule et votre créneau directement ici 📅\n"
+      : "Prix : " + euro(tT.base) + "\n\nChoisissez votre créneau directement ici 📅\n") + url;
+}
+function lienToutAssurer(dT) {
+  var deja = lienToutPret(dT);
+  if (deja) return Promise.resolve(deja);
+  if (dT.lienPromesse) return dT.lienPromesse;
+  var cT = getSb();
+  if (!cT || !session) return Promise.reject(new Error("connecte-toi au cloud (Réglages)"));
+  var tT = quoteResolvedTotals(dT), sigT = lienToutSig(dT), lignesT = lienToutLignes(dT);
+  var seulT = (dT.articles || []).length === 1 && (dT.articles[0].quantite || 1) === 1 ? dT.articles[0].item : "";
+  var plT = plageDuree((tT.base + tT.prem) / 2, seulT);
+  var tokT = (function () { var a = new Uint8Array(12); crypto.getRandomValues(a); return Array.prototype.map.call(a, function (x) { return "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[x % 62]; }).join(""); })();
+  var telT = String(dT.telephone || "").replace(/[^0-9+]/g, "");
+  if (telT && telT.indexOf("+") !== 0) telT = "+32" + telT.replace(/^0/, "");
+  var ancien = dT.lienToutTok && !dT.lienEnvoye ? dT.lienToutTok : null;
+  dT.lienEtat = "creation";
+  dT.lienPromesse = cT.from("sc_devis").insert({
+    token: tokT, tel: telT || null, nom: String(dT.client || "").trim() || null,
+    lignes: lignesT, resume: lienToutResume(dT), formule: tT.prem > tT.base ? null : "basique",
+    total_basique: tT.base, total_premium: tT.prem,
+    duree_min: Math.min(plT[1], toMin(siteCfg().fermeture || "19:00") - toMin(siteCfg().ouverture || "10:00")), duree_texte: plageTxt(plT[0]) + " à " + plageTxt(plT[1]),
+    source: "app"
+  }).then(function (res) {
+    dT.lienPromesse = null;
+    if (res.error) throw res.error;
+    dT.lienTout = "https://stayclean.be/reservation/?d=" + tokT; dT.lienToutTok = tokT; dT.lienToutSig = sigT; dT.lienEnvoye = false; dT.lienEtat = null;
+    /* l'ancienne version, jamais envoyée, ne sert plus à rien */
+    if (ancien) { try { cT.from("sc_devis").delete().eq("token", ancien).then(function () {}, function () {}); } catch (e) {} }
+    return lienToutPret(dT) || dT.lienTout;
+  }, function (e) {
+    dT.lienPromesse = null; dT.lienEtat = "erreur";
+    throw e;
+  });
+  return dT.lienPromesse;
+}
+/* prépare le lien en arrière-plan quand le devis affiché a changé (nom, numéro, prix…) */
+var lienToutMinuteur = null;
+function lienToutAuto() {
+  clearTimeout(lienToutMinuteur);
+  lienToutMinuteur = setTimeout(function () {
+    var dT = ui.qDraft;
+    if (!dT || ui.tab !== "devis" || lienToutPret(dT) || dT.lienPromesse || dT.lienEtat === "erreur") return;
+    lienToutAssurer(dT).then(function () { if (ui.qDraft === dT) renderMain(); }, function () { if (ui.qDraft === dT) renderMain(); });
+  }, 900);
+}
+function lienToutLireChamps(dT) {
+  var n = document.getElementById("q-nom"), t = document.getElementById("q-tel");
+  if (n) dT.client = n.value.trim() || null;
+  if (t) dT.telephone = t.value.trim() || null;
+}
+
 /* Retrouve le jeton d'un devis figé déjà envoyé, à partir du texte de la demande
    (« Devis WhatsApp n°TOKEN · … ») — permet de retrouver/renvoyer le lien d'un
    devis créé par l'IA ou par l'app, même depuis l'onglet Demandes. */
@@ -1590,6 +1671,12 @@ function handleQuoteAnalyse() {
     ui.qDraft = p;
     var el = document.getElementById("q-text"); if (el) p._text = el.value;
     renderMain();
+    lienToutAssurer(p).then(function () { if (ui.qDraft === p) renderMain(); }, function () { if (ui.qDraft === p) renderMain(); });
+    (function descendre(n) { /* l'écran peut se redessiner un peu plus tard (doigt encore posé) */
+      var r = document.getElementById("q-resultat");
+      if (r && r.scrollIntoView) { r.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+      if (n < 30) setTimeout(function () { descendre(n + 1); }, 100);
+    })(0);
     if (hasManual) {
       toast("ok", ["Devis prêt avec les prix indiqués : Basique " + (hasManualPrix(p.prixBase) ? euro(Number(p.prixBase)) : "—") + " · Premium " + (hasManualPrix(p.prixPremium) ? euro(Number(p.prixPremium)) : "—") + "."]);
     } else {
@@ -4832,6 +4919,11 @@ function lienRapideMessage(L, B, P, formule) {
 /* ce qui est tapé dans le lien rapide est gardé même si l'écran se redessine */
 document.addEventListener("input", function (e) {
   var id = e.target && e.target.id;
+  if ((id === "q-nom" || id === "q-tel") && ui.qDraft) {
+    if (id === "q-nom") ui.qDraft.client = e.target.value.trim() || null; else ui.qDraft.telephone = e.target.value.trim() || null;
+    lienToutAuto();
+    return;
+  }
   if (id && /^lr-(nom|tel|quoi|prixB|prixP)$/.test(id)) {
     ui.lienR = ui.lienR || {}; ui.lienR[id.slice(3)] = e.target.value;
     if (id === "lr-quoi") lienRapideAuto();
@@ -4843,17 +4935,33 @@ document.addEventListener("change", function (e) {
 });
 
 function renderDevisTab() {
-  var h = lienRapideHtml() + '<section class="card sec"><p class="k">Calculateur de devis</p>' +
-    '<p class="note" style="margin-top:0">Colle le message du client et/ou ses photos (canapé, tapis...), ou dicte toi-même le prix (ex. "total 138€ basique, 158€ premium"). Les prix restent modifiables ensuite.</p>' +
+  var h = '<section class="card sec"><p class="k">📸 Photo du client → prix + son lien</p>' +
+    '<p class="note" style="margin-top:0"><b>1.</b> Ajoute la photo (ou colle son message). <b>2.</b> Touche « Calculer le prix » : l’IA calcule avec ta grille. <b>3.</b> Son lien personnel (son devis + tes disponibilités) se prépare tout seul : tu n’as plus qu’à l’envoyer.</p>' +
     '<textarea id="q-text" rows="4" placeholder="Ex : Bonjour, 2 canapés 5 places et un tapis à Molenbeek… ou : total 138€ basique, 158€ premium" ' + (ui.qBusy ? "disabled" : "") + ">" + esc(ui.qDraft && ui.qDraft._text ? ui.qDraft._text : "") + "</textarea>" +
     thumbsHtml(ui.qImgs, "quote") +
-    '<button class="btn-main" data-act="quote-analyse" ' + (ui.qBusy ? "disabled" : "") + ">" + (ui.qBusy ? "Analyse en cours…" : "Calculer le devis") + "</button>";
+    '<button class="btn-main" data-act="quote-analyse" ' + (ui.qBusy ? "disabled" : "") + ">" + (ui.qBusy ? "Analyse en cours…" : "Calculer le prix") + "</button>";
   if (ui.qBusy) h += '<p class="busy">Identification des articles, calcul avec ta grille…</p>';
   h += "</section>";
 
   if (ui.qDraft) {
     var d = ui.qDraft;
     var t = quoteResolvedTotals(d);
+    var pretR = lienToutPret(d);
+    var etatR = pretR
+      ? '<p class="qres-lien">🔗 <b>Son lien personnel est prêt</b><br><a href="' + esc(pretR) + '" target="_blank" rel="noopener">Voir ce que le client verra ↗</a></p>'
+      : d.lienEtat === "creation" || d.lienPromesse ? '<p class="qres-lien">⏳ Je prépare son lien personnel…</p>'
+      : d.lienEtat === "erreur" ? '<p class="qres-lien" style="color:var(--rouge)">⚠️ Le lien n’a pas pu être préparé (réseau ?). Il sera créé quand tu touches le bouton vert.</p>'
+      : '<p class="qres-lien">⏳ Son lien se met à jour…</p>';
+    h += '<section class="card sec qres" id="q-resultat"><p class="k">✅ Devis prêt pour ton client</p>' +
+      '<p class="qres-quoi">' + esc(lienToutResume(d)) + '</p>' +
+      '<div class="qres-prix"><div><small>Basique</small><b class="tnum">' + euro(t.base) + '</b></div>' +
+      (t.prem > t.base ? '<div class="pr"><small>Premium vapeur</small><b class="tnum">' + euro(t.prem) + '</b></div>' : "") + '</div>' +
+      '<div class="fld" style="margin-bottom:8px"><label>Prénom du client (pour « Bonjour {prénom} »)</label><input id="q-nom" value="' + esc(d.client || "") + '" autocomplete="off" placeholder="Ex : Gilda"></div>' +
+      '<div class="fld" style="margin-bottom:10px"><label>Son numéro WhatsApp (facultatif)</label><input id="q-tel" value="' + esc(d.telephone || "") + '" inputmode="tel" placeholder="Ex : 0498 12 34 56"></div>' +
+      etatR +
+      '<button class="btn-main" data-act="q-tout" style="margin:12px 0 8px;background:#25D366;color:#06361C">📲 Envoyer au client sur WhatsApp</button>' +
+      '<button class="linkline" data-act="q-tout-copier" style="display:block;margin:0 auto 6px">Copier le message (pour le coller toi-même)</button>' +
+      '<p class="note" style="margin:6px 0 0">Il reçoit ses prix + son lien : il choisit sa formule et son créneau, et sa réservation arrive ici avec le bon prix.' + (d.telephone ? "" : " Sans numéro, WhatsApp te demande à qui l’envoyer.") + ' Prix pas bon ? Corrige juste en dessous, le lien suit.</p></section>';
     h += '<section class="card sec"><p class="k">Articles détectés</p>';
     d.articles.forEach(function (a, i) {
       var it = findItem(a.item);
@@ -4882,11 +4990,9 @@ function renderDevisTab() {
 
     var sigActuelle = devisSignature(d, t);
     var lienPerime = d.lienUrl && d.lienSig !== sigActuelle;
-    h += '<section class="card sec"><p class="k">Message pr\u00eat \u00e0 envoyer</p>' +
+    h += '<section class="card sec"><p class="k">Autres options (devis seul, lien seul, RDV)</p>' +
       '<p class="note" style="margin-top:0">\u26a0\ufe0f Ceci est le <b>devis</b> (avec les prix). Le lien de r\u00e9servation personnalis\u00e9 se cr\u00e9e et s\u2019envoie \u00e0 part, ci-dessous \u2014 ce n\u2019est jamais le m\u00eame envoi.</p>' +
-      '<div class="fld" style="margin-bottom:10px"><label>T\u00e9l\u00e9phone client (pour l\u2019envoi direct WhatsApp)</label><input id="q-tel" value="' + esc(d.telephone || "") + '" inputmode="tel" placeholder="Ex : 0498 12 34 56"></div>' +
-      '<button class="btn-main" data-act="q-tout" style="margin:0 0 12px;background:#25D366;color:#06361C">📲 Devis + lien de réservation → WhatsApp</button>' +
-      '<p class="note" style="margin:-6px 0 12px">Un seul message : ses 2 prix + le lien où il choisit sa formule et son créneau. La demande arrivera avec le bon prix.</p>' +
+
       '<textarea id="q-msg" class="quote-pre">' + esc(quoteText(d)) + "</textarea>" +
       '<div class="qbtns">' +
       '<button class="q-copy" data-act="q-copy">Copier le devis</button>' +
@@ -4913,7 +5019,8 @@ function renderDevisTab() {
     }
     h += "</section>";
   }
-  return h;
+  if (ui.qDraft && !lienToutPret(ui.qDraft)) lienToutAuto();
+  return h + lienRapideHtml();
 }
 
 function rangeFor(period) {
@@ -6622,49 +6729,32 @@ document.addEventListener("click", function (e) {
       });
       break;
     }
-    case "q-tout": {
-      /* 23/11/2026 : en un geste — le devis (2 prix) + le lien où le client choisit sa formule et son créneau */
-      var cT = getSb();
-      if (!cT || !session) { toast("err", ["Connecte-toi au cloud (Réglages) pour créer un lien."]); break; }
+    case "q-tout":
+    case "q-tout-copier": {
+      /* 23/11/2026 v2 : le devis (ses prix) + SON lien personnel. Le lien est déjà prêt
+         (créé juste après le calcul) → WhatsApp s'ouvre tout de suite, sans être bloqué. */
       var dT = ui.qDraft; if (!dT) break;
-      var telIn = document.getElementById("q-tel"); if (telIn && telIn.value) dT.telephone = telIn.value;
-      var tT = quoteResolvedTotals(dT), sigT = devisSignature(dT, tT);
-      var lignesT = (dT.articles || []).map(function (a) {
-        var it = findItem(a.item); if (!it) return null;
-        var lbl = (a.quantite > 1 ? a.quantite + "× " : "") + it.label + (it.id === "moquette" ? " (" + Math.round(a.surface_m2 || 10) + " m²)" : "");
-        var b0 = it.id === "moquette" ? moquettePrix(a.surface_m2 || 10) * (a.quantite || 1) : it.base * a.quantite;
-        var p0 = it.id === "moquette" ? b0 : it.prem * a.quantite;
-        return { label: lbl, base: b0, prem: p0 };
-      }).filter(Boolean);
-      var resumeT = lignesT.map(function (l) { return l.label; }).join(" + ") || "Votre nettoyage";
-      var envoyerT = function (url) {
-        var prenomT = String(dT.client || "").trim().split(/\s+/)[0] || "";
-        var msgT = (prenomT ? prenomT + ", voici" : "Voici") + " votre devis StayClean 🧽\n" + resumeT + "\n\n" +
-          (tT.prem > tT.base ? "• Basique : " + euro(tT.base) + "\n• Premium vapeur (+ désinfection vapeur) : " + euro(tT.prem) + "\n\nChoisissez votre formule et votre créneau directement ici 📅\n"
-            : "Prix : " + euro(tT.base) + "\n\nChoisissez votre créneau directement ici 📅\n") + url;
-        var waT = telWa(dT.telephone);
+      lienToutLireChamps(dT);
+      var ouvrirT = act === "q-tout";
+      var envoyerT = function (url, apresAttente) {
+        var msgT = lienToutMessage(dT, url), waT = telWa(dT.telephone);
+        var waUrl = "https://wa.me/" + (waT || "") + "?text=" + encodeURIComponent(msgT);
+        dT.lienEnvoye = true;
         copyText(msgT);
-        if (waT) window.open("https://wa.me/" + waT + "?text=" + encodeURIComponent(msgT), "_blank"); else openWhatsApp("");
-        toast("ok", waT ? ["📲 WhatsApp ouvert avec le devis + le lien.", "Appuie sur Envoyer : le client choisit sa formule et son créneau."]
-          : ["Devis + lien copiés.", "Colle-les dans la conversation du client (ajoute son numéro pour l’ouvrir directement)."]);
+        if (ouvrirT) {
+          if (apresAttente && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) window.location.href = waUrl;
+          else window.open(waUrl, "_blank");
+        }
+        renderMain();
+        toast("ok", !ouvrirT ? ["📋 Message copié (prix + son lien).", "Colle-le dans sa conversation WhatsApp."]
+          : waT ? ["📲 WhatsApp ouvert sur ton client avec le message.", "Appuie sur Envoyer."]
+          : ["📲 WhatsApp ouvert : choisis le client, le message est déjà écrit.", "Il est aussi copié, au cas où."]);
       };
-      if (dT.lienTout && dT.lienToutSig === sigT) { envoyerT(dT.lienTout); break; }
-      var seulT = (dT.articles || []).length === 1 && (dT.articles[0].quantite || 1) === 1 ? dT.articles[0].item : "";
-      var plT = plageDuree((tT.base + tT.prem) / 2, seulT);
-      var tokT = (function () { var a = new Uint8Array(12); crypto.getRandomValues(a); return Array.prototype.map.call(a, function (x) { return "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[x % 62]; }).join(""); })();
-      var telT = String(dT.telephone || "").replace(/[^0-9+]/g, "");
-      if (telT && telT.indexOf("+") !== 0) telT = "+32" + telT.replace(/^0/, "");
-      cT.from("sc_devis").insert({
-        token: tokT, tel: telT || null, nom: dT.client || null,
-        lignes: lignesT, resume: resumeT, formule: tT.prem > tT.base ? null : "basique",
-        total_basique: tT.base, total_premium: tT.prem,
-        duree_min: Math.min(plT[1], toMin(siteCfg().fermeture || "19:00") - toMin(siteCfg().ouverture || "10:00")), duree_texte: plageTxt(plT[0]) + " à " + plageTxt(plT[1]),
-        source: "app"
-      }).then(function (res) {
-        if (res.error) throw res.error;
-        dT.lienTout = "https://stayclean.be/reservation/?d=" + tokT; dT.lienToutSig = sigT;
-        envoyerT(dT.lienTout);
-      }).catch(function (e) {
+      var pretT = lienToutPret(dT);
+      if (pretT) { envoyerT(pretT, false); break; }
+      toast("ok", ["⏳ Je prépare son lien…"]);
+      lienToutAssurer(dT).then(function (url) { envoyerT(url, true); }).catch(function (e) {
+        renderMain();
         toast("err", ["Lien impossible à créer : " + (e && e.message ? e.message : "erreur réseau") + ".", "Rien n'a été envoyé — tu peux réessayer."]);
       });
       break;
@@ -7272,7 +7362,7 @@ if ("serviceWorker" in navigator) {
 /* 4/11/2026 : l'app sur l'écran d'accueil de l'iPhone reste ouverte en mémoire et gardait l'ancienne version.
    À chaque retour dans l'app (max 1 fois / 2 min), on regarde si une nouvelle version est en ligne ;
    si oui, on recharge — jamais pendant une saisie en cours. */
-var APP_BUILD = "2026-11-23c";
+var APP_BUILD = "2026-11-23d";
 (function () {
   /* 5/11/2026 : si une nouvelle version est en ligne, on recharge UNIQUEMENT au moment où l'app revient
      à l'écran (avant que le doigt touche quoi que ce soit) — jamais pendant que tu utilises l'app. */
