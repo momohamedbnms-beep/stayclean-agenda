@@ -2166,7 +2166,8 @@ function spResume() {
     if (r.date === auj && r.k === "done") return '<span class="pst">✓ ' + esc(r.sid || "Séance") + " faite aujourd’hui" + kg + "</span>";
     if (r.date === auj && r.k === "rest") return '<span class="pst">Repos aujourd’hui' + kg + "</span>";
     if (r.date === auj && r.k === "active") return '<span class="pst">Séance en cours : ' + esc(r.sid || "") + kg + "</span>";
-    return r.next ? '<span class="pst">Prochaine séance : ' + esc(r.next) + kg + "</span>" : "";
+    var cnt = typeof r.count === "number" ? r.count + "/" + (r.of || 6) + " · " : "";
+    return r.next ? '<span class="pst">' + cnt + "Prochaine : " + esc(r.next) + kg + "</span>" : "";
   } catch (e) { return ""; }
 }
 /* ---- Mon Coran : apprendre, lire et réviser (coran.html, même appli, même compte) ----
@@ -7397,7 +7398,7 @@ if ("serviceWorker" in navigator) {
 /* 4/11/2026 : l'app sur l'écran d'accueil de l'iPhone reste ouverte en mémoire et gardait l'ancienne version.
    À chaque retour dans l'app (max 1 fois / 2 min), on regarde si une nouvelle version est en ligne ;
    si oui, on recharge — jamais pendant une saisie en cours. */
-var APP_BUILD = "2026-11-23f";
+var APP_BUILD = "2026-11-23g";
 (function () {
   /* 5/11/2026 : si une nouvelle version est en ligne, on recharge UNIQUEMENT au moment où l'app revient
      à l'écran (avant que le doigt touche quoi que ce soit) — jamais pendant que tu utilises l'app. */

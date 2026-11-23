@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Mon Programme · Le Camp</title>
-<meta name="description" content="Six séances d’athlète, la nutrition et le poids. Tu appuies sur « Je m’entraîne », je te donne la séance du jour.">
-<meta name="theme-color" content="#141233">
+<meta name="description" content="Six séances d’athlète, le jour que tu veux. Le coach te dit quoi faire, série par série.">
+<meta name="theme-color" content="#0f0d2b">
 <meta name="color-scheme" content="dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -15,33 +15,28 @@
 <link rel="apple-touch-icon" href="sport/icon-180.png">
 <link rel="icon" type="image/png" href="sport/icon-192.png">
 <link rel="manifest" href="sport/manifest.webmanifest">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="sport/pics.css?v=1">
-<link rel="stylesheet" href="sport/app.css?v=1">
+<link rel="preload" href="sport/fonts/anton.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="sport/pics.css?v=2">
+<link rel="stylesheet" href="sport/app.css?v=2">
 <!-- même fichier que l'agenda (version figée + empreinte SRI) ; utilisé seulement si l'agenda est relié à un compte -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.js" integrity="sha384-K1nraABOP/zFehpLIUksXebbs7jMpB8gYMlb+uhVKZcWT/9Vkq1+qhv6ndC+1Yuz" crossorigin="anonymous"></script>
 </head>
 <body>
-<div class="clap" aria-hidden="true"></div>
 <header class="top" id="top"></header>
-<main class="app" id="app">
-  <section id="tab-today" class="screen" aria-label="Aujourd’hui"></section>
-  <section id="tab-plan" class="screen" aria-label="Programme" hidden></section>
-  <section id="tab-food" class="screen" aria-label="Assiette" hidden></section>
-  <section id="tab-weight" class="screen" aria-label="Poids" hidden></section>
+<main class="app">
+  <section id="tab-home" class="screen" aria-label="Ta semaine"></section>
+  <section id="tab-food" class="screen" aria-label="Ton assiette" hidden></section>
+  <section id="tab-weight" class="screen" aria-label="Ton poids" hidden></section>
 </main>
 <nav class="nav" aria-label="Navigation">
-  <button type="button" class="nav__tab is-on" data-act="tab" data-tab="today"><span class="nav__ic">⚡</span><span>Aujourd’hui</span></button>
-  <button type="button" class="nav__tab" data-act="tab" data-tab="plan"><span class="nav__ic">🗓️</span><span>Programme</span></button>
-  <button type="button" class="nav__tab" data-act="tab" data-tab="food"><span class="nav__ic">🍽️</span><span>Assiette</span></button>
-  <button type="button" class="nav__tab" data-act="tab" data-tab="weight"><span class="nav__ic">⚖️</span><span>Poids</span></button>
+  <button type="button" class="nav__tab on" data-act="tab" data-tab="home"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><path d="M15 15l5 5M20 15l-5 5"/></svg><span>Séances</span></button>
+  <button type="button" class="nav__tab" data-act="tab" data-tab="food"><svg viewBox="0 0 24 24"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg><span>Assiette</span></button>
+  <button type="button" class="nav__tab" data-act="tab" data-tab="weight"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M8 10a5 5 0 0 1 8 0M12 10.2l1.6-1.8"/></svg><span>Poids</span></button>
 </nav>
 <div id="sheet" class="sheet" hidden></div>
-<div id="timer" class="timer" hidden></div>
+<div id="player" class="player" hidden></div>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-<script src="sport/data.js?v=1"></script>
-<script src="sport/app.js?v=1"></script>
+<script src="sport/data.js?v=2"></script>
+<script src="sport/app.js?v=2"></script>
 </body>
 </html>

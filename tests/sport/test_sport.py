@@ -1,10 +1,11 @@
-"""Mon Programme (sport.html, « Le Camp ») — banc d'essai Playwright. Données fictives, faux serveur Supabase en mémoire.
-1. Lien ami (?ami=1, téléphone sans agenda) : profil, séance du jour, séries cochées, charges retenues, rotation sur
-   plusieurs jours (le jour de la semaine ne compte pas), repos après J6, aucune requête vers un serveur ;
-   l'icône de l'écran d'accueil (sans « ?ami=1 ») retrouve tout.
-2. Depuis l'agenda (compte relié) : pesées partagées avec Mes Calories (kind « weights »), programme dans
-   settings/sport, un 2e appareil retrouve la séance ; la ligne settings/main de Mes Calories n'est jamais touchée.
-3. Accueil de l'agenda : la carte MON PROGRAMME remplace MES CALORIES, aller-retour avec flèche, résumé sur la carte.
+"""Mon Programme v2 (sport.html, « Le Camp » : le coach) — banc d'essai Playwright. Données fictives, faux Supabase en mémoire.
+1. Lien ami (?ami=Isaac, téléphone sans agenda) : prénom prérempli, tableau des 6, « Déjà faite hier » barre J1 (croix rouge),
+   GO sur J2 → coach série par série → fin → J2 barrée ; aucune requête serveur ; l'icône sans « ?ami » retrouve tout.
+2. Coach : charge proposée (+ le pas si « facile » la dernière fois), ressenti enregistré, record, minuteur.
+3. Semaine bouclée (6/6) puis tableau neuf ; le jour de la semaine ne compte pas.
+4. Ancien format (v1, charges « J1:0 ») migré.
+5. Depuis l'agenda (compte) : pesées partagées avec Mes Calories, programme dans settings/sport, 2e appareil, settings/main intact.
+6. Accueil de l'agenda : carte MON PROGRAMME, aller-retour, résumé.
 Lancer : python3 -m http.server 8765 (racine du dépôt), puis python3 tests/sport/test_sport.py"""
 import os, re, json, time, base64, datetime, urllib.parse
 from playwright.sync_api import sync_playwright
@@ -25,6 +26,7 @@ AGENDA = """(() => { try {
   localStorage.setItem('stayclean-agenda-v1', JSON.stringify({ settings: { sync: { url: '%s', anonKey: '%s' } }, cpt: { profil: { prenom: 'Mohamed' } } }));
   localStorage.setItem('sb-%s-auth-token', JSON.stringify(%s));
 } catch (e) {} })();""" % (URL, 'anon-' + 'x' * 60, REF, json.dumps(SESSION))
+QUIET = "(() => { try { const s = JSON.parse(localStorage.getItem('sp.state.v1') || 'null'); if (!s) localStorage.setItem('sp.state.v1', JSON.stringify({ prefs: { voice: false } })); } catch (e) {} })();"
 def day(d): return "window.__SP_TODAY = '%s';" % d
 
 checks = []
@@ -32,14 +34,12 @@ def check(name, cond, extra=''):
     checks.append((name, bool(cond))); print(('OK   ' if cond else 'FAIL ') + name + (('  ' + str(extra)) if extra else ''))
 
 class Fake:
-    def __init__(self):
-        self.rows = {}; self.clock = 0; self.hits = 0; self.posts = []
+    def __init__(self): self.rows = {}; self.clock = 0
     def now(self):
         self.clock += 1; return (datetime.datetime(2026, 11, 23, 12) + datetime.timedelta(milliseconds=self.clock)).isoformat() + 'Z'
     def put(self, kind, id_, data, deleted=False):
         self.rows[(UID, kind, id_)] = {'user_id': UID, 'kind': kind, 'id': id_, 'data': data, 'deleted': deleted, 'updated_at': self.now()}
     def handle(self, route):
-        self.hits += 1
         req = route.request
         cors = {'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*', 'access-control-expose-headers': '*', 'content-type': 'application/json'}
         if req.method == 'OPTIONS': return route.fulfill(status=204, headers=cors, body='')
@@ -48,153 +48,171 @@ class Fake:
         if u.path.startswith('/auth/v1/token'): return route.fulfill(status=200, headers=cors, body=json.dumps(SESSION))
         if u.path.startswith('/rest/v1/cal_items'):
             if req.method == 'GET':
+                assert qs.get('user_id') == ['eq.' + UID], qs
                 out = [r for r in self.rows.values() if r['user_id'] == UID]
                 for f in ('kind', 'id'):
                     v = qs.get(f)
                     if v: out = [r for r in out if r[f] == v[0][3:]]
-                assert qs.get('user_id') == ['eq.' + UID], qs
                 return route.fulfill(status=200, headers=cors, body=json.dumps([{k: r[k] for k in ('kind', 'id', 'data', 'deleted', 'updated_at')} for r in out]))
             if req.method == 'POST':
                 body = json.loads(req.post_data or '[]'); body = body if isinstance(body, list) else [body]
                 for r in body:
                     assert r['user_id'] == UID and r['kind'] in ('meals', 'weights', 'settings'), r
-                    self.put(r['kind'], r['id'], r['data'], r.get('deleted', False)); self.posts.append((r['kind'], r['id']))
+                    self.put(r['kind'], r['id'], r['data'], r.get('deleted', False))
                 return route.fulfill(status=201, headers=cors, body='')
         return route.fulfill(status=404, headers=cors, body='{}')
     def data(self, kind, id_):
         r = self.rows.get((UID, kind, id_)); return r and r['data']
 
-def env(p, init=(), fake=None, block_net=False):
+def env(p, init=(), fake=None):
     b = p.chromium.launch()
     ctx = b.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2, locale='fr-BE', timezone_id='Europe/Brussels')
     errs = []; net = []
-    for s in init: ctx.add_init_script(s)
+    for s in (QUIET,) + tuple(init): ctx.add_init_script(s)
     ctx.route(re.compile(r'https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@2\.117\.1/dist/umd/supabase\.js'),
               lambda r: r.fulfill(status=200, body=SBJS_BODY, headers={'content-type': 'application/javascript', 'access-control-allow-origin': '*'}))
     def sb(route):
         net.append(route.request.url)
-        if fake: return fake.handle(route)
-        return route.abort()
+        return fake.handle(route) if fake else route.abort()
     ctx.route(re.compile(r'https://[a-z0-9]+\.supabase\.co/.*'), sb)
-    ctx.route(re.compile(r'https://fonts\.(googleapis|gstatic)\.com/.*'), lambda r: r.abort())
     pg = ctx.new_page()
     pg.on('dialog', lambda d: d.accept())
-    pg.on('response', lambda r: errs.append('404:' + r.url) if r.status == 404 and 'supabase.co' not in r.url else None)
     pg.on('pageerror', lambda e: errs.append('pageerror:' + str(e)))
-    pg.on('console', lambda m: errs.append('console:' + m.text) if m.type == 'error' and 'fonts' not in m.text and 'ERR_FAILED' not in m.text and 'status of 404' not in m.text else None)
+    pg.on('console', lambda m: errs.append('console:' + m.text) if m.type == 'error' and 'status of 404' not in m.text and 'ERR_FAILED' not in m.text else None)
     return b, ctx, pg, errs, net
 
 def shot(pg, name, full=False): pg.wait_for_timeout(200); pg.screenshot(path=os.path.join(SHOTS, name + '.png'), full_page=full)
-def txt(pg, sel): return pg.locator(sel).text_content() if pg.locator(sel).count() else ''   # texte réel (sans majuscules CSS)
-def S(pg): return pg.evaluate('() => JSON.parse(JSON.stringify(window.__SP.S))')
+def txt(pg, sel): return pg.locator(sel).first.text_content() if pg.locator(sel).count() else ''
+def st(pg): return pg.evaluate("() => window.__SP.curStep().t")
+def run_session(pg, feel='ok'):
+    """Fait toute la séance : FAIT sur les séries, ressenti, saute les minuteurs."""
+    for _ in range(400):
+        if pg.locator('.endv').count(): return True
+        t = st(pg)
+        if t == 'set': pg.click('[data-act=p-done]')
+        elif t == 'feel': pg.click(f'[data-act=feel][data-v={feel}]')
+        elif t == 'hold': pg.click('[data-act=p-hold]'); pg.wait_for_timeout(1100); pg.click('[data-act=p-stop]')
+        else: pg.click('[data-act=p-skip]')
+        pg.wait_for_timeout(40)
+    return False
+def tiles(pg): return str(pg.evaluate("() => [...document.querySelectorAll('.tile')].map(t => (t.className.includes('done') ? 'X' : (t.className.includes('next') ? '>' : '.')))"))
 
 with sync_playwright() as p:
-    # ---------- 1. L'ami : lien ?ami=1, pas d'agenda, pas de compte ----------
-    b, ctx, pg, errs, net = env(p, init=[day('2026-11-24')])
-    pg.goto(BASE + 'sport.html?ami=1'); pg.wait_for_timeout(800)
-    check('ami : le profil s’ouvre d’abord', pg.locator('[data-form="profile"]').count() == 1)
-    check('ami : aucun lien vers l’agenda ni vers Mes Calories', pg.locator('[data-act="go-agenda"]').count() == 0 and pg.locator('a[href="calories.html"]').count() == 0)
-    shot(pg, '01-ami-profil')
-    f = pg.locator('[data-form="profile"]')
-    f.locator('[name=name]').fill('Yassine'); f.locator('[name=startKg]').fill('114'); f.locator('[name=goalKg]').fill('95')
-    f.locator('[name=heightCm]').fill('182'); f.locator('[name=age]').fill('27'); f.locator('[name=startDate]').fill('2026-11-24')
-    f.locator('button[type=submit]').click(); pg.wait_for_timeout(400)
-    hero = txt(pg, '#tab-today .hero')
-    check('ami : séance du jour J1 et bouton « Je m’entraîne »', 'J1' in hero and 'Je m’entraîne aujourd’hui' in hero, hero[:120])
-    shot(pg, '02-ami-aujourdhui', full=True)
-    pg.click('[data-act="start"]'); pg.wait_for_timeout(400)
-    check('séance ouverte : semaine 1 → une série de moins (5 × 5–6 devient 4)', '4' in pg.locator('.ex').first.locator('.dose').inner_text() and pg.locator('.ex').first.locator('.dot').count() == 4,
-          pg.locator('.ex').first.locator('.dose').inner_text())
-    pg.locator('.ex').first.locator('input[data-kg]').fill('22,5')
-    pg.locator('.ex').first.locator('.dot').nth(0).click(); pg.wait_for_timeout(300)
-    check('minuteur de repos lancé après une série (2 min 30)', pg.locator('#timer').is_visible() and '2:2' in txt(pg, '#timer') or '2:3' in txt(pg, '#timer'), txt(pg, '#timer'))
-    for k in range(1, 4): pg.locator('.ex').first.locator('.dot').nth(k).click(); pg.wait_for_timeout(80)
-    check('exercice complet : 4 séries cochées', pg.locator('.ex').first.locator('.dot.on').count() == 4)
-    shot(pg, '03-ami-seance')
+    # ---------- 1. Isaac : lien ami, pas d'agenda, pas de compte ----------
+    b, ctx, pg, errs, net = env(p, init=[day('2026-11-23')])
+    pg.goto(BASE + 'sport.html?ami=Isaac'); pg.wait_for_timeout(800)
+    check('ami : profil d’abord, prénom Isaac prérempli', pg.locator('[data-form=profile] [name=name]').input_value() == 'Isaac')
+    check('ami : aucun lien vers l’agenda, Mes Calories ni partage', pg.locator('[data-act=go-agenda]').count() == 0 and pg.locator('a[href="calories.html"]').count() == 0 and pg.locator('[data-act=share]').count() == 0)
+    f = pg.locator('[data-form=profile]')
+    f.locator('[name=startKg]').fill('114'); f.locator('[name=goalKg]').fill('95'); f.locator('[name=heightCm]').fill('182'); f.locator('[name=age]').fill('27')
+    f.locator('button[type=submit]').click(); pg.wait_for_timeout(500)
+    check('tableau : 6 séances, J1 en GO', pg.locator('.tile').count() == 6 and txt(pg, '.tile.next .tn') == '1', tiles(pg))
+    shot(pg, '01-ami-tableau', True)
+    pg.click('.tile >> nth=0'); pg.wait_for_timeout(300)
+    check('aperçu J1 : la liste des exos et « Déjà faite ? »', pg.locator('.sheet .row').count() >= 8 and pg.locator('[data-act=mark]').count() == 2)
+    shot(pg, '02-apercu-j1')
+    pg.click('[data-act=mark][data-d="2026-11-22"]'); pg.wait_for_timeout(600)
+    check('« Déjà faite hier » : J1 barrée d’une croix rouge, J2 en GO, 1/6', pg.locator('.tile.done .cross').count() == 1 and txt(pg, '.tile.next .tn') == '2' and txt(pg, '.cnt').startswith('1'), tiles(pg))
+    check('… avec « ✓ hier » sur la case', '✓ hier' in txt(pg, '.tile.done'))
+    shot(pg, '03-j1-barree', True)
+    pg.click('.cta[data-act=go]'); pg.wait_for_timeout(400)
+    check('GO J2 : le coach s’ouvre sur l’échauffement', pg.locator('#player').is_visible() and st(pg) == 'steady' and 'ÉCHAUFFEMENT' in txt(pg, '.pmeta'))
+    pg.click('[data-act=p-skip]'); pg.wait_for_timeout(250)
+    check('1re série : RAMEUR 250 m, SÉRIE 1/5 (semaine 1 : une série de moins), EXPLOSIF', '250 m' in txt(pg, '.big') and '1/5' in txt(pg, '.setn').replace(' ', '') and 'EXPLOSIF' in txt(pg, '.badges'), txt(pg, '.setn'))
+    shot(pg, '04-coach-serie')
+    pg.click('[data-act=p-done]'); pg.wait_for_timeout(300)
+    check('après la série : REPOS ≈ 1:30 avec la suite affichée', st(pg) == 'rest' and txt(pg, '#pt-big') in ('1:30', '1:29') and 'Série 2/5' in txt(pg, '.nextc'), txt(pg, '#pt-big'))
+    shot(pg, '05-coach-repos')
     pg.reload(); pg.wait_for_timeout(600)
-    check('séance en cours retrouvée après fermeture (Reprendre)', 'Reprendre' in txt(pg, '#tab-today .hero'))
-    pg.click('[data-act="resume"]'); pg.wait_for_timeout(300)
-    check('… avec ses séries et sa charge', pg.locator('.ex').first.locator('.dot.on').count() == 4 and pg.locator('.ex').first.locator('input[data-kg]').input_value() == '22,5')
-    pg.click('[data-act="finish"]'); pg.wait_for_timeout(500)
-    check('séance terminée : « ✓ J1 faite », demain J2', '✓ J1 faite' in txt(pg, '#tab-today .hero') and 'J2' in txt(pg, '#tab-today .hero'), txt(pg, '#tab-today .hero')[:100])
-    # jour suivant : J2 ; puis on saute un jour, la rotation continue
-    ctx.add_init_script(day('2026-11-25')); pg.goto(BASE + 'sport.html?ami=1'); pg.wait_for_timeout(500)
-    check('lendemain : J2 proposée', 'J2' in txt(pg, '#tab-today .hero') and 'Je m’entraîne' in txt(pg, '#tab-today .hero'))
-    pg.click('[data-act="start"]'); pg.wait_for_timeout(200); pg.click('[data-act="finish"]'); pg.wait_for_timeout(300)
-    ctx.add_init_script(day('2026-11-28')); pg.goto(BASE + 'sport.html?ami=1'); pg.wait_for_timeout(500)
-    check('trois jours sans séance : on reprend où on s’était arrêté (J3)', 'J3' in txt(pg, '#tab-today .hero'), txt(pg, '#tab-today .hero')[:60])
-    # J1 retient la charge : on refait un cycle complet par l'état, puis on vérifie « La dernière fois »
-    pg.evaluate("""() => { const S = window.__SP.S; const add = (d, sid) => { S.log['t-' + d] = { id: 't-' + d, date: d, sid, done: true, at: Date.parse(d) }; };
-      add('2026-11-28', 'J3'); add('2026-11-29', 'J4'); add('2026-11-30', 'J5'); add('2026-12-01', 'J6');
-      localStorage.setItem('sp.state.v1', JSON.stringify(S)); }""")
-    ctx.add_init_script(day('2026-12-02')); pg.goto(BASE + 'sport.html?ami=1'); pg.wait_for_timeout(500)
-    check('après J6 : repos le lendemain', 'Repos' in txt(pg, '#tab-today .hero'))
-    shot(pg, '04-ami-repos')
-    ctx.add_init_script(day('2026-12-03')); pg.goto(BASE + 'sport.html'); pg.wait_for_timeout(500)   # icône de l'écran d'accueil (sans ?ami)
-    check('icône d’accueil sans « ?ami=1 » : tout est là, on repart sur J1', 'J1' in txt(pg, '#tab-today .hero') and 'Yassine' in txt(pg, '#top'), txt(pg, '#tab-today .hero')[:60])
-    pg.click('[data-act="start"]'); pg.wait_for_timeout(300)
-    check('J1 : « La dernière fois : 22,5 kg » au développé incliné', 'La dernière fois : 22,5 kg' in pg.locator('.ex').first.inner_text())
-    pg.click('[data-act="close"]'); pg.wait_for_timeout(200)
-    pg.click('.nav__tab[data-tab="weight"]'); pg.wait_for_timeout(200)
-    pg.fill('#wIn', '112,8'); pg.click('[data-act="save-w"]'); pg.wait_for_timeout(300)
-    check('pesée enregistrée et courbe affichée', '112,8' in txt(pg, '#tab-weight') and pg.locator('svg.chart').count() == 1)
-    shot(pg, '05-ami-poids', full=True)
-    pg.click('.nav__tab[data-tab="food"]'); pg.wait_for_timeout(200)
-    check('assiette : cible calculée pour son profil et menu fixe', 'kcal par jour' in txt(pg, '#tab-food') and 'Le bol' in txt(pg, '#tab-food'))
-    shot(pg, '06-ami-assiette', full=True)
-    pg.click('.nav__tab[data-tab="plan"]'); pg.wait_for_timeout(200); shot(pg, '07-programme', full=True)
-    check('ami : aucune requête vers un serveur Supabase', not net, net[:3])
-    check('ami : aucune lecture de l’agenda (pas de résumé écrit pour la carte)', pg.evaluate("() => localStorage.getItem('sp.summary.v1')") is None)
+    check('appli fermée pendant la séance : « REPRENDRE · J2 »', 'REPRENDRE' in txt(pg, '.cta'))
+    pg.click('[data-act=resume]'); pg.wait_for_timeout(300)
+    check('… on reprend au même endroit (repos du rameur)', st(pg) == 'rest')
+    ok = run_session(pg)
+    check('séance menée jusqu’au bout : écran « J2 BOUCLÉE »', ok and 'J2 BOUCLÉE' in txt(pg, '.endv h1'))
+    shot(pg, '06-coach-fin')
+    pg.click('[data-act=p-close]'); pg.wait_for_timeout(400)
+    check('retour : J1 et J2 barrées, J3 en GO, 2/6', pg.locator('.tile.done').count() == 2 and txt(pg, '.tile.next .tn') == '3' and txt(pg, '.cnt').startswith('2'), tiles(pg))
+    pg.click('.nav__tab[data-tab=weight]'); pg.wait_for_timeout(200)
+    for _ in range(4): pg.click('[data-act="w-"]')
+    pg.click('[data-act=save-w]'); pg.wait_for_timeout(300)
+    check('poids d’Isaac : 114 − 0,4 = 113,6 enregistré sur son téléphone', '113,6' in txt(pg, '.wl-list'))
+    shot(pg, '07-ami-poids', True)
+    pg.click('.nav__tab[data-tab=food]'); pg.wait_for_timeout(200); shot(pg, '08-ami-assiette', True)
+    check('assiette : 3 repas illustrés', pg.locator('.meal svg').count() >= 3)
+    ctx.add_init_script(day('2026-11-24')); pg.goto(BASE + 'sport.html'); pg.wait_for_timeout(500)   # icône d'accueil, sans ?ami
+    check('icône sans « ?ami » le lendemain : tout est là (2/6, J3 en GO)', 'Isaac' in txt(pg, '#top') and pg.locator('.tile.done').count() == 2 and txt(pg, '.tile.next .tn') == '3')
+    check('ami : aucune requête vers un serveur', not net, net[:2])
+    check('ami : rien écrit pour la carte de l’agenda', pg.evaluate("() => localStorage.getItem('sp.summary.v1')") is None)
     check('ami : aucune erreur JavaScript', not errs, errs)
     b.close()
 
-    # ---------- 2. Mohamed, depuis l'agenda : compte relié ----------
+    # ---------- 2. Charges, ressenti, records ; 3. semaine bouclée ; 4. migration v1 ----------
+    V1 = {'v': 1, 'profile': {'name': 'Mohamed', 'startKg': 106, 'goalKg': 87, 'startDate': '2026-11-23', 'heightCm': 184, 'age': 24}, 'profileAt': 1,
+          'log': {}, 'loads': {'J1:0': {'kg': 20, 'at': 1}}, 'weights': {}, 'dirtyW': {}, 'dirtyDoc': False, 'active': None, 'prefs': {'voice': False}}
+    b, ctx, pg, errs, net = env(p, init=["if (!sessionStorage.getItem('seeded')) { localStorage.setItem('sp.state.v1', %s); sessionStorage.setItem('seeded', '1'); }" % json.dumps(json.dumps(V1)), day('2026-12-14')])
+    pg.goto(BASE + 'sport.html?ami=1'); pg.wait_for_timeout(500)
+    check('migration v1 : la charge « J1:0 » devient « J1:incline »', pg.evaluate("() => window.__SP.S.loads['J1:incline'] && window.__SP.S.loads['J1:incline'].kg") == 20)
+    pg.click('.cta[data-act=go]'); pg.wait_for_timeout(300); pg.click('[data-act=p-skip]'); pg.wait_for_timeout(200)
+    check('semaine 4 : développé incliné 5 séries, 20 kg proposés', '1/5' in txt(pg, '.setn').replace(' ', '') and txt(pg, '.kg b') == '20', txt(pg, '.kg b'))
+    pg.click('[data-act="kg+"]'); pg.wait_for_timeout(100)
+    check('« + » ajoute 2 kg (haltères)', txt(pg, '.kg b') == '22')
+    ok = run_session(pg, feel='facile')
+    check('fin : record 🏆 développé incliné 22 kg', ok and 'Développé incliné 22 kg' in txt(pg, '.recs'), txt(pg, '.recs'))
+    pg.click('[data-act=p-close]'); pg.wait_for_timeout(200)
+    pg.evaluate("""() => { const S = window.__SP.S; ['J2','J3','J4','J5','J6'].forEach((sid, i) => { const d = ['2026-12-15','2026-12-16','2026-12-18','2026-12-19','2026-12-21'][i];
+      S.log['t' + i] = { id: 't' + i, date: d, sid, done: true, at: Date.parse(d) }; }); localStorage.setItem('sp.state.v1', JSON.stringify(S)); }""")
+    ctx.add_init_script(day('2026-12-21')); pg.goto(BASE + 'sport.html?ami=1'); pg.wait_for_timeout(400)
+    check('6/6 le jour même : « Semaine bouclée », tout barré', pg.locator('.tile.done').count() == 6 and 'Semaine bouclée' in txt(pg, '.bravo'))
+    shot(pg, '10-semaine-bouclee', True)
+    ctx.add_init_script(day('2026-12-23')); pg.goto(BASE + 'sport.html?ami=1'); pg.wait_for_timeout(400)
+    check('2 jours plus tard (repos pris quand il veut) : tableau neuf, J1 en GO, 0/6', pg.locator('.tile.done').count() == 0 and txt(pg, '.tile.next .tn') == '1' and txt(pg, '.cnt').startswith('0'))
+    pg.click('.cta[data-act=go]'); pg.wait_for_timeout(300); pg.click('[data-act=p-skip]'); pg.wait_for_timeout(200)
+    check('« facile » la dernière fois → 24 kg proposés (+2) et le message ▲', txt(pg, '.kg b') == '24' and '▲' in txt(pg, '.pm'), txt(pg, '.kg b'))
+    shot(pg, '11-charge-montee')
+    check('aucune erreur JavaScript (charges, semaine)', not errs, errs)
+    b.close()
+
+    # ---------- 5. Mohamed, depuis l'agenda ----------
     fake = Fake()
     fake.put('weights', 'w-2026-11-20', {'id': 'w-2026-11-20', 'date': '2026-11-20', 'kg': 106.4, 'at': '2026-11-20T07:00:00Z'})
     fake.put('settings', 'main', {'target': 2000, 'startKg': 104, 'goalKg': 87})
     b, ctx, pg, errs, net = env(p, init=[AGENDA, day('2026-11-23'), "sessionStorage.setItem('sp.from','agenda');"], fake=fake)
     pg.goto(BASE + 'sport.html'); pg.wait_for_timeout(1500)
-    check('compte : pas de profil à créer (programme de Mohamed, 106 kg)', pg.locator('[data-form="profile"]').count() == 0 and 'Mohamed' in txt(pg, '#top'))
-    check('compte : « Synchronisé avec ton compte » et flèche vers l’agenda', 'Synchronisé' in txt(pg, '#top') and pg.locator('[data-act="go-agenda"]').count() == 1, txt(pg, '#top'))
-    shot(pg, '10-compte-aujourdhui', full=True)
-    pg.click('.nav__tab[data-tab="weight"]'); pg.wait_for_timeout(200)
-    check('pesée de Mes Calories retrouvée (106,4 kg)', '106,4' in txt(pg, '#tab-weight'))
-    pg.fill('#wIn', '105,9'); pg.click('[data-act="save-w"]'); pg.wait_for_timeout(1800)
-    check('pesée envoyée dans cal_items (kind weights, même format que Mes Calories)', (fake.data('weights', 'w-2026-11-23') or {}).get('kg') == 105.9, fake.data('weights', 'w-2026-11-23'))
-    pg.click('.nav__tab[data-tab="today"]'); pg.wait_for_timeout(200)
-    pg.click('[data-act="start"]'); pg.wait_for_timeout(300)
-    pg.locator('.ex').first.locator('input[data-kg]').fill('24')
-    pg.locator('.ex').first.locator('.dot').nth(0).click(); pg.click('[data-act="finish"]'); pg.wait_for_timeout(1800)
+    check('compte : programme de Mohamed sans profil à créer, point vert « synchronisé »', pg.locator('[data-form=profile]').count() == 0 and 'Mohamed' in txt(pg, '#top') and pg.locator('.dot-sync.sync').count() == 1)
+    check('compte : flèche retour vers l’agenda', pg.locator('[data-act=go-agenda]').count() == 1)
+    shot(pg, '20-compte-tableau', True)
+    pg.click('.tile >> nth=0'); pg.wait_for_timeout(200); pg.click('[data-act=mark][data-d="2026-11-22"]'); pg.wait_for_timeout(1800)
     doc = fake.data('settings', 'sport') or {}
-    check('séance envoyée dans settings/sport (J1 faite, charge 24 kg)', any(e.get('sid') == 'J1' and e.get('done') for e in (doc.get('log') or {}).values()) and (doc.get('loads') or {}).get('J1:0', {}).get('kg') == 24, list((doc.get('log') or {}).values())[:1])
+    check('J1 barrée « hier » envoyée dans settings/sport', any(e.get('sid') == 'J1' and e.get('manual') and e.get('date') == '2026-11-22' for e in (doc.get('log') or {}).values()))
+    pg.click('.nav__tab[data-tab=weight]'); pg.wait_for_timeout(200)
+    check('pesée de Mes Calories retrouvée (106,4)', '106,4' in txt(pg, '.wl-list'))
+    for _ in range(5): pg.click('[data-act="w-"]')
+    pg.click('[data-act=save-w]'); pg.wait_for_timeout(1800)
+    check('pesée envoyée (kind weights, même format que Mes Calories)', (fake.data('weights', 'w-2026-11-23') or {}).get('kg') == 105.9, fake.data('weights', 'w-2026-11-23'))
     check('settings/main de Mes Calories intact', fake.data('settings', 'main') == {'target': 2000, 'startKg': 104, 'goalKg': 87})
-    pg.click('[data-act="go-agenda"]'); pg.wait_for_timeout(300)
+    pg.click('[data-act=profile]'); pg.wait_for_timeout(200)
+    check('profil : « Envoyer le programme à un ami »', pg.locator('[data-act=share]').count() == 1)
     check('aucune erreur JavaScript (compte)', not errs, errs)
     b.close()
-    # 2e appareil (Mac) : retrouve la séance et les pesées
     b, ctx, pg, errs, net = env(p, init=[AGENDA, day('2026-11-24')], fake=fake)
     pg.goto(BASE + 'sport.html'); pg.wait_for_timeout(1500)
-    check('2e appareil : J1 faite hier → J2 proposée aujourd’hui', 'J2' in txt(pg, '#tab-today .hero'), txt(pg, '#tab-today .hero')[:80])
-    pg.click('.nav__tab[data-tab="weight"]'); pg.wait_for_timeout(200)
-    check('2e appareil : pesée du 23 retrouvée', '105,9' in txt(pg, '#tab-weight'))
+    check('2e appareil : J1 barrée, J2 en GO, pesée du 23 retrouvée', pg.locator('.tile.done').count() == 1 and txt(pg, '.tile.next .tn') == '2' and pg.evaluate("() => window.__SP.S.weights['2026-11-23'].kg") == 105.9)
     check('aucune erreur JavaScript (2e appareil)', not errs, errs)
     b.close()
 
-    # ---------- 3. L'accueil de l'agenda ----------
+    # ---------- 6. Accueil de l'agenda ----------
     b, ctx, pg, errs, net = env(p)
     pg.goto(BASE + 'index.html'); pg.wait_for_timeout(2500)
     cards = pg.evaluate("() => [...document.querySelectorAll('.pcard .tt')].map(x => x.textContent)")
     check('accueil : MON PROGRAMME à la place de MES CALORIES', cards == ['STAYCLEAN', 'COMPTA', 'MA PAPERASSE', 'MON PROGRAMME', 'MON CORAN'], cards)
-    shot(pg, '20-agenda-accueil')
     pg.click('.pcard.sp'); pg.wait_for_url('**/sport.html', timeout=10000); pg.wait_for_timeout(800)
-    check('la carte ouvre Mon Programme, avec la flèche retour', pg.locator('[data-act="go-agenda"]').count() == 1)
-    if pg.locator('[data-form="profile"]').count():
-        f = pg.locator('[data-form="profile"]'); f.locator('[name=name]').fill('Mohamed'); f.locator('[name=startKg]').fill('106'); f.locator('[name=goalKg]').fill('87')
+    if pg.locator('[data-form=profile]').count():
+        f = pg.locator('[data-form=profile]'); f.locator('[name=name]').fill('Mohamed'); f.locator('[name=startKg]').fill('106'); f.locator('[name=goalKg]').fill('87')
         f.locator('[name=heightCm]').fill('184'); f.locator('[name=age]').fill('24'); f.locator('button[type=submit]').click(); pg.wait_for_timeout(300)
-    pg.click('[data-act="go-agenda"]'); pg.wait_for_timeout(2000)
+    check('la carte ouvre Mon Programme, flèche retour', pg.locator('[data-act=go-agenda]').count() == 1)
+    pg.click('[data-act=go-agenda]'); pg.wait_for_timeout(2000)
     pill = pg.evaluate("() => { const c = document.querySelector('.pcard.sp .pst'); return c ? c.textContent : null }")
-    check('retour à l’agenda : la carte affiche la prochaine séance', pill and 'J1' in pill, pill)
-    shot(pg, '21-agenda-carte')
+    check('retour à l’agenda : la carte montre 0/6 et la prochaine séance', pill and '0/6' in pill and 'J1' in pill, pill)
     check('agenda : aucune erreur JavaScript', not [x for x in errs if x.startswith('pageerror')], errs)
     b.close()
 
