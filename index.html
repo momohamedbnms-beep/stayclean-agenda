@@ -1662,7 +1662,7 @@ function handleQuoteAnalyse() {
   if (activeKeyMissing()) { toast("err", [keyErrMsg()]); return; }
   ui.qBusy = true; renderMain();
   parseQuote(text, ui.qImgs).then(function (p) {
-    ui.qBusy = false;
+    ui.qBusy = false; ui.qErrCle = false;
     var hasManual = hasManualPrix(p.prixBase) || hasManualPrix(p.prixPremium);
     if (!p.articles.length && !hasManual) {
       toast("err", ["Aucun article ni prix reconnu. Complète manuellement ci-dessous."]);
@@ -1685,7 +1685,9 @@ function handleQuoteAnalyse() {
     }
   }).catch(function (e) {
     ui.qBusy = false;
-    toast("err", ["Analyse impossible : " + (e && e.message ? e.message : "erreur")]);
+    var m = e && e.message ? e.message : "erreur";
+    ui.qErrCle = /x-api-key|api key|api_key|authentication|unauthorized|permission|401|403/i.test(m);
+    toast("err", ui.qErrCle ? ["🔑 Ta clé IA ne marche plus : l’IA ne peut pas lire la photo.", "Réglages ⚙️ → Analyse (IA) → mets une nouvelle clé."] : ["Analyse impossible : " + m]);
     renderMain();
   });
 }
@@ -4941,6 +4943,9 @@ function renderDevisTab() {
     thumbsHtml(ui.qImgs, "quote") +
     '<button class="btn-main" data-act="quote-analyse" ' + (ui.qBusy ? "disabled" : "") + ">" + (ui.qBusy ? "Analyse en cours…" : "Calculer le prix") + "</button>";
   if (ui.qBusy) h += '<p class="busy">Identification des articles, calcul avec ta grille…</p>';
+  if (ui.qErrCle && !ui.qBusy) h += '<div style="margin-top:12px;padding:12px;border-radius:12px;background:#FEF3F2;border:1px solid #FECDCA;color:#B42318;font-size:14px;line-height:1.45">' +
+    '<b>🔑 Ta clé IA ne marche plus</b> : l’IA ne peut pas lire la photo.<br>Crée une nouvelle clé (Gemini est gratuit) puis colle-la dans Réglages → « Analyse (IA) ».' +
+    '<button class="linkline" data-act="go-reglages-ia" style="display:block;margin-top:8px;color:#B42318;font-weight:700">Ouvrir les réglages de l’IA →</button></div>';
   h += "</section>";
 
   if (ui.qDraft) {
@@ -5349,7 +5354,7 @@ function renderReglages() {
   });
   h += '<button class="addline" data-act="dur-add">+ Ajouter une ligne</button></section>';
 
-  h += '<section class="card sec"><p style="font-weight:700;font-size:14px">Analyse (IA)</p>' +
+  h += '<section class="card sec" id="set-ia"><p style="font-weight:700;font-size:14px">Analyse (IA)</p>' +
     '<div class="set-row"><span>Moteur</span><select data-set="provider" style="width:auto">' +
     '<option value="gemini"' + (S.provider !== "anthropic" ? " selected" : "") + '>Gemini (gratuit)</option>' +
     '<option value="anthropic"' + (S.provider === "anthropic" ? " selected" : "") + '>Claude (Anthropic)</option>' +
@@ -6032,6 +6037,8 @@ document.addEventListener("click", function (e) {
     case "go-jour": ui.space = "jour"; renderAll(); break;
     case "go-home": ui.space = "portal"; ui.searchQ = ""; renderAll(); break;
     case "go-reglages": ui.space = "pro"; ui.tab = "reglages"; renderAll(); break;
+    case "go-reglages-ia": ui.space = "pro"; ui.tab = "reglages"; renderAll();
+      setTimeout(function () { var x = document.getElementById("set-ia"); if (x) x.scrollIntoView({ behavior: "smooth", block: "start" }); }, 150); break;
     case "fac-scan": document.getElementById("facpick").click(); break;
     case "fac-manuel": ui.facDraft = facFromParsed({}, null); renderModals(); break;
     case "facd-cancel": ui.facDraft = null; renderModals(); break;
@@ -7362,7 +7369,7 @@ if ("serviceWorker" in navigator) {
 /* 4/11/2026 : l'app sur l'écran d'accueil de l'iPhone reste ouverte en mémoire et gardait l'ancienne version.
    À chaque retour dans l'app (max 1 fois / 2 min), on regarde si une nouvelle version est en ligne ;
    si oui, on recharge — jamais pendant une saisie en cours. */
-var APP_BUILD = "2026-11-23d";
+var APP_BUILD = "2026-11-23e";
 (function () {
   /* 5/11/2026 : si une nouvelle version est en ligne, on recharge UNIQUEMENT au moment où l'app revient
      à l'écran (avant que le doigt touche quoi que ce soit) — jamais pendant que tu utilises l'app. */
