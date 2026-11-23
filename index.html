@@ -2217,6 +2217,71 @@ function renderPlus() {
 
 /* ---------------- Demandes venues du site stayclean.be ---------------- */
 
+/* 23/11/2026 — demande arrivée SANS prix (le client a seulement écrit « canapé 3 places + fauteuil » dans le
+   message, souvent avec l'option e-mail) : l'app calcule elle-même le prix d'après le texte, avec la grille du site.
+   Estimation (Basique, minimum appliqué) préremplie dans « Prix des prestations » ; Mohamed vérifie avant de confirmer. */
+var EST_EXTRAS = { fauteuil: ["Fauteuil 1 place", 39], litcomplet: ["Lit complet 2 personnes", 119], tetelit: ["Tête de lit", 29], sommier: ["Contour de lit / sommier", 29] };
+var EST_MOTS = { un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8 };
+function demSansPrix(d) { return !(Number(d && d.total) > 0) && !((d && d.items) || []).length; }
+function estimerDemande(d) {
+  var txt = norm(String(d && d.message || "").replace(/✉️\s*Réservé avec l'option e-mail\.?/i, "").replace(/\[Google Ads[^\]]*\]/g, ""));
+  if (!txt.trim()) return null;
+  var P = DB.settings.pricing || DEFAULT_PRICING, items = P.items || [];
+  function it(id) { return items.find(function (x) { return x.id === id; }); }
+  var lignes = [], canapes = 0, diffs = 0;
+  function ajoute(label, qte, base, prem) {
+    qte = Math.max(1, Math.min(10, qte || 1));
+    lignes.push({ label: (qte > 1 ? qte + "× " : "") + label, prix: base * qte });
+    diffs += Math.max(0, (prem || base) - base) * qte;
+  }
+  var morceaux = txt.split(/\s*(?:\+|,|;|\/(?!\d)|\bet\b|\bplus\b|\bavec\b|&|\n)\s*/);
+  morceaux.forEach(function (m) {
+    if (!m.trim()) return;
+    function qte(mot) {
+      var r = new RegExp("(\\d+|un|une|deux|trois|quatre|cinq|six|sept|huit)\\s*(?:x\\s*)?" + mot);
+      var x = r.exec(m); if (x) return EST_MOTS[x[1]] || parseInt(x[1], 10) || 1;
+      var y = /x\s*(\d+)/.exec(m); return y ? parseInt(y[1], 10) : 1;
+    }
+    var places = /(\d+)\s*(?:-|a|à|\/)?\s*\d*\s*(?:places?|pl\b|p\b|personnes?|pers)/.exec(m);
+    var n = places ? parseInt(places[1], 10) : 0;
+    if (/canap|sofa|divan|banquette/.test(m)) {
+      var id = /angle|\bu\b|en u/.test(m) && !n ? "canape45" : n >= 8 ? "canape89" : n >= 6 ? "canape67" : n >= 4 ? "canape45" : "canape23";
+      var c = it(id), q = qte("(?:canap|sofa|divan|banquette)");
+      if (c) { ajoute(c.label, q, c.base, c.prem); canapes += q; }
+      if (/fauteuil/.test(m)) { var qf = qte("fauteuil"); ajoute(EST_EXTRAS.fauteuil[0], qf, EST_EXTRAS.fauteuil[1]); }
+      return;
+    }
+    if (/fauteuil/.test(m)) { ajoute(EST_EXTRAS.fauteuil[0], qte("fauteuil"), EST_EXTRAS.fauteuil[1]); return; }
+    if (/lit complet/.test(m)) { ajoute(EST_EXTRAS.litcomplet[0], qte("lit"), EST_EXTRAS.litcomplet[1]); return; }
+    if (/tete de lit/.test(m)) { ajoute(EST_EXTRAS.tetelit[0], qte("tete"), EST_EXTRAS.tetelit[1]); return; }
+    if (/sommier|box ?spring|contour de lit/.test(m)) { ajoute(EST_EXTRAS.sommier[0], qte("(?:sommier|box|contour)"), EST_EXTRAS.sommier[1]); return; }
+    if (/matelas/.test(m)) {
+      var mid = /bebe|enfant|berceau/.test(m) ? "matelasBB" : /\b1\s*(?:pl|place|pers)|une personne|simple|\b90\b/.test(m) ? "matelas1" : "matelas2";
+      var mm = it(mid); if (mm) ajoute(mm.label, qte("matelas"), mm.base, mm.prem); return;
+    }
+    if (/moquette/.test(m)) {
+      var m2 = /(\d+[.,]?\d*)\s*m/.exec(m), surf = m2 ? parseFloat(m2[1].replace(",", ".")) : 0;
+      if (surf > 0 && typeof moquettePrix === "function") ajoute("Moquette (" + Math.round(surf) + " m²)", 1, moquettePrix(surf));
+      return;
+    }
+    if (/tapis/.test(m)) {
+      var s2 = /(\d+[.,]?\d*)\s*m/.exec(m), sf = s2 ? parseFloat(s2[1].replace(",", ".")) : 0;
+      var tid = /petit/.test(m) || (sf && sf < 2) ? "tapisS" : /grand/.test(m) || sf > 4 ? "tapisL" : "tapisM";
+      var t = it(tid); if (t) ajoute(t.label, qte("tapis"), t.base, t.prem); return;
+    }
+    if (/chaise/.test(m)) { var ch = it("chaise"); if (ch) ajoute(ch.label, qte("chaises?"), ch.base, ch.prem); return; }
+    if (/pouf/.test(m)) { var pf = it("pouf"); if (pf) ajoute(pf.label, qte("poufs?"), pf.base, pf.prem); return; }
+    if (/voiture|siege auto|sieges? de voiture/.test(m)) { var v = it("voiture"); if (v) ajoute(v.label, 1, v.base, v.prem); return; }
+  });
+  if (!lignes.length) return null;
+  var brut = lignes.reduce(function (s0, l) { return s0 + l.prix; }, 0);
+  var mini = Number(P.minimum) || 99;
+  var base = Math.max(mini, brut);
+  var prem = Math.max(mini, brut + (canapes > 0 ? canapes * 20 : Math.min(diffs, 20)));
+  var veutPremium = /premium|vapeur/.test(txt);
+  return { lignes: lignes, brut: brut, base: base, prem: prem, minimum: brut < mini ? mini : 0, premium: veutPremium, propose: veutPremium ? prem : base };
+}
+
 function demItemsHtml(dem) {
   var h = "";
   (dem.items || []).forEach(function (it) {
@@ -2290,7 +2355,8 @@ function renderDemandes() {
   if (!nouv.length) h += '<p class="libre" style="text-align:center;margin-top:22px;font-size:13px">Aucune demande en attente 👌</p>';
   nouv.forEach(function (d) {
     h += '<button class="demrow neuf" data-act="dem-open" data-id="' + esc(String(d.id)) + '">' +
-      '<span class="dh"><span class="dn">' + esc(d.nom || "Client") + " " + origineTag(origineDem(d)) + '</span><span class="dp">' + euro(d.total || 0) + "</span></span>" +
+      '<span class="dh"><span class="dn">' + esc(d.nom || "Client") + " " + origineTag(origineDem(d)) + '</span><span class="dp">' +
+        (demSansPrix(d) ? (estimerDemande(d) ? "≈ " + euro(estimerDemande(d).propose) : "Prix à fixer") : euro(d.total || 0)) + "</span></span>" +
       '<span class="dq">📅 ' + humanDate(d.jour) + " à " + esc(d.heure) + "</span>" +
       '<span class="dq">📍 ' + esc(d.adresse || "adresse non fournie") + "</span>" +
       '<span class="dl">👉 À valider — vérifie la faisabilité et les frais de déplacement</span></button>';
@@ -3870,6 +3936,7 @@ function findDem(id) { return (DB.dem || []).find(function (d) { return String(d
 function demConfirmer(dem, total, note) {
   var c = getSb();
   var presta = (dem.items || []).map(function (it) { return { nom: it.label, prix: it.sub != null ? Number(it.sub) : null }; });
+  if (!presta.length) { var estC = estimerDemande(dem); if (estC) presta = estC.lignes.map(function (l) { return { nom: l.label, prix: l.prix }; }); }
   var bk = {
     id: uid(),
     client: dem.nom || "Client site",
@@ -5565,7 +5632,8 @@ function renderModals() {
   var dem = ui.demId ? findDem(ui.demId) : null;
   if (dem) {
     if (!ui.demForm || ui.demForm.id !== dem.id) {
-      ui.demForm = { id: dem.id, depl: 0, note: "", total: Number(dem.total || 0), duree: Number(dem.duree_min) || 0, jour: dem.jour || todayStr(), heure: String(dem.heure || "10:00").slice(0, 5) };
+      var estI = demSansPrix(dem) ? estimerDemande(dem) : null;
+      ui.demForm = { id: dem.id, depl: 0, note: "", total: estI ? estI.propose : Number(dem.total || 0), estime: estI ? estI.propose : null, duree: Number(dem.duree_min) || 0, jour: dem.jour || todayStr(), heure: String(dem.heure || "10:00").slice(0, 5) };
     }
     var df = ui.demForm;
     /* 7/11/2026 : date et heure modifiables avant de confirmer */
@@ -5604,7 +5672,18 @@ function renderModals() {
       })() +
       "</section>" +
       '<section class="card sec"><p class="k">Ce qu’il a commandé</p>' + demItemsHtml(dem) +
-      '<div class="demtot"><span>Total annoncé sur le site</span><b class="tnum">' + euro(dem.total || 0) + "</b></div></section>" +
+      (function () {
+        if (!demSansPrix(dem)) return '<div class="demtot"><span>Total annoncé sur le site</span><b class="tnum">' + euro(dem.total || 0) + "</b></div>";
+        var E = estimerDemande(dem);
+        if (!E) return '<div class="demtot"><span>Aucun prix choisi par le client</span><b class="tnum">à fixer</b></div><p class="note">Il n’a pas choisi d’articles : lis son message et indique le prix ci-dessous.</p>';
+        return '<p class="note" style="margin:8px 0 6px">🧮 <b>Prix calculé automatiquement d’après son message</b> (grille du site) :</p>' +
+          E.lignes.map(function (l) { return '<div class="demline"><span>' + esc(l.label) + '</span><b class="tnum">' + euro(l.prix) + "</b></div>"; }).join("") +
+          (E.minimum ? '<div class="demline"><span>Minimum d’intervention</span><b class="tnum">' + euro(E.minimum) + "</b></div>" : "") +
+          '<div class="demtot"><span>' + (E.premium ? "Premium vapeur (il l’a demandé)" : "Basique") + ' · prérempli ci-dessous</span><b class="tnum">' + euro(E.propose) + "</b></div>" +
+          '<div class="acts2" style="margin-top:8px"><button class="icsbtn" data-act="dem-est" data-v="' + E.base + '">Basique · ' + euro(E.base) + '</button>' +
+          '<button class="icsbtn" data-act="dem-est" data-v="' + E.prem + '">Premium vapeur · ' + euro(E.prem) + "</button></div>" +
+          '<p class="note">Vérifie : c’est une estimation à partir de ce qu’il a écrit. Il n’a vu aucun prix sur le site : confirme-lui le montant.</p>';
+      })() + "</section>" +
       '<section class="card sec"><p class="k">Ton ajustement avant de confirmer</p>' +
       '<div class="two"><div class="fld"><label>Date</label><input type="date" value="' + esc(dfJour) + '" min="' + todayStr() + '" data-dem="jour"></div>' +
       '<div class="fld"><label>Heure d’arrivée</label><input type="time" step="900" value="' + esc(dfHeure) + '" data-dem="heure"></div></div>' +
@@ -5616,7 +5695,7 @@ function renderModals() {
       '<select data-dem="duree">' + dureeOptions(dfDuree, dfHeure) + '</select></div>' +
       '<div class="fld"><label>Note pour toi (accès, étage, remarque…)</label><input value="' + esc(df.note) + '" data-dem="note"></div>' +
       '<div class="demtot"><span>Total final</span><b class="tnum" style="color:#047857">' + euro(totalFinal) + "</b></div>" +
-      (totalFinal !== Number(dem.total || 0) ? '<p class="note">⚠️ Tu changes le prix annoncé (' + euro(dem.total || 0) + ") — préviens-le clairement dans ton message avant qu'il ne s'engage.</p>" : "") +
+      (!demSansPrix(dem) && totalFinal !== Number(dem.total || 0) ? '<p class="note">⚠️ Tu changes le prix annoncé (' + euro(dem.total || 0) + ") — préviens-le clairement dans ton message avant qu'il ne s'engage.</p>" : "") +
       "</section>" +
       '<button class="btn-main" data-act="dem-ok" data-id="' + esc(String(dem.id)) + '">✅ Confirmer et créer le rendez-vous</button>' +
       '<button class="b-cancel" style="width:100%;margin-top:10px;padding:13px;border-radius:14px" data-act="dem-no" data-id="' + esc(String(dem.id)) + '">✖️ Refuser — le créneau se rouvre sur le site</button>' +
@@ -5930,6 +6009,7 @@ document.addEventListener("click", function (e) {
     }
     case "dem-open": ui.demId = el.getAttribute("data-id"); ui.demForm = null; renderModals(); break;
     case "dem-close": ui.demId = null; ui.demForm = null; renderAll(); break;
+    case "dem-est": if (ui.demForm) { ui.demForm.total = Number(el.getAttribute("data-v")) || ui.demForm.total; renderModals(); } break;
     case "dem-creneau-reset": { var dR = ui.demId ? findDem(ui.demId) : null; if (dR && ui.demForm) { ui.demForm.jour = dR.jour; ui.demForm.heure = String(dR.heure || "").slice(0, 5); renderModals(); } break; }
     case "dem-ok": {
       var dOk = findDem(el.getAttribute("data-id")); if (!dOk) break;
@@ -7115,7 +7195,7 @@ if ("serviceWorker" in navigator) {
 /* 4/11/2026 : l'app sur l'écran d'accueil de l'iPhone reste ouverte en mémoire et gardait l'ancienne version.
    À chaque retour dans l'app (max 1 fois / 2 min), on regarde si une nouvelle version est en ligne ;
    si oui, on recharge — jamais pendant une saisie en cours. */
-var APP_BUILD = "2026-11-17a";
+var APP_BUILD = "2026-11-23a";
 (function () {
   /* 5/11/2026 : si une nouvelle version est en ligne, on recharge UNIQUEMENT au moment où l'app revient
      à l'écran (avant que le doigt touche quoi que ce soit) — jamais pendant que tu utilises l'app. */
